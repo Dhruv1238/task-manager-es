@@ -10,9 +10,8 @@ import StatusDonut from '../components/charts/StatusDonut'
 import PriorityBar from '../components/charts/PriorityBar'
 import UpcomingDeadlines from '../components/charts/UpcomingDeadlines'
 import WeeklyCompletionLine from '../components/charts/WeeklyCompletionLine'
-import { STAGE_NAMES } from '../types/models'
-import { STAGE_TONE } from '../components/tender/stageStyle'
-import type { Stage, Task, TaskPriority, TaskStatus } from '../types/models'
+import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
+import type { Task, TaskPriority, TaskStatus } from '../types/models'
 
 const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
   todo: { label: 'Todo', cls: 'border-white/15 bg-white/5 text-white/70' },
@@ -263,19 +262,24 @@ function ProjectsAwaitingActionSection() {
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">
         {projects.map(({ project, cta }) => {
-          const stage = (project.stage ?? 1) as Stage
-          const tone = STAGE_TONE[stage]
+          const phase = displayedPhase(project)
+          const tone = STAGE_TONE[phase.toneStage]
+          // When a project comes back via escalation, the whole card should
+          // visually communicate urgency — red border + red CTA, not the default amber.
+          const cardCls = phase.isEscalated
+            ? 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-red-400/40 bg-red-500/5 p-4 transition hover:bg-red-500/10'
+            : 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/5 p-4 transition hover:bg-amber-500/10'
+          const ctaCls = phase.isEscalated
+            ? 'inline-flex items-center justify-between gap-2 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-100 transition group-hover:bg-red-500/15'
+            : 'inline-flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition group-hover:bg-amber-500/15'
           return (
             <li key={project.id}>
-              <Link
-                to={`/projects/${project.id}`}
-                className="group flex h-full flex-col justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/5 p-4 transition hover:bg-amber-500/10"
-              >
+              <Link to={`/projects/${project.id}`} className={cardCls}>
                 <div>
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.pill}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
-                      {STAGE_NAMES[stage]}
+                      {phase.label}
                     </span>
                   </div>
                   <h3 className="mt-2 text-sm font-medium text-white">{project.title}</h3>
@@ -283,7 +287,7 @@ function ProjectsAwaitingActionSection() {
                     <p className="mt-1 line-clamp-2 text-xs text-white/55">{project.description}</p>
                   )}
                 </div>
-                <span className="inline-flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition group-hover:bg-amber-500/15">
+                <span className={ctaCls}>
                   {cta}
                   <span aria-hidden>→</span>
                 </span>

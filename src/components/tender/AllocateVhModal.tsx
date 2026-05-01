@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../ui/Modal'
+import UserPicker from '../ui/UserPicker'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { transitionStage } from '../../lib/firestore'
@@ -19,8 +20,9 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const candidates = useMemo(
-    () => users.filter((u) => u.globalRole === 'admin'),
+  // The VH pool is users with the 'admin' global role (per delta §2.1).
+  const candidateUids = useMemo(
+    () => users.filter((u) => u.globalRole === 'admin').map((u) => u.uid),
     [users],
   )
 
@@ -71,25 +73,17 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
           <label htmlFor="vh-pick" className="text-sm font-medium text-white/80">
             Vertical Head
           </label>
-          <select
+          <UserPicker
             id="vh-pick"
-            value={vhId ?? ''}
-            onChange={(e) => setVhId(e.target.value || null)}
-            className="w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
-            required
-          >
-            <option value="" className="bg-[#11111a]">
-              Pick a VH…
-            </option>
-            {candidates.map((u) => (
-              <option key={u.uid} value={u.uid} className="bg-[#11111a]">
-                {u.displayName} — {u.email}
-              </option>
-            ))}
-          </select>
-          {candidates.length === 0 && (
+            mode="single"
+            value={vhId}
+            onChange={setVhId}
+            placeholder="Search admins…"
+            includeUids={candidateUids}
+          />
+          {candidateUids.length === 0 && (
             <p className="text-xs text-amber-300/80">
-              No users with the Admin role yet. Create one from /admin/members first.
+              No users with the Admin role yet. Create one from Members first.
             </p>
           )}
         </div>

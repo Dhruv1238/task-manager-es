@@ -194,7 +194,7 @@ export default function Login() {
             </div>
 
             <p className="mt-6 text-center text-xs text-white/40 lg:hidden">
-              © {new Date().getFullYear()} EventStrat. All rights reserved.
+              © {new Date().getFullYear()} Eventstrat. All rights reserved.
             </p>
           </div>
         </div>

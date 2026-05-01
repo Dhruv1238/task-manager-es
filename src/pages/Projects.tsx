@@ -6,10 +6,9 @@ import { db } from '../lib/firebase'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
 import AdminActionBar from '../components/admin/AdminActionBar'
-import { STAGE_TONE } from '../components/tender/stageStyle'
+import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
 import ProjectStatusPill from '../components/tender/ProjectStatusPill'
-import { STAGE_NAMES } from '../types/models'
-import type { Project, Stage, User } from '../types/models'
+import type { Project, User } from '../types/models'
 
 function initialsFor(u: User): string {
   const src = u.displayName || u.email || '?'
@@ -49,15 +48,16 @@ function isOverdue(project: Project): boolean {
   return ts.toDate().getTime() < Date.now()
 }
 
-function StagePill({ stage }: { stage: Stage }) {
-  const tone = STAGE_TONE[stage] ?? STAGE_TONE[1]
+function StagePill({ project }: { project: Project }) {
+  const phase = displayedPhase(project)
+  const tone = STAGE_TONE[phase.toneStage] ?? STAGE_TONE[1]
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone.pill}`}
-      title={STAGE_NAMES[stage]}
+      title={phase.label}
     >
       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
-      {STAGE_NAMES[stage]}
+      {phase.shortLabel}
     </span>
   )
 }
@@ -185,7 +185,7 @@ export default function Projects() {
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {p.stage && <StagePill stage={p.stage as Stage} />}
+                  {p.stage && <StagePill project={p} />}
                   {(p.vhIterationCount ?? 0) > 0 && (
                     <span className="inline-flex items-center rounded-full border border-indigo-400/40 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-200">
                       Iter {(p.vhIterationCount ?? 0) + 1}

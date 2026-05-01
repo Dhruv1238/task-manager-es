@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts'
 import ChartCard from './ChartCard'
+import { ITEM_STYLE, LABEL_STYLE, TOOLTIP_STYLE } from './chartTheme'
 import { STAGE_NAMES, STAGE_SHORT_NAMES } from '../../types/models'
 import { STAGE_TONE } from '../tender/stageStyle'
 import { isProjectClosed } from '../../lib/projectStatus'
@@ -65,13 +66,11 @@ export default function TenderPipelineFunnel({ projects }: Props) {
           <YAxis stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
           <Tooltip
             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-            contentStyle={{
-              background: '#0e0e16',
-              border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 8,
-              color: 'white',
-              fontSize: 12,
-            }}
+            contentStyle={TOOLTIP_STYLE}
+            itemStyle={ITEM_STYLE}
+            labelStyle={LABEL_STYLE}
+            // Hide the default "name : value" separator; we render value directly.
+            separator=""
             formatter={(v) => {
               const n = Number(v ?? 0)
               return [`${n} project${n === 1 ? '' : 's'}`, '']

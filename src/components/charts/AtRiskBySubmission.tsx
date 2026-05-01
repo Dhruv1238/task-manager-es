@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import ChartCard from './ChartCard'
-import { STAGE_NAMES } from '../../types/models'
-import { STAGE_TONE } from '../tender/stageStyle'
+import { STAGE_TONE, displayedPhase } from '../tender/stageStyle'
 import { isProjectLive } from '../../lib/projectStatus'
-import type { Project, Stage } from '../../types/models'
+import type { Project } from '../../types/models'
 
 interface Props {
   projects: Project[]
@@ -36,8 +35,8 @@ export default function AtRiskBySubmission({ projects }: Props) {
     >
       <ul className="divide-y divide-white/5 overflow-y-auto pr-1">
         {items.map(({ p, days }) => {
-          const stage = (p.stage ?? 1) as Stage
-          const tone = STAGE_TONE[stage]
+          const phase = displayedPhase(p)
+          const tone = STAGE_TONE[phase.toneStage]
           const overdue = days < 0
           return (
             <li key={p.id}>
@@ -50,7 +49,7 @@ export default function AtRiskBySubmission({ projects }: Props) {
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-white/55">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] ${tone.pill}`}>
                       <span className={`h-1 w-1 rounded-full ${tone.dot}`} aria-hidden />
-                      {STAGE_NAMES[stage]}
+                      {phase.shortLabel}
                     </span>
                   </div>
                 </div>

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import type { Project, Stage } from '../../types/models'
-import { STAGE_HEADLINE, STAGE_NAMES } from '../../types/models'
+import { STAGE_HEADLINE } from '../../types/models'
 import { usePermissions } from '../../hooks/usePermissions'
-import { STAGE_HINT, STAGE_TONE } from './stageStyle'
+import { STAGE_TONE, displayedPhase } from './stageStyle'
 import AllocateVhModal from './AllocateVhModal'
 import EscalateBackModal from './EscalateBackModal'
 import AcceptProjectModal from './AcceptProjectModal'
@@ -20,7 +20,8 @@ interface Props {
 // Buttons render-only-when-allowed; no greyed-out states.
 export default function StageBanner({ project }: Props) {
   const stage = (project.stage ?? 1) as Stage
-  const tone = STAGE_TONE[stage] ?? STAGE_TONE[1]
+  const phase = displayedPhase(project)
+  const tone = STAGE_TONE[phase.toneStage] ?? STAGE_TONE[1]
 
   const perms = usePermissions(project.id)
 
@@ -156,7 +157,7 @@ export default function StageBanner({ project }: Props) {
     <div
       className={`mb-6 rounded-2xl border ${tone.ring} bg-white/3 p-5`}
       role="status"
-      aria-label={`Project phase: ${STAGE_NAMES[stage]}`}
+      aria-label={`Project phase: ${phase.label}`}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -165,7 +166,7 @@ export default function StageBanner({ project }: Props) {
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${tone.pill}`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
-              {STAGE_NAMES[stage]}
+              {phase.label}
             </span>
             {/* Iteration badge stays — it reflects the *current* iteration in
                 flight, which is actionable context. The escalation counter is
@@ -176,9 +177,11 @@ export default function StageBanner({ project }: Props) {
               </span>
             )}
           </div>
-          <p className="mt-2 text-sm text-white/75">{headline}</p>
-          {!closedTone && actionButtons.length === 0 && (
-            <p className="mt-1 text-xs text-white/45">{STAGE_HINT[stage]}</p>
+          <p className="mt-2 text-sm text-white/75">
+            {phase.isEscalated ? phase.hint : headline}
+          </p>
+          {!closedTone && !phase.isEscalated && actionButtons.length === 0 && (
+            <p className="mt-1 text-xs text-white/45">{phase.hint}</p>
           )}
         </div>
 

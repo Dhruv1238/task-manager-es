@@ -44,7 +44,12 @@ export function useProjectsAwaitingMyAction(): {
       if (!stage) continue
 
       if (stage === 1 && isSuperAdmin) {
-        out.push({ project: p, reason: 'allocate-vh', cta: 'Allocate to VH' })
+        const wasEscalated = (p.escalationCount ?? 0) > 0
+        out.push({
+          project: p,
+          reason: 'allocate-vh',
+          cta: wasEscalated ? 'Re-allocate after escalation' : 'Allocate to VH',
+        })
         continue
       }
       if (stage === 2 && p.vhId === profile.uid) {

@@ -186,7 +186,7 @@ export default function VhReviewModal({ open, decision, onClose, project }: Prop
       ) : (
         <div className="space-y-5">
           <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-            Approving moves <span className="font-medium">{project.title}</span> to stage 10. CS will then mark final delivery.
+            Approving sends <span className="font-medium">{project.title}</span> to the client. CS will record the final outcome.
           </div>
 
           {error && (

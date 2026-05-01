@@ -191,7 +191,7 @@ export const STAGE_HEADLINE: Record<Stage, string> = {
   3: 'Escalated — back to allocation queue',
   4: 'Accepted',
   6: 'Add tasks for each team to start execution',
-  7: 'Teams executing, CS validating in parallel',
+  7: 'Teams executing',
   8: 'VH reviewing with CS',
   9: 'Reworking after VH feedback',
   10: 'Pitch sent to client',
