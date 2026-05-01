@@ -2,6 +2,7 @@ import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db, firebaseConfig } from './firebase'
+import type { GlobalRole } from '../types/models'
 
 export interface CreateMemberResult {
   uid: string
@@ -23,6 +24,7 @@ export async function createMember(
   displayName: string,
   tempPassword: string,
   adminUid: string,
+  globalRole: GlobalRole = 'user',
 ): Promise<CreateMemberResult> {
   const secondary = initializeApp(firebaseConfig, `Secondary-${Date.now()}`)
   try {
@@ -33,7 +35,7 @@ export async function createMember(
       uid: cred.user.uid,
       email,
       displayName,
-      globalRole: 'user',
+      globalRole,
       teamIds: [],
       tempPassword,
       createdBy: adminUid,

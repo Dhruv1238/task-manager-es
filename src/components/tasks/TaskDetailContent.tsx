@@ -1,17 +1,20 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { useSubtasks } from '../../hooks/useSubtasks'
 import { usePermissions } from '../../hooks/usePermissions'
+import { useTaskPermissions } from '../../hooks/useTaskPermissions'
 import { useAuth } from '../../contexts/AuthContext'
-import { setTaskStatus } from '../../lib/firestore'
+import { setTaskStatus, transitionTaskFromReview } from '../../lib/firestore'
 import { getEffectiveAssignee } from '../../lib/effectiveAssignee'
 import AddSubtaskForm from './AddSubtaskForm'
 import StatusMenu from './StatusMenu'
 import TaskAttachmentsSection from './TaskAttachmentsSection'
 import CommentsSection from './CommentsSection'
+import SubmitForReviewModal from '../tender/SubmitForReviewModal'
+import SendBackModal from '../tender/SendBackModal'
 import type { Task, TaskPriority, TaskStatus, Team, User } from '../../types/models'
 
 interface Props {
@@ -78,6 +81,7 @@ function Avatar({ user, size = 22 }: { user: User; size?: number }) {
 
 function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
   const assignee = task.assigneeId ? users.get(task.assigneeId) : null
+  const reviewer = task.reviewerId ? users.get(task.reviewerId) : null
   const priority = PRIORITY_STYLES[task.priority]
   const overdue =
     task.dueDate &&
@@ -92,6 +96,11 @@ function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
         {task.description && (
           <div className="mt-0.5 line-clamp-1 text-xs text-white/50">
             {task.description}
+          </div>
+        )}
+        {task.status === 'in_review' && (reviewer || task.reviewerName) && (
+          <div className="mt-0.5 text-[11px] text-purple-200/80">
+            🔍 In review by {reviewer?.displayName ?? task.reviewerName}
           </div>
         )}
       </div>
@@ -121,7 +130,13 @@ export default function TaskDetailContent({ task }: Props) {
   const { users } = useAllUsers()
   const { subtasks, loading: subtasksLoading, error: subtasksError } = useSubtasks(task.id)
   const { isAdmin, isProjectOwner, isTeamLead } = usePermissions(task.projectId, task.teamId)
-  const { user } = useAuth()
+  const taskPerms = useTaskPermissions(task)
+  const { user, profile } = useAuth()
+
+  const [submitReviewOpen, setSubmitReviewOpen] = useState(false)
+  const [sendBackOpen, setSendBackOpen] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const [approveError, setApproveError] = useState<string | null>(null)
 
   const team = useMemo(
     () => teams.find((t) => t.id === task.teamId) ?? null,
@@ -159,13 +174,96 @@ export default function TaskDetailContent({ task }: Props) {
   const totalCount = task.subtaskCount ?? subtasks.length
 
   async function handleStatusChange(next: TaskStatus) {
+    // Submitting to review is a structured transition — open the modal so the
+    // user picks a reviewer (and optionally writes notes). Modal commits the write.
+    if (next === 'in_review' && task.status !== 'in_review') {
+      setSubmitReviewOpen(true)
+      return
+    }
+    // Approving from in_review goes through transitionTaskFromReview so reviewerId
+    // is cleared and parent counters roll up cleanly. Prevents direct state writes
+    // from bypassing the helper.
+    if (task.status === 'in_review' && next === 'done') {
+      if (!user || !profile) return
+      await transitionTaskFromReview({
+        taskId: task.id,
+        decision: 'approve',
+        authorId: user.uid,
+        authorName: profile.displayName,
+      })
+      return
+    }
     await setTaskStatus(task.id, next)
   }
 
+  async function handleApproveClick() {
+    if (!user || !profile) return
+    setApproving(true)
+    setApproveError(null)
+    try {
+      await transitionTaskFromReview({
+        taskId: task.id,
+        decision: 'approve',
+        authorId: user.uid,
+        authorName: profile.displayName,
+      })
+    } catch (e) {
+      setApproveError(e instanceof Error ? e.message : 'Failed to approve')
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  const reviewer =
+    task.reviewerId ? userById.get(task.reviewerId) ?? null : null
+
   return (
     <div className="space-y-8">
+      {task.status === 'in_review' && (
+        <div className="flex flex-col gap-3 rounded-xl border border-purple-400/30 bg-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-purple-100">
+            <span aria-hidden>🔍</span>
+            <span>
+              In review by{' '}
+              <span className="font-medium text-white">
+                {reviewer?.displayName ?? task.reviewerName ?? 'someone'}
+              </span>
+            </span>
+          </div>
+          {taskPerms.canDecideReview && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleApproveClick}
+                disabled={approving}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {approving ? 'Approving…' : 'Approve →'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendBackOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3.5 py-1.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/20"
+              >
+                Send Back ↺
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {approveError && (
+        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {approveError}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
         <StatusMenu value={task.status} onChange={handleStatusChange} disabled={!canEdit} />
+        {task.workType && (
+          <span className="inline-flex items-center rounded-md border border-white/10 bg-white/4 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-white/60">
+            {task.workType}
+          </span>
+        )}
         {assignee && (
           <span className="inline-flex items-center gap-1.5 text-white/70">
             <Avatar user={assignee.user} size={20} />
@@ -260,6 +358,17 @@ export default function TaskDetailContent({ task }: Props) {
       />
 
       <CommentsSection taskId={task.id} users={userById} />
+
+      <SubmitForReviewModal
+        open={submitReviewOpen}
+        onClose={() => setSubmitReviewOpen(false)}
+        task={task}
+      />
+      <SendBackModal
+        open={sendBackOpen}
+        onClose={() => setSendBackOpen(false)}
+        task={task}
+      />
     </div>
   )
 }

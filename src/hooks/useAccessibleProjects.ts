@@ -4,7 +4,8 @@ import { useAllProjects } from './useAllProjects'
 import type { Project } from '../types/models'
 
 // Projects the current user is allowed to view:
-// - admins: every project
+// - super_admins / admins: every project
+// - VHs: projects they're VH on, even if their teams aren't yet attached
 // - regular users: projects they own OR where one of their teams is assigned
 export function useAccessibleProjects(): { projects: Project[]; loading: boolean } {
   const { profile } = useAuth()
@@ -12,11 +13,14 @@ export function useAccessibleProjects(): { projects: Project[]; loading: boolean
 
   const scoped = useMemo(() => {
     if (!profile) return [] as Project[]
-    if (profile.globalRole === 'admin') return projects
+    if (profile.globalRole === 'admin' || profile.globalRole === 'super_admin') {
+      return projects
+    }
     const myTeams = new Set(profile.teamIds ?? [])
     return projects.filter(
       (p) =>
         p.ownerId === profile.uid ||
+        p.vhId === profile.uid ||
         (p.teamIds ?? []).some((tid) => myTeams.has(tid)),
     )
   }, [projects, profile])

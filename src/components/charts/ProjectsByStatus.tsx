@@ -2,20 +2,17 @@ import { useMemo } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { Project, ProjectStatus } from '../../types/models'
 import { LABEL_STYLE, TOOLTIP_STYLE } from './chartTheme'
+import { STATUS_DISPLAY, STATUS_OPTIONS } from '../../lib/projectStatus'
 import ChartCard from './ChartCard'
 
-const ORDER: ProjectStatus[] = ['active', 'completed', 'archived']
-
+// Hex colors aligned with the pill tones in projectStatus.ts.
 const COLOR: Record<ProjectStatus, string> = {
-  active: '#34d399',
-  completed: '#c084fc',
-  archived: 'rgba(255,255,255,0.25)',
-}
-
-const LABEL: Record<ProjectStatus, string> = {
-  active: 'Active',
-  completed: 'Completed',
-  archived: 'Archived',
+  in_progress: 'rgba(255,255,255,0.45)',
+  submitted: '#60A5FA',
+  not_submitted: 'rgba(255,255,255,0.35)',
+  awarded: '#34D399',
+  lost: '#F87171',
+  on_hold: '#FBBF24',
 }
 
 interface Props {
@@ -31,10 +28,10 @@ export default function ProjectsByStatus({
 }: Props) {
   const data = useMemo(() => {
     const counts = new Map<ProjectStatus, number>()
-    for (const s of ORDER) counts.set(s, 0)
+    for (const s of STATUS_OPTIONS) counts.set(s, 0)
     for (const p of projects) counts.set(p.status, (counts.get(p.status) ?? 0) + 1)
-    return ORDER.map((s) => ({
-      name: LABEL[s],
+    return STATUS_OPTIONS.map((s) => ({
+      name: STATUS_DISPLAY[s].label,
       value: counts.get(s) ?? 0,
       color: COLOR[s],
     })).filter((d) => d.value > 0)

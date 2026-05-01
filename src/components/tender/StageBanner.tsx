@@ -1,0 +1,239 @@
+import { useState } from 'react'
+import type { Project, Stage } from '../../types/models'
+import { STAGE_HEADLINE, STAGE_NAMES } from '../../types/models'
+import { usePermissions } from '../../hooks/usePermissions'
+import { STAGE_HINT, STAGE_TONE } from './stageStyle'
+import AllocateVhModal from './AllocateVhModal'
+import EscalateBackModal from './EscalateBackModal'
+import AcceptProjectModal from './AcceptProjectModal'
+import StageHistorySidePanel from './StageHistorySidePanel'
+import SignOffValidationModal from './SignOffValidationModal'
+import VhReviewModal from './VhReviewModal'
+import UpdateProjectStatusModal from './UpdateProjectStatusModal'
+
+interface Props {
+  project: Project
+}
+
+// Banner pinned to the top of every project page. Reads the project's stage and
+// renders stage-aware action buttons gated by role/stage flags from usePermissions.
+// Buttons render-only-when-allowed; no greyed-out states.
+export default function StageBanner({ project }: Props) {
+  const stage = (project.stage ?? 1) as Stage
+  const tone = STAGE_TONE[stage] ?? STAGE_TONE[1]
+
+  const perms = usePermissions(project.id)
+
+  const [allocateOpen, setAllocateOpen] = useState(false)
+  const [escalateOpen, setEscalateOpen] = useState(false)
+  const [acceptOpen, setAcceptOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [signOffOpen, setSignOffOpen] = useState(false)
+  const [vhDecision, setVhDecision] = useState<'approve' | 'reject' | null>(null)
+  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
+
+  const iterations = project.vhIterationCount ?? 0
+
+  // Compose primary CTAs for the banner. Each button is present only when the
+  // permission check passes and the current stage matches.
+  const actionButtons: React.ReactNode[] = []
+
+  if (perms.canAllocateVh) {
+    actionButtons.push(
+      <button
+        key="allocate"
+        type="button"
+        onClick={() => setAllocateOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+      >
+        Allocate to VH
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </button>,
+    )
+  }
+
+  if (perms.canAcceptOrEscalate) {
+    actionButtons.push(
+      <button
+        key="accept"
+        type="button"
+        onClick={() => setAcceptOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+      >
+        Accept
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </button>,
+      <button
+        key="escalate"
+        type="button"
+        onClick={() => setEscalateOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+      >
+        Escalate Back
+      </button>,
+    )
+  }
+
+  if (perms.canAddFanoutTask) {
+    // Stage 6 is transient — execution begins automatically when the first task is
+    // added. Show a quiet hint so the VH knows what's expected, no CTA button.
+    actionButtons.push(
+      <span
+        key="add-tasks-hint"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/55"
+      >
+        Use “+ New Task” to assign work to teams.
+      </span>,
+    )
+  }
+
+  if (perms.canSignOffValidation) {
+    actionButtons.push(
+      <button
+        key="signoff"
+        type="button"
+        onClick={() => setSignOffOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+      >
+        Validation complete — sign off
+      </button>,
+    )
+  }
+
+  if (perms.canApproveOrReject) {
+    actionButtons.push(
+      <button
+        key="vh-approve"
+        type="button"
+        onClick={() => setVhDecision('approve')}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+      >
+        Approve
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </button>,
+      <button
+        key="vh-reject"
+        type="button"
+        onClick={() => setVhDecision('reject')}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+      >
+        Reject — Send Back
+      </button>,
+    )
+  }
+
+  if (perms.canMarkDelivered) {
+    actionButtons.push(
+      <button
+        key="update-status"
+        type="button"
+        onClick={() => setStatusUpdateOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+      >
+        Update status
+      </button>,
+    )
+  }
+
+  // Project considered closed once the outcome is conclusive.
+  const closedTone =
+    project.status === 'awarded' ||
+    project.status === 'lost' ||
+    project.status === 'not_submitted'
+  const headline = closedTone
+    ? `Closed — ${project.status?.replace('_', ' ')}`
+    : STAGE_HEADLINE[stage]
+
+  return (
+    <div
+      className={`mb-6 rounded-2xl border ${tone.ring} bg-white/3 p-5`}
+      role="status"
+      aria-label={`Project phase: ${STAGE_NAMES[stage]}`}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${tone.pill}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
+              {STAGE_NAMES[stage]}
+            </span>
+            {/* Iteration badge stays — it reflects the *current* iteration in
+                flight, which is actionable context. The escalation counter is
+                an audit fact only — it lives in Project history, not the banner. */}
+            {iterations > 0 && (
+              <span className="inline-flex items-center rounded-full border border-indigo-400/40 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-200">
+                Iteration {iterations + 1}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-sm text-white/75">{headline}</p>
+          {!closedTone && actionButtons.length === 0 && (
+            <p className="mt-1 text-xs text-white/45">{STAGE_HINT[stage]}</p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {actionButtons}
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-xs font-medium text-white/75 transition hover:bg-white/8 hover:text-white"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Project history
+          </button>
+        </div>
+      </div>
+
+      <AllocateVhModal
+        open={allocateOpen}
+        onClose={() => setAllocateOpen(false)}
+        project={project}
+      />
+      <EscalateBackModal
+        open={escalateOpen}
+        onClose={() => setEscalateOpen(false)}
+        project={project}
+      />
+      <AcceptProjectModal
+        open={acceptOpen}
+        onClose={() => setAcceptOpen(false)}
+        project={project}
+      />
+      <SignOffValidationModal
+        open={signOffOpen}
+        onClose={() => setSignOffOpen(false)}
+        project={project}
+      />
+      <VhReviewModal
+        open={vhDecision !== null}
+        decision={vhDecision ?? 'approve'}
+        onClose={() => setVhDecision(null)}
+        project={project}
+      />
+      <UpdateProjectStatusModal
+        open={statusUpdateOpen}
+        onClose={() => setStatusUpdateOpen(false)}
+        project={project}
+      />
+      <StageHistorySidePanel
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        project={project}
+      />
+    </div>
+  )
+}

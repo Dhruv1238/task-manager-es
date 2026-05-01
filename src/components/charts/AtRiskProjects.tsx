@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import type { Project, Task } from '../../types/models'
 import { aggregateProgress, formatPercent } from '../../lib/progress'
+import { isProjectLive } from '../../lib/projectStatus'
 import ChartCard from './ChartCard'
 
 interface Props {
@@ -35,7 +36,7 @@ export default function AtRiskProjects({
     const within = now + WEEK_MS
 
     return projects
-      .filter((p) => p.status === 'active' && p.deadline)
+      .filter((p) => isProjectLive(p.status) && p.deadline)
       .map((p) => {
         const deadline = p.deadline!.toDate().getTime()
         const progress = aggregateProgress(tasksByProject.get(p.id) ?? [])

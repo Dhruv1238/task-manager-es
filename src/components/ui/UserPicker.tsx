@@ -57,7 +57,9 @@ export default function UserPicker(props: Props) {
   const { placeholder, excludeUids = [], includeUids, allowCreate = false, id } = props
   const { users } = useAllUsers()
   const { profile } = useAuth()
-  const canCreate = allowCreate && profile?.globalRole === 'admin'
+  const canCreate =
+    allowCreate &&
+    (profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin')
 
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')

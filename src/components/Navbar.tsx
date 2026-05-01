@@ -26,7 +26,7 @@ const mobileLinkCls = ({ isActive }: { isActive: boolean }) =>
 
 export default function Navbar() {
   const { user, profile, signOut } = useAuth()
-  const isAdmin = profile?.globalRole === 'admin'
+  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 

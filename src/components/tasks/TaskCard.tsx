@@ -70,6 +70,19 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
           <span className={`h-1.5 w-1.5 rounded-full ${priority.dot}`} aria-hidden />
           {priority.label}
         </span>
+        {task.workType && (
+          <span className="inline-flex items-center rounded-md border border-white/10 bg-white/4 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60">
+            {task.workType}
+          </span>
+        )}
+        {task.status === 'in_review' && task.reviewerName && (
+          <span
+            className="inline-flex items-center rounded-md border border-purple-400/40 bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-200"
+            title={`In review by ${task.reviewerName}`}
+          >
+            🔍 {task.reviewerName.split(' ')[0]}
+          </span>
+        )}
         {due && (
           <span className={overdue ? 'text-red-300' : 'text-white/40'}>
             {overdue ? '⚠ ' : ''}

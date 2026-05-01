@@ -28,7 +28,8 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [deadline, setDeadline] = useState('')
+  const [submissionDate, setSubmissionDate] = useState('')
+  const [presentationDate, setPresentationDate] = useState('')
   const [ownerId, setOwnerId] = useState<string | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -43,7 +44,8 @@ export default function NewProjectModal({ open, onClose }: Props) {
     } else {
       setTitle('')
       setDescription('')
-      setDeadline('')
+      setSubmissionDate('')
+      setPresentationDate('')
       setOwnerId(null)
       setFiles([])
       setError(null)
@@ -106,7 +108,12 @@ export default function NewProjectModal({ open, onClose }: Props) {
         description: description.trim(),
         ownerId,
         createdBy: user.uid,
-        deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : undefined,
+        submissionDate: submissionDate
+          ? Timestamp.fromDate(new Date(submissionDate))
+          : undefined,
+        presentationDate: presentationDate
+          ? Timestamp.fromDate(new Date(presentationDate))
+          : undefined,
         attachments,
       })
       onClose()
@@ -128,8 +135,8 @@ export default function NewProjectModal({ open, onClose }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="New project"
-      description="A project is a top-level container of work. Assign teams to it in a moment."
+      title="New tender project"
+      description="Lands at stage 1. You'll allocate a Vertical Head once it's created."
       size="lg"
       closeOnBackdrop={!submitting}
     >
@@ -230,19 +237,32 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="project-deadline" className="text-sm font-medium text-white/80">
-              Deadline <span className="font-normal text-white/40">(optional)</span>
+            <label htmlFor="project-submission" className="text-sm font-medium text-white/80">
+              Submission date <span className="font-normal text-white/40">(to client)</span>
             </label>
             <input
-              id="project-deadline"
+              id="project-submission"
               type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
+              value={submissionDate}
+              onChange={(e) => setSubmissionDate(e.target.value)}
               className={`${inputCls} scheme-dark`}
             />
           </div>
 
           <div className="space-y-1.5">
+            <label htmlFor="project-presentation" className="text-sm font-medium text-white/80">
+              Presentation date <span className="font-normal text-white/40">(optional)</span>
+            </label>
+            <input
+              id="project-presentation"
+              type="date"
+              value={presentationDate}
+              onChange={(e) => setPresentationDate(e.target.value)}
+              className={`${inputCls} scheme-dark`}
+            />
+          </div>
+
+          <div className="space-y-1.5 sm:col-span-2">
             <label htmlFor="project-owner" className="text-sm font-medium text-white/80">
               Owner
             </label>

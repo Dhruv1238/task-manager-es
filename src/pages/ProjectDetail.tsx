@@ -10,14 +10,17 @@ import { usePermissions } from '../hooks/usePermissions'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
-import ProjectStatusMenu from '../components/admin/ProjectStatusMenu'
-import { setProjectStatus } from '../lib/firestore'
+import StageBanner from '../components/tender/StageBanner'
+import NewTaskModal from '../components/admin/NewTaskModal'
+import ProjectStatusPill from '../components/tender/ProjectStatusPill'
+import UpdateProjectStatusModal from '../components/tender/UpdateProjectStatusModal'
 import ProgressRing from '../components/charts/ProgressRing'
 import PerTeamProgress from '../components/charts/PerTeamProgress'
 import OverdueTasksList from '../components/charts/OverdueTasksList'
 import StatusDonut from '../components/charts/StatusDonut'
 import { aggregateProgress, formatPercent } from '../lib/progress'
-import type { Project, ProjectStatus, Task, Team, User } from '../types/models'
+import type { Project, Task, Team, User } from '../types/models'
+import { isProjectClosed } from '../lib/projectStatus'
 
 type ProjectTab = 'overview' | 'analytics'
 
@@ -36,21 +39,6 @@ function Avatar({ user, size = 32 }: { user: User; size?: number }) {
     >
       {initialsFor(user)}
     </div>
-  )
-}
-
-function StatusBadge({ status }: { status: ProjectStatus }) {
-  const styles: Record<ProjectStatus, string> = {
-    active: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
-    completed: 'border-purple-400/40 bg-purple-500/15 text-purple-200',
-    archived: 'border-white/10 bg-white/4 text-white/60',
-  }
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${styles[status]}`}
-    >
-      {status}
-    </span>
   )
 }
 
@@ -161,11 +149,13 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
+  const [newTaskOpen, setNewTaskOpen] = useState(false)
+  const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
   const [tab, setTab] = useState<ProjectTab>('overview')
   const { users } = useAllUsers()
   const { teams } = useAllTeams()
   const { tasks: projectTasks } = useProjectTasks(projectId)
-  const { isAdmin, isProjectOwner } = usePermissions(projectId)
+  const { isAdmin, isProjectOwner, isVerticalHead, canUpdateStatus } = usePermissions(projectId)
 
   useEffect(() => {
     if (!projectId) return
@@ -239,11 +229,16 @@ export default function ProjectDetail() {
   }
 
   const owner = userById.get(project.ownerId)
+  const vh = project.vhId ? userById.get(project.vhId) : undefined
+  const submissionDeadline = project.submissionDate ?? project.deadline
+  const isClosed = isProjectClosed(project.status)
   const overdue =
-    project.deadline &&
-    project.status === 'active' &&
-    project.deadline.toDate().getTime() < Date.now()
-  const canManageTeams = isAdmin || isProjectOwner
+    submissionDeadline &&
+    !isClosed &&
+    submissionDeadline.toDate().getTime() < Date.now()
+  // Project owner, admins/super_admins, or the assigned VH can manage teams.
+  // Once the outcome is conclusive, lock down to super_admin / owner only.
+  const canManageTeams = !isClosed && (isAdmin || isProjectOwner || isVerticalHead)
   const assignedTeams = (project.teamIds ?? [])
     .map((id) => teamById.get(id))
     .filter(Boolean) as Team[]
@@ -260,19 +255,24 @@ export default function ProjectDetail() {
         All projects
       </Link>
 
-      <div className="mt-4 mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mt-4">
+        <StageBanner project={project} />
+      </div>
+
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold tracking-tight text-white">{project.title}</h1>
-            {canManageTeams ? (
-              <ProjectStatusMenu
-                value={project.status}
-                onChange={(next) => setProjectStatus(project.id, next)}
-              />
-            ) : (
-              <StatusBadge status={project.status} />
-            )}
+            <ProjectStatusPill
+              status={project.status}
+              onClick={canUpdateStatus ? () => setStatusUpdateOpen(true) : undefined}
+            />
           </div>
+          {project.statusNote && (
+            <p className="mt-1 text-xs text-white/45">
+              <span className="text-white/30">Latest note:</span> {project.statusNote}
+            </p>
+          )}
           {project.description && (
             <p className="mt-2 max-w-2xl text-white/60">{project.description}</p>
           )}
@@ -286,9 +286,20 @@ export default function ProjectDetail() {
                 </span>
               </div>
             )}
+            {vh && (
+              <div className="flex items-center gap-2">
+                <Avatar user={vh} size={22} />
+                <span>
+                  <span className="text-white/80">{vh.displayName}</span>
+                  <span className="ml-1 text-white/40">· VH</span>
+                </span>
+              </div>
+            )}
             <span className={overdue ? 'text-red-300' : undefined}>
               {overdue ? 'Overdue · ' : ''}
-              {project.deadline ? `Due ${formatDate(project.deadline)}` : 'No deadline'}
+              {submissionDeadline
+                ? `Submit by ${formatDate(submissionDeadline)}`
+                : 'No submission date'}
             </span>
             <span>
               {project.teamIds?.length ?? 0} team
@@ -323,6 +334,15 @@ export default function ProjectDetail() {
             </svg>
             Board View
           </Link>
+          {canManageTeams && (
+            <button
+              type="button"
+              onClick={() => setNewTaskOpen(true)}
+              className="rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+            >
+              + New Task
+            </button>
+          )}
           {canManageTeams && (
             <button
               type="button"
@@ -455,10 +475,18 @@ export default function ProjectDetail() {
               <span className="text-white/85">{owner?.displayName ?? '—'}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Deadline</span>
+              <span className="text-white/50">Vertical Head</span>
+              <span className="text-white/85">{vh?.displayName ?? '— not allocated —'}</span>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-white/50">Submission</span>
               <span className={overdue ? 'text-red-300' : 'text-white/85'}>
-                {formatDate(project.deadline)}
+                {formatDate(project.submissionDate)}
               </span>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-white/50">Presentation</span>
+              <span className="text-white/85">{formatDate(project.presentationDate)}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
               <span className="text-white/50">Created</span>
@@ -481,6 +509,21 @@ export default function ProjectDetail() {
           currentTeamIds={project.teamIds ?? []}
         />
       )}
+
+      {projectId && (
+        <NewTaskModal
+          open={newTaskOpen}
+          onClose={() => setNewTaskOpen(false)}
+          projectId={projectId}
+          projectTitle={project.title}
+        />
+      )}
+
+      <UpdateProjectStatusModal
+        open={statusUpdateOpen}
+        onClose={() => setStatusUpdateOpen(false)}
+        project={project}
+      />
     </div>
   )
 }

@@ -58,7 +58,7 @@ export default function ManageTeamsModal({
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
   const { profile } = useAuth()
-  const isAdmin = profile?.globalRole === 'admin'
+  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
   const [selected, setSelected] = useState<Set<string>>(new Set(currentTeamIds))
   const [search, setSearch] = useState('')

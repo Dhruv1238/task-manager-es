@@ -4,11 +4,15 @@ import type { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useMyTasks } from '../hooks/useMyTasks'
 import { useMyLedTeamTasks } from '../hooks/useMyLedTeamTasks'
+import { useMyReviewQueue } from '../hooks/useMyReviewQueue'
+import { useProjectsAwaitingMyAction } from '../hooks/useProjectsAwaitingMyAction'
 import StatusDonut from '../components/charts/StatusDonut'
 import PriorityBar from '../components/charts/PriorityBar'
 import UpcomingDeadlines from '../components/charts/UpcomingDeadlines'
 import WeeklyCompletionLine from '../components/charts/WeeklyCompletionLine'
-import type { Task, TaskPriority, TaskStatus } from '../types/models'
+import { STAGE_NAMES } from '../types/models'
+import { STAGE_TONE } from '../components/tender/stageStyle'
+import type { Stage, Task, TaskPriority, TaskStatus } from '../types/models'
 
 const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
   todo: { label: 'Todo', cls: 'border-white/15 bg-white/5 text-white/70' },
@@ -197,6 +201,101 @@ function GroupedTaskList({
   )
 }
 
+function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
+  const location = useLocation()
+  if (tasks.length === 0) return null
+  return (
+    <section className="mb-10">
+      <div className="mb-3">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-purple-200">
+          🔍 Awaiting my review
+        </h2>
+        <p className="mt-1 text-xs text-white/40">
+          Tasks where you're the named reviewer. Open one to approve or send back.
+        </p>
+      </div>
+      <ul className="space-y-2">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <Link
+              to={`/tasks/${t.id}`}
+              state={{ backgroundLocation: location }}
+              className="flex items-center gap-3 rounded-xl border border-purple-400/30 bg-purple-500/5 px-4 py-3 transition hover:bg-purple-500/10"
+            >
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-purple-400/40 bg-purple-500/20 text-base">
+                🔍
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-white">{t.title}</div>
+                <div className="mt-0.5 text-xs text-white/55">
+                  {t.projectTitle ?? '—'}
+                  <span className="mx-1.5 text-white/25">·</span>
+                  {t.teamName ?? '—'}
+                  {t.assigneeName && (
+                    <>
+                      <span className="mx-1.5 text-white/25">·</span>
+                      from {t.assigneeName}
+                    </>
+                  )}
+                </div>
+              </div>
+              <span className="hidden text-xs text-purple-200/80 sm:block">Review →</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function ProjectsAwaitingActionSection() {
+  const { projects } = useProjectsAwaitingMyAction()
+  if (projects.length === 0) return null
+  return (
+    <section className="mb-10">
+      <div className="mb-3">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-amber-200">
+          🚦 Projects awaiting my action
+        </h2>
+        <p className="mt-1 text-xs text-white/40">
+          The workflow is blocked on you. Take an action to move things forward.
+        </p>
+      </div>
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {projects.map(({ project, cta }) => {
+          const stage = (project.stage ?? 1) as Stage
+          const tone = STAGE_TONE[stage]
+          return (
+            <li key={project.id}>
+              <Link
+                to={`/projects/${project.id}`}
+                className="group flex h-full flex-col justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/5 p-4 transition hover:bg-amber-500/10"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.pill}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
+                      {STAGE_NAMES[stage]}
+                    </span>
+                  </div>
+                  <h3 className="mt-2 text-sm font-medium text-white">{project.title}</h3>
+                  {project.description && (
+                    <p className="mt-1 line-clamp-2 text-xs text-white/55">{project.description}</p>
+                  )}
+                </div>
+                <span className="inline-flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition group-hover:bg-amber-500/15">
+                  {cta}
+                  <span aria-hidden>→</span>
+                </span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 export default function Me() {
   const { user, profile } = useAuth()
   const {
@@ -209,6 +308,7 @@ export default function Me() {
     loading: ledLoading,
     error: ledError,
   } = useMyLedTeamTasks(user?.uid)
+  const { tasks: reviewQueue } = useMyReviewQueue(user?.uid)
   const [showCompleted, setShowCompleted] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true)
 
@@ -284,6 +384,9 @@ export default function Me() {
           Show completed
         </label>
       </div>
+
+      <ReviewQueueSection tasks={reviewQueue} />
+      <ProjectsAwaitingActionSection />
 
       <section className="mb-10">
         <div className="mb-3">

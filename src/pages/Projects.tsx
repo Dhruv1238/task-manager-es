@@ -6,7 +6,10 @@ import { db } from '../lib/firebase'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
 import AdminActionBar from '../components/admin/AdminActionBar'
-import type { Project, ProjectStatus, User } from '../types/models'
+import { STAGE_TONE } from '../components/tender/stageStyle'
+import ProjectStatusPill from '../components/tender/ProjectStatusPill'
+import { STAGE_NAMES } from '../types/models'
+import type { Project, Stage, User } from '../types/models'
 
 function initialsFor(u: User): string {
   const src = u.displayName || u.email || '?'
@@ -26,24 +29,6 @@ function Avatar({ user, size = 22 }: { user: User; size?: number }) {
   )
 }
 
-function StatusBadge({ status }: { status: ProjectStatus }) {
-  const styles: Record<ProjectStatus, string> = {
-    active:
-      'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
-    completed:
-      'border-purple-400/40 bg-purple-500/15 text-purple-200',
-    archived:
-      'border-white/10 bg-white/4 text-white/60',
-  }
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize ${styles[status]}`}
-    >
-      {status}
-    </span>
-  )
-}
-
 function formatDeadline(ts: Timestamp | undefined): string {
   if (!ts) return 'No deadline'
   return ts.toDate().toLocaleDateString(undefined, {
@@ -53,9 +38,28 @@ function formatDeadline(ts: Timestamp | undefined): string {
   })
 }
 
+function submissionDeadline(project: Project) {
+  return project.submissionDate ?? project.deadline
+}
+
 function isOverdue(project: Project): boolean {
-  if (!project.deadline || project.status !== 'active') return false
-  return project.deadline.toDate().getTime() < Date.now()
+  const ts = submissionDeadline(project)
+  if (!ts) return false
+  if (project.status === 'awarded' || project.status === 'lost' || project.status === 'not_submitted') return false
+  return ts.toDate().getTime() < Date.now()
+}
+
+function StagePill({ stage }: { stage: Stage }) {
+  const tone = STAGE_TONE[stage] ?? STAGE_TONE[1]
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone.pill}`}
+      title={STAGE_NAMES[stage]}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
+      {STAGE_NAMES[stage]}
+    </span>
+  )
 }
 
 export default function Projects() {
@@ -64,7 +68,7 @@ export default function Projects() {
   const [search, setSearch] = useState('')
   const { users } = useAllUsers()
   const { profile } = useAuth()
-  const isAdmin = profile?.globalRole === 'admin'
+  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
   useEffect(() => {
     const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'))
@@ -177,7 +181,16 @@ export default function Projects() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="min-w-0 text-lg font-semibold text-white">{p.title}</h3>
-                  <StatusBadge status={p.status} />
+                  <ProjectStatusPill status={p.status} size="sm" />
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {p.stage && <StagePill stage={p.stage as Stage} />}
+                  {(p.vhIterationCount ?? 0) > 0 && (
+                    <span className="inline-flex items-center rounded-full border border-indigo-400/40 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-200">
+                      Iter {(p.vhIterationCount ?? 0) + 1}
+                    </span>
+                  )}
                 </div>
 
                 {p.description && (
@@ -201,7 +214,7 @@ export default function Projects() {
                 <div className="mt-5 flex items-center justify-between border-t border-white/5 pt-4 text-xs">
                   <span className={overdue ? 'text-red-300' : 'text-white/50'}>
                     {overdue ? 'Overdue · ' : ''}
-                    {formatDeadline(p.deadline)}
+                    {formatDeadline(submissionDeadline(p))}
                   </span>
                   <div className="flex items-center gap-3 text-white/50">
                     {p.attachments && p.attachments.length > 0 && (

@@ -5,6 +5,8 @@ import ProjectsByStatus from '../components/charts/ProjectsByStatus'
 import TeamUtilization from '../components/charts/TeamUtilization'
 import AtRiskProjects from '../components/charts/AtRiskProjects'
 import NewVsCompleted from '../components/charts/NewVsCompleted'
+import TenderPipelineFunnel from '../components/charts/TenderPipelineFunnel'
+import AtRiskBySubmission from '../components/charts/AtRiskBySubmission'
 
 export default function AdminDashboard() {
   const { projects } = useAllProjects()
@@ -19,12 +21,13 @@ export default function AdminDashboard() {
           Global analytics
         </h1>
         <p className="mt-2 max-w-2xl text-white/60">
-          Org-wide health: which projects are at risk, which teams carry the most load, and how
-          the organization's throughput is trending.
+          Org-wide health: tender pipeline, at-risk submissions, team load, and throughput.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <TenderPipelineFunnel projects={projects} />
+        <AtRiskBySubmission projects={projects} />
         <ProjectsByStatus projects={projects} />
         <TeamUtilization teams={teams} tasks={tasks} />
         <div className="lg:col-span-2">

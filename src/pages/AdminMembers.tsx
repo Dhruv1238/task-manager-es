@@ -3,8 +3,32 @@ import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase
 import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import type { User } from '../types/models'
+import type { GlobalRole, User } from '../types/models'
 import AdminActionBar from '../components/admin/AdminActionBar'
+
+const ROLE_OPTIONS: { value: GlobalRole; label: string }[] = [
+  { value: 'super_admin', label: 'Super Admin' },
+  { value: 'admin', label: 'Admin (VH pool)' },
+  { value: 'horizontal_lead', label: 'Horizontal Lead' },
+  { value: 'user', label: 'User' },
+]
+
+function rolePillClass(role: GlobalRole): string {
+  switch (role) {
+    case 'super_admin':
+      return 'border-amber-400/40 bg-amber-500/15 text-amber-200'
+    case 'admin':
+      return 'border-purple-400/40 bg-purple-500/15 text-purple-200'
+    case 'horizontal_lead':
+      return 'border-sky-400/40 bg-sky-500/15 text-sky-200'
+    default:
+      return 'border-white/10 bg-white/4 text-white/70'
+  }
+}
+
+function roleLabel(role: GlobalRole): string {
+  return ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role
+}
 
 function initials(u: User): string {
   const src = u.displayName || u.email || '?'
@@ -20,13 +44,14 @@ function formatDate(ts: Timestamp | undefined): string {
 }
 
 export default function AdminMembers() {
-  const { user: firebaseUser } = useAuth()
+  const { user: firebaseUser, profile } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [pendingRoleUid, setPendingRoleUid] = useState<string | null>(null)
+  const canEditRoles = profile?.globalRole === 'super_admin'
 
   useEffect(() => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'))
@@ -65,13 +90,12 @@ export default function AdminMembers() {
     setTimeout(() => setCopiedId((id) => (id === u.uid ? null : id)), 2000)
   }
 
-  async function toggleRole(u: User) {
-    if (firebaseUser?.uid === u.uid) return // can't demote yourself
+  async function changeRole(u: User, nextRole: GlobalRole) {
+    if (firebaseUser?.uid === u.uid) return // can't change your own role
+    if (u.globalRole === nextRole) return
     setPendingRoleUid(u.uid)
     try {
-      await updateDoc(doc(db, 'users', u.uid), {
-        globalRole: u.globalRole === 'admin' ? 'user' : 'admin',
-      })
+      await updateDoc(doc(db, 'users', u.uid), { globalRole: nextRole })
     } finally {
       setPendingRoleUid(null)
     }
@@ -167,13 +191,9 @@ export default function AdminMembers() {
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={
-                            u.globalRole === 'admin'
-                              ? 'inline-flex min-w-16 items-center justify-center rounded-full border capitalize border-purple-400/40 bg-purple-500/15 px-2.5 py-1 text-xs font-medium text-purple-200'
-                              : 'inline-flex min-w-16 items-center justify-center rounded-full border capitalize border-white/10 bg-white/4 px-2.5 py-1 text-xs font-medium text-white/70'
-                          }
+                          className={`inline-flex min-w-24 items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap ${rolePillClass(u.globalRole)}`}
                         >
-                          {u.globalRole}
+                          {roleLabel(u.globalRole)}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-white/70">{u.teamIds?.length ?? 0}</td>
@@ -219,21 +239,44 @@ export default function AdminMembers() {
                               {isCopied ? 'Copied' : 'Copy'}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => toggleRole(u)}
-                            disabled={isSelf || roleUpdating}
-                            title={isSelf ? "You can't change your own role" : undefined}
-                            className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/4 px-2.5 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {roleUpdating ? (
-                              <span className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/25 border-t-white/90" />
-                            ) : u.globalRole === 'admin' ? (
-                              'Demote'
-                            ) : (
-                              'Promote'
-                            )}
-                          </button>
+                          {canEditRoles && !isSelf ? (
+                            <div className="relative">
+                              <select
+                                value={u.globalRole}
+                                onChange={(e) => changeRole(u, e.target.value as GlobalRole)}
+                                disabled={roleUpdating}
+                                title="Change role"
+                                className="appearance-none rounded-md border border-white/10 bg-white/4 px-2.5 py-1.5 pr-7 text-xs font-medium text-white/80 outline-none transition hover:bg-white/8 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {ROLE_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value} className="bg-[#11111a]">
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <svg
+                                className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-white/40"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                              {roleUpdating && (
+                                <span className="ml-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/25 border-t-white/90 align-middle" />
+                              )}
+                            </div>
+                          ) : (
+                            <span
+                              className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/4 px-2.5 py-1.5 text-xs font-medium text-white/40"
+                              title={isSelf ? "You can't change your own role" : 'Only super admins can change roles'}
+                            >
+                              {isSelf ? 'You' : 'Locked'}
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>

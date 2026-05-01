@@ -98,7 +98,7 @@ function BoardViewCard() {
 
 export default function Home() {
   const { profile } = useAuth()
-  const isAdmin = profile?.globalRole === 'admin'
+  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
   const firstName = profile?.displayName?.split(/\s+/)[0] ?? ''
 
   return (

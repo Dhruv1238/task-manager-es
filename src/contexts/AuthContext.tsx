@@ -26,6 +26,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+// Bootstrap email — when this account is the first to sign in to a fresh Firebase
+// project, it auto-provisions as super_admin so the workspace is operable. After
+// that, super_admins manage roles via /admin/members.
+const BOOTSTRAP_SUPER_ADMIN_EMAIL = 'taskmanager@ai.com'
+
 async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
   const ref = doc(db, 'users', u.uid)
   const snap = await getDoc(ref)
@@ -33,11 +38,12 @@ async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
     return snap.data() as UserProfile
   }
 
+  const isBootstrap = (u.email ?? '').toLowerCase() === BOOTSTRAP_SUPER_ADMIN_EMAIL
   await setDoc(ref, {
     uid: u.uid,
     email: u.email ?? '',
     displayName: u.displayName ?? u.email?.split('@')[0] ?? 'User',
-    globalRole: 'user',
+    globalRole: isBootstrap ? 'super_admin' : 'user',
     teamIds: [],
     createdAt: serverTimestamp(),
   })

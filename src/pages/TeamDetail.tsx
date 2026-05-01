@@ -8,6 +8,8 @@ import { useTeamTasks } from '../hooks/useTeamTasks'
 import { usePermissions } from '../hooks/usePermissions'
 import AddTeamMemberModal from '../components/admin/AddTeamMemberModal'
 import RemoveMemberConfirmModal from '../components/admin/RemoveMemberConfirmModal'
+import { setTeamLead } from '../lib/firestore'
+import { isProjectLive } from '../lib/projectStatus'
 import MemberWorkload from '../components/charts/MemberWorkload'
 import WeeklyCompletionLine from '../components/charts/WeeklyCompletionLine'
 import StatusDonut from '../components/charts/StatusDonut'
@@ -35,9 +37,12 @@ function Avatar({ user, size = 36 }: { user: User; size?: number }) {
 
 function StatusDot({ status }: { status: ProjectStatus }) {
   const cls: Record<ProjectStatus, string> = {
-    active: 'bg-emerald-400',
-    completed: 'bg-purple-400',
-    archived: 'bg-white/30',
+    in_progress: 'bg-white/40',
+    submitted: 'bg-blue-400',
+    not_submitted: 'bg-white/30',
+    awarded: 'bg-emerald-400',
+    lost: 'bg-red-400',
+    on_hold: 'bg-amber-400',
   }
   return (
     <span
@@ -63,6 +68,7 @@ export default function TeamDetail() {
   const [notFound, setNotFound] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [removing, setRemoving] = useState<User | null>(null)
+  const [promotingLeadUid, setPromotingLeadUid] = useState<string | null>(null)
   const [tab, setTab] = useState<TeamTab>('overview')
   const { users } = useAllUsers()
   const { projects } = useAllProjects()
@@ -223,6 +229,8 @@ export default function TeamDetail() {
                 {members.map((m) => {
                   const isLead = m.uid === team.leadId
                   const showRemove = canManageRoster && !isLead
+                  const showMakeLead = canManageRoster && !isLead
+                  const promoting = promotingLeadUid === m.uid
                   return (
                     <li key={m.uid} className="group flex items-center gap-3 px-5 py-3">
                       <Avatar user={m} size={36} />
@@ -236,6 +244,25 @@ export default function TeamDetail() {
                         <span className="inline-flex items-center rounded-full border border-purple-400/40 bg-purple-500/15 px-2.5 py-0.5 text-xs font-medium text-purple-200">
                           Lead
                         </span>
+                      )}
+                      {showMakeLead && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (promotingLeadUid) return
+                            setPromotingLeadUid(m.uid)
+                            try {
+                              await setTeamLead(team.id, m.uid)
+                            } finally {
+                              setPromotingLeadUid(null)
+                            }
+                          }}
+                          disabled={promoting}
+                          title={`Promote ${m.displayName} to team lead`}
+                          className="rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
+                        >
+                          {promoting ? 'Promoting…' : 'Make lead'}
+                        </button>
                       )}
                       {showRemove && (
                         <button
@@ -272,7 +299,7 @@ export default function TeamDetail() {
               {assignedProjects.map((p) => {
                 const overdue =
                   p.deadline &&
-                  p.status === 'active' &&
+                  isProjectLive(p.status) &&
                   p.deadline.toDate().getTime() < Date.now()
                 return (
                   <li key={p.id} className="border-b border-white/5 last:border-b-0">

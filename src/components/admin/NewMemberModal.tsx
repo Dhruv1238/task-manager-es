@@ -7,6 +7,14 @@ import {
   generateTempPassword,
   type CreateMemberResult,
 } from '../../lib/createMember'
+import type { GlobalRole } from '../../types/models'
+
+const ROLE_OPTIONS: { value: GlobalRole; label: string; hint: string }[] = [
+  { value: 'user', label: 'User', hint: 'Default — team members and individual contributors' },
+  { value: 'horizontal_lead', label: 'Horizontal Lead', hint: 'Leads a horizontal team (2D, 3D, VE)' },
+  { value: 'admin', label: 'Admin (VH pool)', hint: 'Eligible to be assigned as a Vertical Head' },
+  { value: 'super_admin', label: 'Super Admin', hint: 'Tender team — creates projects, allocates VHs' },
+]
 
 interface Props {
   open: boolean
@@ -33,18 +41,24 @@ function friendlyError(err: unknown): string {
 }
 
 export default function NewMemberModal({ open, onClose, onCreated }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [globalRole, setGlobalRole] = useState<GlobalRole>('user')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CreateMemberResult | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // Only super admins can pick a role at creation time. Admins can still create
+  // 'user'-level members for team rosters (back-compat with v1 flow).
+  const canPickRole = profile?.globalRole === 'super_admin'
+
   useEffect(() => {
     if (!open) {
       setEmail('')
       setDisplayName('')
+      setGlobalRole('user')
       setError(null)
       setSubmitting(false)
       setResult(null)
@@ -58,7 +72,13 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
     setSubmitting(true)
     try {
       const tempPassword = generateTempPassword()
-      const res = await createMember(email.trim(), displayName.trim(), tempPassword, user.uid)
+      const res = await createMember(
+        email.trim(),
+        displayName.trim(),
+        tempPassword,
+        user.uid,
+        canPickRole ? globalRole : 'user',
+      )
       setResult(res)
       onCreated?.(res)
     } catch (e) {
@@ -163,6 +183,29 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
               className={inputCls}
             />
           </div>
+
+          {canPickRole && (
+            <div className="space-y-1.5">
+              <label htmlFor="member-role" className="text-sm font-medium text-white/80">
+                Role
+              </label>
+              <select
+                id="member-role"
+                value={globalRole}
+                onChange={(e) => setGlobalRole(e.target.value as GlobalRole)}
+                className={inputCls}
+              >
+                {ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-[#11111a]">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-white/40">
+                {ROLE_OPTIONS.find((r) => r.value === globalRole)?.hint}
+              </p>
+            </div>
+          )}
 
           {error && (
             <div

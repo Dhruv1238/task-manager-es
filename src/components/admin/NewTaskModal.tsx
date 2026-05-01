@@ -1,18 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FirebaseError } from 'firebase/app'
 import { Timestamp } from 'firebase/firestore'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAllTeams } from '../../hooks/useAllTeams'
+import { useAllUsers } from '../../hooks/useAllUsers'
+import { useTaskTemplates } from '../../hooks/useTaskTemplates'
 import { addTeamTask } from '../../lib/firestore'
-import type { TaskPriority } from '../../types/models'
+import type { TaskPriority, WorkType } from '../../types/models'
 
 interface Props {
   open: boolean
   onClose: () => void
   projectId: string
-  teamId: string
   projectTitle: string
-  teamName: string
+  // When provided, the form starts pinned to this team (existing v1 callers).
+  // When omitted (e.g., VH adding tasks from the project page), the user picks via template.
+  teamId?: string
+  teamName?: string
 }
 
 function friendlyError(err: unknown): string {
@@ -26,16 +31,24 @@ const PRIORITIES: { value: TaskPriority; label: string; cls: string }[] = [
   { value: 'high', label: 'High', cls: 'text-red-200' },
 ]
 
+const CUSTOM = 'custom' as const
+
 export default function NewTaskModal({
   open,
   onClose,
   projectId,
-  teamId,
   projectTitle,
-  teamName,
+  teamId: initialTeamId,
+  teamName: initialTeamName,
 }: Props) {
   const { user } = useAuth()
+  const { teams } = useAllTeams()
+  const { users } = useAllUsers()
+  const { templates } = useTaskTemplates()
 
+  const [templateCode, setTemplateCode] = useState<WorkType | typeof CUSTOM>(CUSTOM)
+  const [teamId, setTeamId] = useState<string>(initialTeamId ?? '')
+  const [assigneeId, setAssigneeId] = useState<string>('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('medium')
@@ -44,7 +57,10 @@ export default function NewTaskModal({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setTemplateCode(CUSTOM)
+      setTeamId(initialTeamId ?? '')
+      setAssigneeId('')
       setTitle('')
       setDescription('')
       setPriority('medium')
@@ -52,7 +68,42 @@ export default function NewTaskModal({
       setError(null)
       setSubmitting(false)
     }
-  }, [open])
+  }, [open, initialTeamId])
+
+  const teamById = useMemo(() => {
+    const m = new Map<string, (typeof teams)[number]>()
+    for (const t of teams) m.set(t.id, t)
+    return m
+  }, [teams])
+
+  const userById = useMemo(() => {
+    const m = new Map<string, (typeof users)[number]>()
+    for (const u of users) m.set(u.uid, u)
+    return m
+  }, [users])
+
+  const selectedTeam = teamId ? teamById.get(teamId) : undefined
+  const selectedTeamMembers = selectedTeam
+    ? [selectedTeam.leadId, ...selectedTeam.memberIds.filter((id) => id !== selectedTeam.leadId)]
+        .map((uid) => userById.get(uid))
+        .filter(Boolean)
+    : []
+
+  // When the user picks a predefined template, auto-fill matching fields.
+  function applyTemplate(code: WorkType | typeof CUSTOM) {
+    setTemplateCode(code)
+    if (code === CUSTOM) return
+    const tpl = templates.find((t) => t.code === code)
+    if (!tpl) return
+    const team = teamById.get(tpl.teamId)
+    if (team) {
+      setTeamId(team.id)
+      setAssigneeId(team.leadId)
+    } else {
+      setTeamId(tpl.teamId)
+    }
+    if (!title.trim()) setTitle(tpl.defaultTitle)
+  }
 
   async function handleSubmit() {
     if (!user) return
@@ -61,19 +112,32 @@ export default function NewTaskModal({
       setError('Task title is required.')
       return
     }
+    if (!teamId) {
+      setError('Pick a team for this task.')
+      return
+    }
+    const team = teamById.get(teamId)
+    if (!team) {
+      setError('Selected team not found.')
+      return
+    }
     setError(null)
     setSubmitting(true)
     try {
+      const assignee = assigneeId ? userById.get(assigneeId) : undefined
       await addTeamTask({
         projectId,
         teamId,
         projectTitle,
-        teamName,
+        teamName: team.name,
         title: trimmedTitle,
         description: description.trim(),
         priority,
         dueDate: dueDate ? Timestamp.fromDate(new Date(dueDate)) : undefined,
         createdBy: user.uid,
+        workType: templateCode === CUSTOM ? undefined : templateCode,
+        assigneeId: assignee?.uid ?? null,
+        assigneeName: assignee?.displayName ?? null,
       })
       onClose()
     } catch (e) {
@@ -85,14 +149,18 @@ export default function NewTaskModal({
 
   const inputCls =
     'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
-  const canSubmit = !!title.trim() && !submitting
+  const canSubmit = !!title.trim() && !!teamId && !submitting
+
+  const description2 = initialTeamName
+    ? `Adding a task to ${initialTeamName}. Pick a template to switch teams or stamp a work type.`
+    : 'Pick a template to auto-fill team and assignee, or stay custom.'
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="New task"
-      description="Team-level tasks belong to the team as a whole. Break them into subtasks for individual members."
+      description={description2}
       size="lg"
       closeOnBackdrop={!submitting}
     >
@@ -105,6 +173,27 @@ export default function NewTaskModal({
         className="space-y-5"
         noValidate
       >
+        <div className="space-y-1.5">
+          <label htmlFor="task-template" className="text-sm font-medium text-white/80">
+            Template
+          </label>
+          <select
+            id="task-template"
+            value={templateCode}
+            onChange={(e) => applyTemplate(e.target.value as WorkType | typeof CUSTOM)}
+            className={inputCls}
+          >
+            <option value={CUSTOM} className="bg-[#11111a]">
+              Custom task — no pre-fill
+            </option>
+            {templates.map((t) => (
+              <option key={t.code} value={t.code} className="bg-[#11111a]">
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-1.5">
           <label htmlFor="task-title" className="text-sm font-medium text-white/80">
             Title
@@ -133,6 +222,57 @@ export default function NewTaskModal({
             rows={3}
             className={`${inputCls} resize-none`}
           />
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="task-team" className="text-sm font-medium text-white/80">
+              Team
+            </label>
+            <select
+              id="task-team"
+              value={teamId}
+              onChange={(e) => {
+                setTeamId(e.target.value)
+                setAssigneeId('')
+              }}
+              className={inputCls}
+              required
+            >
+              <option value="" className="bg-[#11111a]">
+                Pick a team…
+              </option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id} className="bg-[#11111a]">
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="task-assignee" className="text-sm font-medium text-white/80">
+              Assignee <span className="font-normal text-white/40">(optional)</span>
+            </label>
+            <select
+              id="task-assignee"
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              className={inputCls}
+              disabled={!teamId}
+            >
+              <option value="" className="bg-[#11111a]">
+                Unassigned
+              </option>
+              {selectedTeamMembers.map((u) =>
+                u ? (
+                  <option key={u.uid} value={u.uid} className="bg-[#11111a]">
+                    {u.displayName}
+                  </option>
+                ) : null,
+              )}
+            </select>
+          </div>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">

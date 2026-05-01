@@ -32,7 +32,7 @@ export default function Teams() {
   const [search, setSearch] = useState('')
   const { users } = useAllUsers()
   const { profile } = useAuth()
-  const isAdmin = profile?.globalRole === 'admin'
+  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
   useEffect(() => {
     const q = query(collection(db, 'teams'), orderBy('createdAt', 'desc'))
