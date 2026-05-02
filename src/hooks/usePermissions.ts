@@ -27,6 +27,7 @@ export interface Permissions {
   canAllocateVh: boolean // super admin, stage 1
   canAcceptOrEscalate: boolean // VH, stage 2
   canAddFanoutTask: boolean // VH, stage 6 — kept name for back-compat callers
+  canReviewEligibility: boolean // super admin, stage 5, project not closed
   canUpdateStatus: boolean // VH or CS lead, anytime, on a non-closed project
   canSignOffValidation: boolean // CT lead, stage 7
   canApproveOrReject: boolean // VH, stage 8
@@ -121,6 +122,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const canApproveOrReject = Boolean(isVerticalHead && stage === 8)
     const closed = isProjectClosed(project?.status)
     const canMarkDelivered = Boolean(isCsLead && stage === 10 && !closed)
+    const canReviewEligibility = Boolean(isSuperAdmin && stage === 5 && !closed)
     const canUpdateStatus = Boolean(
       project && !closed && (isVerticalHead || isCsLead || isSuperAdmin),
     )
@@ -143,6 +145,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       canAllocateVh,
       canAcceptOrEscalate,
       canAddFanoutTask,
+      canReviewEligibility,
       canUpdateStatus,
       canSignOffValidation,
       canApproveOrReject,

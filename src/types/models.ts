@@ -18,8 +18,9 @@ export type TaskPriority = 'low' | 'medium' | 'high'
 
 export type WorkType = 'CS' | 'CT' | '2D' | '3D' | 'VE'
 
-// Tender workflow stage. 5 is reserved as the escalation loop's destination and never stored.
-export type Stage = 1 | 2 | 3 | 4 | 6 | 7 | 8 | 9 | 10
+// Tender workflow stage.
+// Stage 5 = eligibility review (super admin gates the VH's acceptance).
+export type Stage = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
 export type StagePriority = 'low' | 'medium' | 'high'
 
@@ -70,7 +71,18 @@ export interface StatusUpdatePayload {
   note: string
 }
 
-export type StageEventPayload = EscalationPayload | IterationPayload | StatusUpdatePayload | null
+// VH's eligibility assessment when accepting a tender. Recorded on stage-5
+// entry; super admin reads this to decide whether to advance to task setup.
+export interface EligibilityNotePayload {
+  note: string
+}
+
+export type StageEventPayload =
+  | EscalationPayload
+  | IterationPayload
+  | StatusUpdatePayload
+  | EligibilityNotePayload
+  | null
 
 export interface StageEvent {
   stage: Stage
@@ -101,6 +113,9 @@ export interface Project {
   // Last status-update note (mirrors the most recent StatusUpdatePayload in
   // stageHistory). Convenience for rendering the pill subtitle without scanning history.
   statusNote?: string
+  // VH's eligibility assessment, captured on Accept. Mirrors the latest
+  // EligibilityNotePayload so the StageBanner can render it without history scans.
+  eligibilityNote?: string
 }
 
 export interface Attachment {
@@ -164,6 +179,7 @@ export const STAGE_NAMES: Record<Stage, string> = {
   2: 'Awaiting VH',
   3: 'Escalation',
   4: 'Accepted',
+  5: 'Eligibility review',
   6: 'Task setup',
   7: 'In execution',
   8: 'VH review',
@@ -177,6 +193,7 @@ export const STAGE_SHORT_NAMES: Record<Stage, string> = {
   2: 'Awaiting VH',
   3: 'Escalation',
   4: 'Accepted',
+  5: 'Eligibility',
   6: 'Setup',
   7: 'Execution',
   8: 'Review',
@@ -190,6 +207,7 @@ export const STAGE_HEADLINE: Record<Stage, string> = {
   2: 'Awaiting VH decision',
   3: 'Escalated — back to allocation queue',
   4: 'Accepted',
+  5: 'Awaiting super admin eligibility review',
   6: 'Add tasks for each team to start execution',
   7: 'Teams executing',
   8: 'VH reviewing with CS',

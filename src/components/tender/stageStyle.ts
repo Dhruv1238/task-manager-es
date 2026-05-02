@@ -25,6 +25,11 @@ export const STAGE_TONE: Record<Stage, { pill: string; ring: string; dot: string
     ring: 'border-blue-400/30',
     dot: 'bg-blue-400',
   },
+  5: {
+    pill: 'border-sky-400/40 bg-sky-500/15 text-sky-200',
+    ring: 'border-sky-400/30',
+    dot: 'bg-sky-400',
+  },
   6: {
     pill: 'border-blue-400/40 bg-blue-500/15 text-blue-200',
     ring: 'border-blue-400/30',
@@ -58,6 +63,7 @@ export const STAGE_HINT: Record<Stage, string> = {
   2: 'Waiting on the assigned Vertical Head to accept or escalate.',
   3: 'Escalated — bouncing back to allocation.',
   4: 'Accepted. Moving to task setup.',
+  5: "Super admin is reviewing eligibility based on the VH's assessment.",
   6: 'The VH is setting up tasks for each team.',
   7: 'Teams are executing.',
   8: 'The VH is reviewing the deliverable with CS.',

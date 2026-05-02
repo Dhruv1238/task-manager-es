@@ -10,6 +10,7 @@
 
 import type {
   Attachment,
+  EligibilityNotePayload,
   EscalationPayload,
   IterationPayload,
   ProjectStatus,
@@ -443,7 +444,12 @@ export interface TransitionStageInput {
   // append a second event for it.
   events: Array<{
     stage: Stage
-    payload?: EscalationPayload | IterationPayload | StatusUpdatePayload | null
+    payload?:
+      | EscalationPayload
+      | IterationPayload
+      | StatusUpdatePayload
+      | EligibilityNotePayload
+      | null
   }>
   // Extra patch fields (e.g., { vhId: null, escalationCount: increment(1) }).
   extras?: Record<string, unknown>

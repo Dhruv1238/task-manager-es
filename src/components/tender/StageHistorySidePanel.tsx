@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { Timestamp } from 'firebase/firestore'
 import type {
+  EligibilityNotePayload,
   EscalationPayload,
   IterationPayload,
   Project,
@@ -45,6 +46,10 @@ function isIteration(p: StageEvent['payload']): p is IterationPayload {
 }
 function isStatusUpdate(p: StageEvent['payload']): p is StatusUpdatePayload {
   return !!p && 'from' in (p as object) && 'to' in (p as object) && 'note' in (p as object)
+}
+function isEligibilityNote(p: StageEvent['payload']): p is EligibilityNotePayload {
+  // Distinct from StatusUpdate (also has `note`) by the absence of from/to.
+  return !!p && 'note' in (p as object) && !('from' in (p as object))
 }
 
 // Slide-over side panel rendering project.stageHistory as a vertical timeline (delta §6.4).
@@ -172,6 +177,14 @@ export default function StageHistorySidePanel({ open, onClose, project }: Props)
                         </div>
                         <p className="text-white/85">{e.payload.note}</p>
                       </div>
+                    )}
+                    {isEligibilityNote(e.payload) && (
+                      <blockquote className="mt-3 rounded-lg border-l-2 border-sky-400/50 bg-sky-500/5 px-3 py-2 text-sm text-white/85">
+                        <span className="block text-[10px] uppercase tracking-wider text-white/40">
+                          VH's eligibility assessment
+                        </span>
+                        <span className="mt-1 block">{e.payload.note}</span>
+                      </blockquote>
                     )}
                   </li>
                 )

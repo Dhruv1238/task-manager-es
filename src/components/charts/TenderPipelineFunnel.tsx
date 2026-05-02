@@ -11,13 +11,14 @@ interface Props {
   projects: Project[]
 }
 
-const STAGES: Stage[] = [1, 2, 4, 6, 7, 8, 10]
+const STAGES: Stage[] = [1, 2, 5, 6, 7, 8, 10]
 
 const COLOR_BY_STAGE: Record<Stage, string> = {
   1: '#F59E0B',
   2: '#F59E0B',
   3: '#EF4444',
   4: '#3B82F6',
+  5: '#38BDF8', // sky-400 — eligibility review
   6: '#3B82F6',
   7: '#A855F7',
   8: '#6366F1',

@@ -6,6 +6,7 @@ import { STAGE_TONE, displayedPhase } from './stageStyle'
 import AllocateVhModal from './AllocateVhModal'
 import EscalateBackModal from './EscalateBackModal'
 import AcceptProjectModal from './AcceptProjectModal'
+import EligibilityReviewModal from './EligibilityReviewModal'
 import StageHistorySidePanel from './StageHistorySidePanel'
 import SignOffValidationModal from './SignOffValidationModal'
 import VhReviewModal from './VhReviewModal'
@@ -31,6 +32,7 @@ export default function StageBanner({ project }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [signOffOpen, setSignOffOpen] = useState(false)
   const [vhDecision, setVhDecision] = useState<'approve' | 'reject' | null>(null)
+  const [eligibilityDecision, setEligibilityDecision] = useState<'approve' | 'reject' | null>(null)
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
 
   const iterations = project.vhIterationCount ?? 0
@@ -76,6 +78,31 @@ export default function StageBanner({ project }: Props) {
         className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
       >
         Escalate Back
+      </button>,
+    )
+  }
+
+  if (perms.canReviewEligibility) {
+    actionButtons.push(
+      <button
+        key="eligibility-approve"
+        type="button"
+        onClick={() => setEligibilityDecision('approve')}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+      >
+        Approve & continue
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </button>,
+      <button
+        key="eligibility-reject"
+        type="button"
+        onClick={() => setEligibilityDecision('reject')}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+      >
+        Reject — close tender
       </button>,
     )
   }
@@ -183,6 +210,14 @@ export default function StageBanner({ project }: Props) {
           {!closedTone && !phase.isEscalated && actionButtons.length === 0 && (
             <p className="mt-1 text-xs text-white/45">{phase.hint}</p>
           )}
+          {stage === 5 && project.eligibilityNote && (
+            <blockquote className="mt-3 rounded-lg border-l-2 border-sky-400/50 bg-sky-500/5 px-3 py-2 text-sm text-white/80">
+              <span className="block text-[10px] uppercase tracking-wider text-white/40">
+                VH's assessment
+              </span>
+              <span className="mt-1 block">{project.eligibilityNote}</span>
+            </blockquote>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -214,6 +249,12 @@ export default function StageBanner({ project }: Props) {
       <AcceptProjectModal
         open={acceptOpen}
         onClose={() => setAcceptOpen(false)}
+        project={project}
+      />
+      <EligibilityReviewModal
+        open={eligibilityDecision !== null}
+        decision={eligibilityDecision ?? 'approve'}
+        onClose={() => setEligibilityDecision(null)}
         project={project}
       />
       <SignOffValidationModal

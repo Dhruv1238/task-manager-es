@@ -10,6 +10,7 @@ export interface ActionableProject {
   reason:
     | 'allocate-vh'
     | 'accept-or-escalate'
+    | 'review-eligibility'
     | 'add-tasks'
     | 'sign-off-validation'
     | 'vh-review'
@@ -54,6 +55,11 @@ export function useProjectsAwaitingMyAction(): {
       }
       if (stage === 2 && p.vhId === profile.uid) {
         out.push({ project: p, reason: 'accept-or-escalate', cta: 'Accept or Escalate' })
+        continue
+      }
+      // Super admin checkpoint after VH accepts (stage 5).
+      if (stage === 5 && isSuperAdmin) {
+        out.push({ project: p, reason: 'review-eligibility', cta: 'Review eligibility' })
         continue
       }
       if (stage === 6 && p.vhId === profile.uid) {
