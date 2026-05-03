@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
 import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { setUserRole } from '../lib/firestore'
 import type { GlobalRole, User } from '../types/models'
 import AdminActionBar from '../components/admin/AdminActionBar'
 
@@ -93,9 +94,17 @@ export default function AdminMembers() {
   async function changeRole(u: User, nextRole: GlobalRole) {
     if (firebaseUser?.uid === u.uid) return // can't change your own role
     if (u.globalRole === nextRole) return
+    if (!firebaseUser) return
     setPendingRoleUid(u.uid)
     try {
-      await updateDoc(doc(db, 'users', u.uid), { globalRole: nextRole })
+      await setUserRole({
+        uid: u.uid,
+        fromRole: u.globalRole,
+        toRole: nextRole,
+        actorId: firebaseUser.uid,
+        actorName: profile?.displayName ?? firebaseUser.email ?? 'Admin',
+        targetName: u.displayName,
+      })
     } finally {
       setPendingRoleUid(null)
     }

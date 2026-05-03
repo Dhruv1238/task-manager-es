@@ -22,7 +22,7 @@ const STATUS_TONE: Record<TaskStatus, string> = {
 // CS lead signs off project-level: stage 7 → 8.
 // Soft-gate: not hard-blocked on all tasks done — judgment call.
 export default function SignOffValidationModal({ open, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { tasks } = useProjectTasks(project.id)
   const [confirmed, setConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -35,7 +35,9 @@ export default function SignOffValidationModal({ open, onClose, project }: Props
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 8,
         events: [{ stage: 8, payload: null }],
       })

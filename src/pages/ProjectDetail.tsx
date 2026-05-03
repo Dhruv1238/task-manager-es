@@ -506,6 +506,7 @@ export default function ProjectDetail() {
           open={manageOpen}
           onClose={() => setManageOpen(false)}
           projectId={projectId}
+          projectTitle={project.title}
           currentTeamIds={project.teamIds ?? []}
         />
       )}

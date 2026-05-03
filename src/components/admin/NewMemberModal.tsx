@@ -77,6 +77,7 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
         displayName.trim(),
         tempPassword,
         user.uid,
+        profile?.displayName ?? user.email ?? 'Admin',
         canPickRole ? globalRole : 'user',
       )
       setResult(res)

@@ -15,7 +15,7 @@ interface Props {
 // Live `stage` immediately returns to 1; the history entry is stage 3 with the escalation payload.
 // `vhId` is zeroed out per delta §10.14 — escalation is "I can't take this", not "later".
 export default function EscalateBackModal({ open, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [reason, setReason] = useState('')
   const [eta, setEta] = useState('')
   const [priority, setPriority] = useState<StagePriority>('medium')
@@ -44,7 +44,9 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 1,
         events: [
           {

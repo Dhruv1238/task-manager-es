@@ -14,7 +14,7 @@ interface Props {
 
 // Flow 14 — Super admin allocates project to a VH (stage 1 → 2).
 export default function AllocateVhModal({ open, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { users } = useAllUsers()
   const [vhId, setVhId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -41,7 +41,9 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 2,
         events: [{ stage: 2, payload: null }],
         extras: { vhId },

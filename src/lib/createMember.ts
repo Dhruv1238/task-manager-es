@@ -1,8 +1,9 @@
 import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, firebaseConfig } from './firebase'
 import type { GlobalRole } from '../types/models'
+import { recordAuditEvent } from './firestore'
 
 export interface CreateMemberResult {
   uid: string
@@ -24,6 +25,7 @@ export async function createMember(
   displayName: string,
   tempPassword: string,
   adminUid: string,
+  adminName: string,
   globalRole: GlobalRole = 'user',
 ): Promise<CreateMemberResult> {
   const secondary = initializeApp(firebaseConfig, `Secondary-${Date.now()}`)
@@ -31,7 +33,8 @@ export async function createMember(
     const secondaryAuth = getAuth(secondary)
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, tempPassword)
 
-    await setDoc(doc(db, 'users', cred.user.uid), {
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'users', cred.user.uid), {
       uid: cred.user.uid,
       email,
       displayName,
@@ -41,6 +44,17 @@ export async function createMember(
       createdBy: adminUid,
       createdAt: serverTimestamp(),
     })
+    recordAuditEvent({
+      actorId: adminUid,
+      actorName: adminName,
+      action: 'user.created',
+      targetType: 'user',
+      targetId: cred.user.uid,
+      targetTitle: displayName,
+      payload: { email, globalRole },
+      batch,
+    })
+    await batch.commit()
 
     await secondaryAuth.signOut()
     return { uid: cred.user.uid, email, tempPassword }

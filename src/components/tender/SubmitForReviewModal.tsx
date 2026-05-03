@@ -71,6 +71,8 @@ export default function SubmitForReviewModal({ open, onClose, task }: Props) {
         notes,
         authorId: user.uid,
         authorName: profile.displayName,
+        taskTitle: task.title,
+        projectId: task.projectId,
       })
       onClose()
     } catch (e) {

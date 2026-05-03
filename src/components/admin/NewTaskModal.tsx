@@ -43,7 +43,7 @@ export default function NewTaskModal({
   teamId: initialTeamId,
   teamName: initialTeamName,
 }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
   const { templates } = useTaskTemplates()
@@ -136,6 +136,7 @@ export default function NewTaskModal({
         priority,
         dueDate: dueDate ? Timestamp.fromDate(new Date(dueDate)) : undefined,
         createdBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         workType: templateCode === CUSTOM ? undefined : templateCode,
         assigneeId: assignee?.uid ?? null,
         assigneeName: assignee?.displayName ?? null,

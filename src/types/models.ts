@@ -226,3 +226,45 @@ export interface TaskTemplate {
 export interface TaskTemplateConfig {
   templates: TaskTemplate[]
 }
+
+// --- Audit trail (forensic-only; not surfaced in UI) -------------------------
+
+export type AuditAction =
+  // Project lifecycle (mirrored from stageHistory for cross-entity queryability)
+  | 'project.created'
+  | 'project.stage_transitioned'
+  | 'project.status_updated'
+  | 'project.teams_updated'
+  // Task lifecycle
+  | 'task.created'
+  | 'subtask.created'
+  | 'task.status_changed'
+  | 'task.assignee_changed'
+  | 'task.submitted_for_review'
+  | 'task.review_approved'
+  | 'task.review_rejected'
+  | 'task.attachment_added'
+  | 'task.attachment_removed'
+  // Admin-sensitive
+  | 'user.created'
+  | 'user.role_changed'
+  | 'team.created'
+  | 'team.member_added'
+  | 'team.member_removed'
+  | 'team.lead_changed'
+
+export type AuditTargetType = 'project' | 'task' | 'team' | 'user'
+
+export interface AuditEvent {
+  id: string
+  actorId: string
+  actorName: string
+  action: AuditAction
+  targetType: AuditTargetType
+  targetId: string
+  targetTitle?: string
+  projectId?: string
+  teamId?: string
+  payload?: Record<string, unknown>
+  createdAt: Timestamp
+}

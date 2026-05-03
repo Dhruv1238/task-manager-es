@@ -15,7 +15,7 @@ interface Props {
 // from the project header pill or from the stage-10 banner action button.
 // Records every change in stageHistory with a required note.
 export default function UpdateProjectStatusModal({ open, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const currentStatus = (project.status ?? 'in_progress') as ProjectStatus
   const [next, setNext] = useState<ProjectStatus>(currentStatus)
   const [note, setNote] = useState('')
@@ -53,10 +53,12 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
     try {
       await updateProjectStatus({
         projectId: project.id,
+        projectTitle: project.title,
         fromStatus: currentStatus,
         toStatus: next,
         note: note.trim(),
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         stage: (project.stage ?? 1) as Stage,
       })
       onClose()

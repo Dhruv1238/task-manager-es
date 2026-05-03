@@ -1,22 +1,29 @@
 import { useRef, useState } from 'react'
-import { arrayRemove, doc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../../contexts/AuthContext'
-import { db } from '../../lib/firebase'
 import { uploadAsset } from '../../lib/uploadAsset'
-import { addTaskAttachment } from '../../lib/firestore'
+import { addTaskAttachment, removeTaskAttachment } from '../../lib/firestore'
 import FileBadge, { formatFileSize } from '../ui/FileBadge'
 import type { Attachment } from '../../types/models'
 
 interface Props {
   taskId: string
+  taskTitle: string
+  projectId: string
   attachments: Attachment[]
   canEdit: boolean
 }
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
-export default function TaskAttachmentsSection({ taskId, attachments, canEdit }: Props) {
-  const { user } = useAuth()
+export default function TaskAttachmentsSection({
+  taskId,
+  taskTitle,
+  projectId,
+  attachments,
+  canEdit,
+}: Props) {
+  const { user, profile } = useAuth()
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -48,7 +55,14 @@ export default function TaskAttachmentsSection({ taskId, attachments, canEdit }:
           uploadedBy: user.uid,
           uploadedAt: Timestamp.now(),
         }
-        await addTaskAttachment(taskId, attachment)
+        await addTaskAttachment({
+          taskId,
+          attachment,
+          actorId: user.uid,
+          actorName: profile?.displayName ?? user.email ?? 'User',
+          taskTitle,
+          projectId,
+        })
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed')
@@ -58,10 +72,15 @@ export default function TaskAttachmentsSection({ taskId, attachments, canEdit }:
   }
 
   async function removeAttachment(att: Attachment) {
+    if (!user) return
     try {
-      await updateDoc(doc(db, 'tasks', taskId), {
-        attachments: arrayRemove(att),
-        updatedAt: serverTimestamp(),
+      await removeTaskAttachment({
+        taskId,
+        attachment: att,
+        actorId: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
+        taskTitle,
+        projectId,
       })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to remove.')

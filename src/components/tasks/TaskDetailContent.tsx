@@ -180,11 +180,11 @@ export default function TaskDetailContent({ task }: Props) {
       setSubmitReviewOpen(true)
       return
     }
+    if (!user || !profile) return
     // Approving from in_review goes through transitionTaskFromReview so reviewerId
     // is cleared and parent counters roll up cleanly. Prevents direct state writes
     // from bypassing the helper.
     if (task.status === 'in_review' && next === 'done') {
-      if (!user || !profile) return
       await transitionTaskFromReview({
         taskId: task.id,
         decision: 'approve',
@@ -193,7 +193,12 @@ export default function TaskDetailContent({ task }: Props) {
       })
       return
     }
-    await setTaskStatus(task.id, next)
+    await setTaskStatus({
+      taskId: task.id,
+      status: next,
+      actorId: user.uid,
+      actorName: profile.displayName,
+    })
   }
 
   async function handleApproveClick() {
@@ -353,6 +358,8 @@ export default function TaskDetailContent({ task }: Props) {
 
       <TaskAttachmentsSection
         taskId={task.id}
+        taskTitle={task.title}
+        projectId={task.projectId}
         attachments={task.attachments ?? []}
         canEdit={canEdit}
       />

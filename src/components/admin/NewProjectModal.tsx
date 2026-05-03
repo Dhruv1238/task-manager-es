@@ -23,7 +23,7 @@ function friendlyError(err: unknown): string {
 }
 
 export default function NewProjectModal({ open, onClose }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
@@ -52,7 +52,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
       setSubmitting(false)
       setUploadStatus(null)
     }
-  }, [open, user?.uid])
+  }, [open, user?.uid])  
 
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? [])
@@ -108,6 +108,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
         description: description.trim(),
         ownerId,
         createdBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         submissionDate: submissionDate
           ? Timestamp.fromDate(new Date(submissionDate))
           : undefined,

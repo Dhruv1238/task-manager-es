@@ -8,6 +8,7 @@ import { useTeamTasks } from '../hooks/useTeamTasks'
 import { usePermissions } from '../hooks/usePermissions'
 import AddTeamMemberModal from '../components/admin/AddTeamMemberModal'
 import RemoveMemberConfirmModal from '../components/admin/RemoveMemberConfirmModal'
+import { useAuth } from '../contexts/AuthContext'
 import { setTeamLead } from '../lib/firestore'
 import { isProjectLive } from '../lib/projectStatus'
 import MemberWorkload from '../components/charts/MemberWorkload'
@@ -74,6 +75,7 @@ export default function TeamDetail() {
   const { projects } = useAllProjects()
   const { tasks: teamTasks } = useTeamTasks(teamId)
   const { isAdmin, isTeamLead } = usePermissions(undefined, teamId)
+  const { user: authUser, profile } = useAuth()
   const canManageRoster = isAdmin || isTeamLead
 
   useEffect(() => {
@@ -250,9 +252,17 @@ export default function TeamDetail() {
                           type="button"
                           onClick={async () => {
                             if (promotingLeadUid) return
+                            if (!authUser) return
                             setPromotingLeadUid(m.uid)
                             try {
-                              await setTeamLead(team.id, m.uid)
+                              await setTeamLead({
+                                teamId: team.id,
+                                newLeadUid: m.uid,
+                                actorId: authUser.uid,
+                                actorName: profile?.displayName ?? authUser.email ?? 'Admin',
+                                teamName: team.name,
+                                fromLeadId: team.leadId,
+                              })
                             } finally {
                               setPromotingLeadUid(null)
                             }

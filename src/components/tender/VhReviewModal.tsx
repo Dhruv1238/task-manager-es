@@ -16,7 +16,7 @@ interface Props {
 // Approve → 10 (clean transition).
 // Reject  → records stage-9 event with iteration payload, lives stage = 7 (loop back).
 export default function VhReviewModal({ open, decision, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [feedback, setFeedback] = useState('')
   const [eta, setEta] = useState('')
   const [priority, setPriority] = useState<StagePriority>('medium')
@@ -43,7 +43,9 @@ export default function VhReviewModal({ open, decision, onClose, project }: Prop
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 10,
         events: [{ stage: 10, payload: null }],
       })
@@ -67,7 +69,9 @@ export default function VhReviewModal({ open, decision, onClose, project }: Prop
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 7,
         events: [
           {

@@ -16,7 +16,7 @@ interface Props {
 //   - reject  → project.status = 'not_submitted' (tender closes)
 // VH's note is shown in both bodies so the super admin's decision context is in the modal.
 export default function EligibilityReviewModal({ open, decision, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +38,9 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 6,
         events: [{ stage: 6, payload: null }],
       })
@@ -62,10 +64,12 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
     try {
       await updateProjectStatus({
         projectId: project.id,
+        projectTitle: project.title,
         fromStatus: project.status,
         toStatus: 'not_submitted',
         note: trimmed,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         stage: 5,
       })
       onClose()

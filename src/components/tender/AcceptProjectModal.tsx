@@ -15,7 +15,7 @@ interface Props {
 //   - stage 5 (entry to eligibility review, payload carries the VH's note)
 // Live stage = 5. The super admin then approves (→ 6) or rejects (→ closes).
 export default function AcceptProjectModal({ open, onClose, project }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,7 +40,9 @@ export default function AcceptProjectModal({ open, onClose, project }: Props) {
     try {
       await transitionStage({
         projectId: project.id,
+        projectTitle: project.title,
         enteredBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         toStage: 5,
         events: [
           { stage: 4, payload: null },
