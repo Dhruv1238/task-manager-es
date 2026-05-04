@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
 import ProjectStatusPill from '../components/tender/ProjectStatusPill'
+import { isProjectClosed } from '../lib/projectStatus'
 import type { Project, User } from '../types/models'
 
 function initialsFor(u: User): string {
@@ -44,7 +45,9 @@ function submissionDeadline(project: Project) {
 function isOverdue(project: Project): boolean {
   const ts = submissionDeadline(project)
   if (!ts) return false
-  if (project.status === 'awarded' || project.status === 'lost' || project.status === 'not_submitted') return false
+  // Skip the submission-deadline overdue flag once the tender has a final outcome,
+  // and also once awarded — at that point the deadline is no longer a submission gate.
+  if (isProjectClosed(project.status) || project.status === 'awarded') return false
   return ts.toDate().getTime() < Date.now()
 }
 

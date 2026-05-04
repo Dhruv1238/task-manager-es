@@ -42,6 +42,7 @@ function StatusDot({ status }: { status: ProjectStatus }) {
     submitted: 'bg-blue-400',
     not_submitted: 'bg-white/30',
     awarded: 'bg-emerald-400',
+    completed: 'bg-teal-400',
     lost: 'bg-red-400',
     on_hold: 'bg-amber-400',
   }

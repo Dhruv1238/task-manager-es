@@ -3,12 +3,15 @@ import type { Timestamp } from 'firebase/firestore'
 export type GlobalRole = 'super_admin' | 'admin' | 'horizontal_lead' | 'user'
 
 // Tender outcome status. Default 'in_progress' is implicit "no outcome yet".
-// The remaining values capture the lifecycle state of the pitch.
+// The remaining values capture the lifecycle state of the pitch. 'awarded' is
+// a positive milestone but not terminal — the project then runs to 'completed'
+// once delivery wraps up.
 export type ProjectStatus =
   | 'in_progress'
   | 'submitted'
   | 'not_submitted'
   | 'awarded'
+  | 'completed'
   | 'lost'
   | 'on_hold'
 

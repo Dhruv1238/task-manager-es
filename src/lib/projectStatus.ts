@@ -2,8 +2,9 @@ import type { ProjectStatus } from '../types/models'
 
 // Visual + label tokens for the project status pill. Aligned with v1's chartTheme:
 // muted slate for the implicit/in-progress state, blue for submitted (in-flight),
-// emerald for awarded (positive terminal), red for lost (negative terminal),
-// amber for on_hold, neutral for not_submitted (declined to send).
+// emerald for awarded (won the pitch — work begins), teal for completed (delivery
+// wrapped — terminal positive), red for lost (negative terminal), amber for
+// on_hold, neutral for not_submitted (declined to send).
 export const STATUS_DISPLAY: Record<
   ProjectStatus,
   { label: string; pill: string; dot: string; description: string }
@@ -30,7 +31,13 @@ export const STATUS_DISPLAY: Record<
     label: 'Awarded',
     pill: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
     dot: 'bg-emerald-400',
-    description: 'Client awarded the work to us. 🎉',
+    description: 'Client awarded the work to us — delivery in progress.',
+  },
+  completed: {
+    label: 'Completed',
+    pill: 'border-teal-400/40 bg-teal-500/15 text-teal-200',
+    dot: 'bg-teal-400',
+    description: 'Awarded work has been delivered and wrapped up.',
   },
   lost: {
     label: 'Lost',
@@ -51,13 +58,15 @@ export const STATUS_OPTIONS: ProjectStatus[] = [
   'submitted',
   'on_hold',
   'awarded',
+  'completed',
   'lost',
   'not_submitted',
 ]
 
-// Conclusive outcomes that lock the project for editing.
+// Conclusive outcomes that lock the project for editing. 'awarded' is excluded
+// because delivery work continues after the award until status flips to 'completed'.
 export function isProjectClosed(status: ProjectStatus | undefined): boolean {
-  return status === 'awarded' || status === 'lost' || status === 'not_submitted'
+  return status === 'completed' || status === 'lost' || status === 'not_submitted'
 }
 
 // "Live" projects are anything that isn't a final outcome — used to filter

@@ -11,6 +11,7 @@ const COLOR: Record<ProjectStatus, string> = {
   submitted: '#60A5FA',
   not_submitted: 'rgba(255,255,255,0.35)',
   awarded: '#34D399',
+  completed: '#2DD4BF',
   lost: '#F87171',
   on_hold: '#FBBF24',
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Project, Stage } from '../../types/models'
 import { STAGE_HEADLINE } from '../../types/models'
 import { usePermissions } from '../../hooks/usePermissions'
+import { isProjectClosed } from '../../lib/projectStatus'
 import { STAGE_TONE, displayedPhase } from './stageStyle'
 import AllocateVhModal from './AllocateVhModal'
 import EscalateBackModal from './EscalateBackModal'
@@ -171,11 +172,9 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  // Project considered closed once the outcome is conclusive.
-  const closedTone =
-    project.status === 'awarded' ||
-    project.status === 'lost' ||
-    project.status === 'not_submitted'
+  // Project considered closed once the outcome is conclusive (completed/lost/not_submitted).
+  // 'awarded' is intentionally excluded — delivery work continues until 'completed'.
+  const closedTone = isProjectClosed(project.status)
   const headline = closedTone
     ? `Closed — ${project.status?.replace('_', ' ')}`
     : STAGE_HEADLINE[stage]
