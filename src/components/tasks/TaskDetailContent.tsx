@@ -121,7 +121,7 @@ export default function TaskDetailContent({ task }: Props) {
   const { users } = useAllUsers()
   const { subtasks, loading: subtasksLoading, error: subtasksError } = useSubtasks(task.id)
   const { isAdmin, isProjectOwner, isTeamLead } = usePermissions(task.projectId, task.teamId)
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   const team = useMemo(
     () => teams.find((t) => t.id === task.teamId) ?? null,
@@ -159,7 +159,13 @@ export default function TaskDetailContent({ task }: Props) {
   const totalCount = task.subtaskCount ?? subtasks.length
 
   async function handleStatusChange(next: TaskStatus) {
-    await setTaskStatus(task.id, next)
+    if (!user) return
+    await setTaskStatus({
+      taskId: task.id,
+      status: next,
+      actorId: user.uid,
+      actorName: profile?.displayName ?? user.email ?? 'User',
+    })
   }
 
   return (
@@ -255,6 +261,8 @@ export default function TaskDetailContent({ task }: Props) {
 
       <TaskAttachmentsSection
         taskId={task.id}
+        taskTitle={task.title}
+        projectId={task.projectId}
         attachments={task.attachments ?? []}
         canEdit={canEdit}
       />

@@ -4,6 +4,7 @@ import { collection, getCountFromServer, query, where } from 'firebase/firestore
 import Modal from '../ui/Modal'
 import { db } from '../../lib/firebase'
 import { removeMemberFromTeam } from '../../lib/firestore'
+import { useAuth } from '../../contexts/AuthContext'
 import type { User } from '../../types/models'
 
 interface Props {
@@ -26,6 +27,7 @@ export default function RemoveMemberConfirmModal({
   teamName,
   member,
 }: Props) {
+  const { user, profile } = useAuth()
   const [openTaskCount, setOpenTaskCount] = useState<number | null>(null)
   const [counting, setCounting] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -63,10 +65,18 @@ export default function RemoveMemberConfirmModal({
   }, [open, member.uid])
 
   async function handleConfirm() {
+    if (!user) return
     setError(null)
     setSubmitting(true)
     try {
-      await removeMemberFromTeam(teamId, member.uid)
+      await removeMemberFromTeam({
+        teamId,
+        uid: member.uid,
+        actorId: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'Admin',
+        teamName,
+        memberName: member.displayName,
+      })
       onClose()
     } catch (e) {
       setError(friendlyError(e))

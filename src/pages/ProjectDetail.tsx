@@ -7,6 +7,7 @@ import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useProjectTasks } from '../hooks/useProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
+import { useAuth } from '../contexts/AuthContext'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
@@ -166,6 +167,7 @@ export default function ProjectDetail() {
   const { teams } = useAllTeams()
   const { tasks: projectTasks } = useProjectTasks(projectId)
   const { isAdmin, isProjectOwner } = usePermissions(projectId)
+  const { user: authUser, profile } = useAuth()
 
   useEffect(() => {
     if (!projectId) return
@@ -267,7 +269,17 @@ export default function ProjectDetail() {
             {canManageTeams ? (
               <ProjectStatusMenu
                 value={project.status}
-                onChange={(next) => setProjectStatus(project.id, next)}
+                onChange={(next) => {
+                  if (!authUser) return
+                  void setProjectStatus({
+                    projectId: project.id,
+                    projectTitle: project.title,
+                    fromStatus: project.status,
+                    toStatus: next,
+                    actorId: authUser.uid,
+                    actorName: profile?.displayName ?? authUser.email ?? 'User',
+                  })
+                }}
               />
             ) : (
               <StatusBadge status={project.status} />
@@ -478,6 +490,7 @@ export default function ProjectDetail() {
           open={manageOpen}
           onClose={() => setManageOpen(false)}
           projectId={projectId}
+          projectTitle={project.title}
           currentTeamIds={project.teamIds ?? []}
         />
       )}

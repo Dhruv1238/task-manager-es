@@ -24,7 +24,7 @@ function friendlyError(err: unknown): string {
 }
 
 export default function AddSubtaskForm({ parent, team, users }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -81,6 +81,7 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
         assigneeId: assignee.uid,
         assigneeName: assignee.displayName,
         createdBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
       })
       close()
     } catch (e) {

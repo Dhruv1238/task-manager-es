@@ -3,6 +3,8 @@ import { FirebaseError } from 'firebase/app'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import { addMemberToTeam } from '../../lib/firestore'
+import { useAuth } from '../../contexts/AuthContext'
+import { useAllUsers } from '../../hooks/useAllUsers'
 
 interface Props {
   open: boolean
@@ -24,6 +26,8 @@ export default function AddTeamMemberModal({
   teamName,
   currentMemberIds,
 }: Props) {
+  const { user, profile } = useAuth()
+  const { users } = useAllUsers()
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,10 +45,19 @@ export default function AddTeamMemberModal({
       setError('Pick a user to add.')
       return
     }
+    if (!user) return
     setError(null)
     setSubmitting(true)
     try {
-      await addMemberToTeam(teamId, selectedUid)
+      const memberName = users.find((u) => u.uid === selectedUid)?.displayName
+      await addMemberToTeam({
+        teamId,
+        uid: selectedUid,
+        actorId: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'Admin',
+        teamName,
+        ...(memberName ? { memberName } : {}),
+      })
       onClose()
     } catch (e) {
       setError(friendlyError(e))

@@ -12,6 +12,7 @@ interface Props {
   open: boolean
   onClose: () => void
   projectId: string
+  projectTitle: string
   currentTeamIds: string[]
 }
 
@@ -53,11 +54,12 @@ export default function ManageTeamsModal({
   open,
   onClose,
   projectId,
+  projectTitle,
   currentTeamIds,
 }: Props) {
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
   const isAdmin = profile?.globalRole === 'admin'
 
   const [selected, setSelected] = useState<Set<string>>(new Set(currentTeamIds))
@@ -112,13 +114,17 @@ export default function ManageTeamsModal({
   }, [selected, previousSet])
 
   async function handleSave() {
+    if (!user) return
     setError(null)
     setSubmitting(true)
     try {
       await setProjectTeams({
         projectId,
+        projectTitle,
         previousTeamIds: currentTeamIds,
         newTeamIds: Array.from(selected),
+        actorId: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'Admin',
       })
       onClose()
     } catch (e) {

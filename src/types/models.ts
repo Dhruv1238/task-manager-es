@@ -94,3 +94,39 @@ export interface Comment {
   createdAt: Timestamp
   editedAt?: Timestamp
 }
+
+// --- Audit trail (forensic-only; not surfaced in UI) -------------------------
+
+export type AuditAction =
+  // Project lifecycle
+  | 'project.created'
+  | 'project.status_updated'
+  | 'project.teams_updated'
+  // Task lifecycle
+  | 'task.created'
+  | 'subtask.created'
+  | 'task.status_changed'
+  | 'task.attachment_added'
+  | 'task.attachment_removed'
+  // Admin-sensitive
+  | 'user.created'
+  | 'user.role_changed'
+  | 'team.created'
+  | 'team.member_added'
+  | 'team.member_removed'
+
+export type AuditTargetType = 'project' | 'task' | 'team' | 'user'
+
+export interface AuditEvent {
+  id: string
+  actorId: string
+  actorName: string
+  action: AuditAction
+  targetType: AuditTargetType
+  targetId: string
+  targetTitle?: string
+  projectId?: string
+  teamId?: string
+  payload?: Record<string, unknown>
+  createdAt: Timestamp
+}

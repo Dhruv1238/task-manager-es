@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
 import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { setUserRole } from '../lib/firestore'
 import type { User } from '../types/models'
 import AdminActionBar from '../components/admin/AdminActionBar'
 
@@ -20,7 +21,7 @@ function formatDate(ts: Timestamp | undefined): string {
 }
 
 export default function AdminMembers() {
-  const { user: firebaseUser } = useAuth()
+  const { user: firebaseUser, profile } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -67,10 +68,17 @@ export default function AdminMembers() {
 
   async function toggleRole(u: User) {
     if (firebaseUser?.uid === u.uid) return // can't demote yourself
+    if (!firebaseUser) return
+    const nextRole = u.globalRole === 'admin' ? 'user' : 'admin'
     setPendingRoleUid(u.uid)
     try {
-      await updateDoc(doc(db, 'users', u.uid), {
-        globalRole: u.globalRole === 'admin' ? 'user' : 'admin',
+      await setUserRole({
+        uid: u.uid,
+        fromRole: u.globalRole,
+        toRole: nextRole,
+        actorId: firebaseUser.uid,
+        actorName: profile?.displayName ?? firebaseUser.email ?? 'Admin',
+        targetName: u.displayName,
       })
     } finally {
       setPendingRoleUid(null)

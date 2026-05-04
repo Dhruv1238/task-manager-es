@@ -8,7 +8,15 @@
  * Signatures live here from Sprint 0; bodies are filled in by the sprint that needs them (see plan).
  */
 
-import type { Attachment, ProjectStatus, TaskPriority, TaskStatus } from '../types/models'
+import type {
+  Attachment,
+  AuditAction,
+  AuditTargetType,
+  GlobalRole,
+  ProjectStatus,
+  TaskPriority,
+  TaskStatus,
+} from '../types/models'
 import {
   addDoc,
   arrayRemove,
@@ -18,11 +26,54 @@ import {
   getDoc,
   increment,
   serverTimestamp,
-  updateDoc,
+  setDoc,
   writeBatch,
   type Timestamp,
+  type WriteBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+
+// --- Audit trail -------------------------------------------------------------
+// Forensic-only append-only collection. Every multi-doc helper threads the
+// caller's actor identity (uid + display name) and writes an `auditEvents`
+// doc inside the same writeBatch — so the audit record either lands with the
+// primary write or rolls back with it. No UI surfacing yet.
+
+export interface RecordAuditEventInput {
+  actorId: string
+  actorName: string
+  action: AuditAction
+  targetType: AuditTargetType
+  targetId: string
+  targetTitle?: string
+  projectId?: string
+  teamId?: string
+  payload?: Record<string, unknown>
+  // When provided, the audit doc joins the caller's batch so it's atomic
+  // with the primary write. When omitted, the helper commits a standalone write.
+  batch?: WriteBatch
+}
+
+export function recordAuditEvent(input: RecordAuditEventInput): Promise<void> | void {
+  const ref = doc(collection(db, 'auditEvents'))
+  const data = {
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: input.action,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    ...(input.targetTitle ? { targetTitle: input.targetTitle } : {}),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.teamId ? { teamId: input.teamId } : {}),
+    ...(input.payload ? { payload: input.payload } : {}),
+    createdAt: serverTimestamp(),
+  }
+  if (input.batch) {
+    input.batch.set(ref, data)
+    return
+  }
+  return setDoc(ref, data)
+}
 
 // --- Teams (Sprint 2 — Flow 1) -------------------------------------------------
 
@@ -32,6 +83,7 @@ export interface AddTeamInput {
   leadId: string
   memberIds: string[]
   createdBy: string
+  actorName: string
 }
 
 export async function addTeam(input: AddTeamInput): Promise<string> {
@@ -54,21 +106,86 @@ export async function addTeam(input: AddTeamInput): Promise<string> {
     })
   }
 
+  recordAuditEvent({
+    actorId: input.createdBy,
+    actorName: input.actorName,
+    action: 'team.created',
+    targetType: 'team',
+    targetId: teamRef.id,
+    targetTitle: input.name,
+    teamId: teamRef.id,
+    payload: { leadId: input.leadId, memberCount: input.memberIds.length },
+    batch,
+  })
+  for (const uid of input.memberIds) {
+    recordAuditEvent({
+      actorId: input.createdBy,
+      actorName: input.actorName,
+      action: 'team.member_added',
+      targetType: 'team',
+      targetId: teamRef.id,
+      targetTitle: input.name,
+      teamId: teamRef.id,
+      payload: { memberUid: uid },
+      batch,
+    })
+  }
+
   await batch.commit()
   return teamRef.id
 }
 
-export async function addMemberToTeam(teamId: string, uid: string): Promise<void> {
+export interface AddMemberToTeamInput {
+  teamId: string
+  uid: string
+  actorId: string
+  actorName: string
+  teamName: string
+  memberName?: string
+}
+
+export async function addMemberToTeam(input: AddMemberToTeamInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'teams', teamId), { memberIds: arrayUnion(uid) })
-  batch.update(doc(db, 'users', uid), { teamIds: arrayUnion(teamId) })
+  batch.update(doc(db, 'teams', input.teamId), { memberIds: arrayUnion(input.uid) })
+  batch.update(doc(db, 'users', input.uid), { teamIds: arrayUnion(input.teamId) })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'team.member_added',
+    targetType: 'team',
+    targetId: input.teamId,
+    targetTitle: input.teamName,
+    teamId: input.teamId,
+    payload: { memberUid: input.uid, ...(input.memberName ? { memberName: input.memberName } : {}) },
+    batch,
+  })
   await batch.commit()
 }
 
-export async function removeMemberFromTeam(teamId: string, uid: string): Promise<void> {
+export interface RemoveMemberFromTeamInput {
+  teamId: string
+  uid: string
+  actorId: string
+  actorName: string
+  teamName: string
+  memberName?: string
+}
+
+export async function removeMemberFromTeam(input: RemoveMemberFromTeamInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'teams', teamId), { memberIds: arrayRemove(uid) })
-  batch.update(doc(db, 'users', uid), { teamIds: arrayRemove(teamId) })
+  batch.update(doc(db, 'teams', input.teamId), { memberIds: arrayRemove(input.uid) })
+  batch.update(doc(db, 'users', input.uid), { teamIds: arrayRemove(input.teamId) })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'team.member_removed',
+    targetType: 'team',
+    targetId: input.teamId,
+    targetTitle: input.teamName,
+    teamId: input.teamId,
+    payload: { memberUid: input.uid, ...(input.memberName ? { memberName: input.memberName } : {}) },
+    batch,
+  })
   await batch.commit()
 }
 
@@ -79,12 +196,15 @@ export interface AddProjectInput {
   description: string
   ownerId: string
   createdBy: string
+  actorName: string
   deadline?: Timestamp
   attachments?: Attachment[]
 }
 
 export async function addProject(input: AddProjectInput): Promise<string> {
-  const ref = await addDoc(collection(db, 'projects'), {
+  const batch = writeBatch(db)
+  const projectRef = doc(collection(db, 'projects'))
+  batch.set(projectRef, {
     title: input.title,
     description: input.description,
     ownerId: input.ownerId,
@@ -96,23 +216,57 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
-  return ref.id
+  recordAuditEvent({
+    actorId: input.createdBy,
+    actorName: input.actorName,
+    action: 'project.created',
+    targetType: 'project',
+    targetId: projectRef.id,
+    targetTitle: input.title,
+    projectId: projectRef.id,
+    batch,
+  })
+  await batch.commit()
+  return projectRef.id
 }
 
-export async function setProjectStatus(
-  projectId: string,
-  status: ProjectStatus,
-): Promise<void> {
-  await updateDoc(doc(db, 'projects', projectId), {
-    status,
+export interface SetProjectStatusInput {
+  projectId: string
+  projectTitle: string
+  fromStatus: ProjectStatus
+  toStatus: ProjectStatus
+  actorId: string
+  actorName: string
+}
+
+export async function setProjectStatus(input: SetProjectStatusInput): Promise<void> {
+  if (input.fromStatus === input.toStatus) return
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'projects', input.projectId), {
+    status: input.toStatus,
     updatedAt: serverTimestamp(),
   })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'project.status_updated',
+    targetType: 'project',
+    targetId: input.projectId,
+    targetTitle: input.projectTitle,
+    projectId: input.projectId,
+    payload: { from: input.fromStatus, to: input.toStatus },
+    batch,
+  })
+  await batch.commit()
 }
 
 export interface SetProjectTeamsInput {
   projectId: string
+  projectTitle: string
   previousTeamIds: string[]
   newTeamIds: string[]
+  actorId: string
+  actorName: string
 }
 
 // Atomically updates `projects/{id}.teamIds` and mirrors the change into each
@@ -138,6 +292,19 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
       projectIds: arrayRemove(input.projectId),
     })
   }
+  if (added.length || removed.length) {
+    recordAuditEvent({
+      actorId: input.actorId,
+      actorName: input.actorName,
+      action: 'project.teams_updated',
+      targetType: 'project',
+      targetId: input.projectId,
+      targetTitle: input.projectTitle,
+      projectId: input.projectId,
+      payload: { added, removed },
+      batch,
+    })
+  }
   await batch.commit()
 }
 
@@ -153,10 +320,13 @@ export interface AddTeamTaskInput {
   teamName: string
   projectTitle: string
   createdBy: string
+  actorName: string
 }
 
 export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
-  const ref = await addDoc(collection(db, 'tasks'), {
+  const batch = writeBatch(db)
+  const taskRef = doc(collection(db, 'tasks'))
+  batch.set(taskRef, {
     projectId: input.projectId,
     teamId: input.teamId,
     parentTaskId: null,
@@ -175,7 +345,19 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
-  return ref.id
+  recordAuditEvent({
+    actorId: input.createdBy,
+    actorName: input.actorName,
+    action: 'task.created',
+    targetType: 'task',
+    targetId: taskRef.id,
+    targetTitle: input.title,
+    projectId: input.projectId,
+    teamId: input.teamId,
+    batch,
+  })
+  await batch.commit()
+  return taskRef.id
 }
 
 export interface AddSubtaskInput {
@@ -191,6 +373,7 @@ export interface AddSubtaskInput {
   teamName: string
   projectTitle: string
   createdBy: string
+  actorName: string
 }
 
 export async function addSubtask(input: AddSubtaskInput): Promise<string> {
@@ -223,29 +406,55 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
     updatedAt: serverTimestamp(),
   })
 
+  recordAuditEvent({
+    actorId: input.createdBy,
+    actorName: input.actorName,
+    action: 'subtask.created',
+    targetType: 'task',
+    targetId: subtaskRef.id,
+    targetTitle: input.title,
+    projectId: input.projectId,
+    teamId: input.teamId,
+    payload: { parentTaskId: input.parentTaskId, assigneeId: input.assigneeId },
+    batch,
+  })
+
   await batch.commit()
   return subtaskRef.id
 }
 
 // Updates a task's status. If the task is a subtask that just crossed the "done" boundary
 // in either direction, also updates the parent's `subtaskDoneCount` in the same batch (§8).
-export async function setTaskStatus(taskId: string, status: TaskStatus): Promise<void> {
-  const ref = doc(db, 'tasks', taskId)
+export interface SetTaskStatusInput {
+  taskId: string
+  status: TaskStatus
+  actorId: string
+  actorName: string
+}
+
+export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
+  const ref = doc(db, 'tasks', input.taskId)
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('Task not found')
-  const task = snap.data() as { status: TaskStatus; parentTaskId: string | null }
-  if (task.status === status) return
+  const task = snap.data() as {
+    status: TaskStatus
+    parentTaskId: string | null
+    title?: string
+    projectId?: string
+    teamId?: string
+  }
+  if (task.status === input.status) return
 
   const batch = writeBatch(db)
   batch.update(ref, {
-    status,
+    status: input.status,
     updatedAt: serverTimestamp(),
-    completedAt: status === 'done' ? serverTimestamp() : null,
+    completedAt: input.status === 'done' ? serverTimestamp() : null,
   })
 
   if (task.parentTaskId) {
     const wasDone = task.status === 'done'
-    const isDone = status === 'done'
+    const isDone = input.status === 'done'
     if (wasDone !== isDone) {
       batch.update(doc(db, 'tasks', task.parentTaskId), {
         subtaskDoneCount: increment(isDone ? 1 : -1),
@@ -254,17 +463,116 @@ export async function setTaskStatus(taskId: string, status: TaskStatus): Promise
     }
   }
 
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.status_changed',
+    targetType: 'task',
+    targetId: input.taskId,
+    ...(task.title ? { targetTitle: task.title } : {}),
+    ...(task.projectId ? { projectId: task.projectId } : {}),
+    ...(task.teamId ? { teamId: task.teamId } : {}),
+    payload: { from: task.status, to: input.status },
+    batch,
+  })
+
   await batch.commit()
 }
 
-export async function addTaskAttachment(
-  taskId: string,
-  attachment: Attachment,
-): Promise<void> {
-  await updateDoc(doc(db, 'tasks', taskId), {
-    attachments: arrayUnion(attachment),
+export interface AddTaskAttachmentInput {
+  taskId: string
+  attachment: Attachment
+  actorId: string
+  actorName: string
+  taskTitle: string
+  projectId: string
+}
+
+export async function addTaskAttachment(input: AddTaskAttachmentInput): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'tasks', input.taskId), {
+    attachments: arrayUnion(input.attachment),
     updatedAt: serverTimestamp(),
   })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.attachment_added',
+    targetType: 'task',
+    targetId: input.taskId,
+    targetTitle: input.taskTitle,
+    projectId: input.projectId,
+    payload: {
+      attachmentId: input.attachment.id,
+      name: input.attachment.name,
+      mimeType: input.attachment.mimeType,
+      sizeBytes: input.attachment.sizeBytes,
+    },
+    batch,
+  })
+  await batch.commit()
+}
+
+export interface RemoveTaskAttachmentInput {
+  taskId: string
+  attachment: Attachment
+  actorId: string
+  actorName: string
+  taskTitle: string
+  projectId: string
+}
+
+export async function removeTaskAttachment(input: RemoveTaskAttachmentInput): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'tasks', input.taskId), {
+    attachments: arrayRemove(input.attachment),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.attachment_removed',
+    targetType: 'task',
+    targetId: input.taskId,
+    targetTitle: input.taskTitle,
+    projectId: input.projectId,
+    payload: {
+      attachmentId: input.attachment.id,
+      name: input.attachment.name,
+      mimeType: input.attachment.mimeType,
+      sizeBytes: input.attachment.sizeBytes,
+    },
+    batch,
+  })
+  await batch.commit()
+}
+
+// --- User role management ----------------------------------------------------
+
+export interface SetUserRoleInput {
+  uid: string
+  fromRole: GlobalRole
+  toRole: GlobalRole
+  actorId: string
+  actorName: string
+  targetName: string
+}
+
+export async function setUserRole(input: SetUserRoleInput): Promise<void> {
+  if (input.fromRole === input.toRole) return
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'users', input.uid), { globalRole: input.toRole })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'user.role_changed',
+    targetType: 'user',
+    targetId: input.uid,
+    targetTitle: input.targetName,
+    payload: { fromRole: input.fromRole, toRole: input.toRole },
+    batch,
+  })
+  await batch.commit()
 }
 
 // --- Comments (Sprint 7 — Flow 6) ---------------------------------------------

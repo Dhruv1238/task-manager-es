@@ -23,7 +23,7 @@ function friendlyError(err: unknown): string {
 }
 
 export default function NewProjectModal({ open, onClose }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
@@ -106,6 +106,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
         description: description.trim(),
         ownerId,
         createdBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
         deadline: deadline ? Timestamp.fromDate(new Date(deadline)) : undefined,
         attachments,
       })

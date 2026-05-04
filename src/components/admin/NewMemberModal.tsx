@@ -33,7 +33,7 @@ function friendlyError(err: unknown): string {
 }
 
 export default function NewMemberModal({ open, onClose, onCreated }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -58,7 +58,13 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
     setSubmitting(true)
     try {
       const tempPassword = generateTempPassword()
-      const res = await createMember(email.trim(), displayName.trim(), tempPassword, user.uid)
+      const res = await createMember(
+        email.trim(),
+        displayName.trim(),
+        tempPassword,
+        user.uid,
+        profile?.displayName ?? user.email ?? 'Admin',
+      )
       setResult(res)
       onCreated?.(res)
     } catch (e) {

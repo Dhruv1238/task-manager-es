@@ -20,7 +20,7 @@ function friendlyError(err: unknown): string {
 }
 
 export default function NewTeamModal({ open, onClose, onCreated }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
 
   const [name, setName] = useState('')
@@ -64,6 +64,7 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
         leadId,
         memberIds: finalMembers,
         createdBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'Admin',
       })
       onClose()
       if (onCreated) {

@@ -34,7 +34,7 @@ export default function NewTaskModal({
   projectTitle,
   teamName,
 }: Props) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -74,6 +74,7 @@ export default function NewTaskModal({
         priority,
         dueDate: dueDate ? Timestamp.fromDate(new Date(dueDate)) : undefined,
         createdBy: user.uid,
+        actorName: profile?.displayName ?? user.email ?? 'User',
       })
       onClose()
     } catch (e) {
