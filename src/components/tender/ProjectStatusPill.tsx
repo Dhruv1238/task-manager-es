@@ -18,7 +18,7 @@ export default function ProjectStatusPill({ status, onClick, size = 'md' }: Prop
       ? 'px-2 py-0.5 text-[11px]'
       : 'px-2.5 py-0.5 text-xs'
 
-  const baseCls = `inline-flex items-center gap-1.5 rounded-full border font-medium ${sizeCls} ${meta?.pill}`
+  const baseCls = `inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border font-medium ${sizeCls} ${meta?.pill}`
 
   if (!onClick) {
     return (

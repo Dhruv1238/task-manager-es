@@ -184,7 +184,9 @@ export default function Projects() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="min-w-0 text-lg font-semibold text-white">{p.title}</h3>
-                  <ProjectStatusPill status={p.status} size="sm" />
+                  <div className="shrink-0">
+                    <ProjectStatusPill status={p.status} size="sm" />
+                  </div>
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
