@@ -1,5 +1,11 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore'
 import { getAuth, type Auth } from 'firebase/auth'
 import { getAnalytics, isSupported, type Analytics } from 'firebase/analytics'
 
@@ -13,8 +19,15 @@ export const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
-export const app: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig)
-export const db: Firestore = getFirestore(app)
+const isFirstInit = !getApps().length
+export const app: FirebaseApp = isFirstInit ? initializeApp(firebaseConfig) : getApp()
+export const db: Firestore = isFirstInit
+  ? initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    })
+  : getFirestore(app)
 export const auth: Auth = getAuth(app)
 
 export const analytics: Promise<Analytics | null> = isSupported().then((ok) =>
