@@ -38,6 +38,7 @@ export async function createMember(
       uid: cred.user.uid,
       email,
       displayName,
+      displayNameLower: displayName.trim().toLowerCase(),
       globalRole,
       teamIds: [],
       tempPassword,

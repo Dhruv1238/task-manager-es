@@ -13,6 +13,7 @@ interface Props {
   onClose: () => void
   projectId: string
   projectTitle: string
+  projectOwnerId: string
   currentTeamIds: string[]
 }
 
@@ -55,6 +56,7 @@ export default function ManageTeamsModal({
   onClose,
   projectId,
   projectTitle,
+  projectOwnerId,
   currentTeamIds,
 }: Props) {
   const { teams } = useAllTeams()
@@ -121,6 +123,7 @@ export default function ManageTeamsModal({
       await setProjectTeams({
         projectId,
         projectTitle,
+        ownerId: projectOwnerId,
         previousTeamIds: currentTeamIds,
         newTeamIds: Array.from(selected),
         actorId: user.uid,

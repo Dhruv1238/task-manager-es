@@ -1,11 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  collection,
+  limit,
+  orderBy,
+  query,
+  startAfter,
+  where,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from 'firebase/firestore'
 import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { setUserRole } from '../lib/firestore'
+import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import type { GlobalRole, User } from '../types/models'
 import AdminActionBar from '../components/admin/AdminActionBar'
+import SearchInput from '../components/ui/SearchInput'
+
+const PAGE_SIZE = 25
 
 const ROLE_OPTIONS: { value: GlobalRole; label: string }[] = [
   { value: 'super_admin', label: 'Super Admin' },
@@ -46,34 +59,42 @@ function formatDate(ts: Timestamp | undefined): string {
 
 export default function AdminMembers() {
   const { user: firebaseUser, profile } = useAuth()
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [pendingRoleUid, setPendingRoleUid] = useState<string | null>(null)
   const canEditRoles = profile?.globalRole === 'super_admin'
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'))
-    return onSnapshot(
-      q,
-      (snap) => {
-        setUsers(snap.docs.map((d) => d.data() as User))
-        setLoading(false)
-      },
-      () => setLoading(false),
-    )
-  }, [])
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 600)
+    return () => clearTimeout(t)
+  }, [search])
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return users
-    return users.filter(
-      (u) =>
-        u.displayName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
-    )
-  }, [users, search])
+  const buildQuery = useCallback(
+    (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
+      const usersRef = collection(db, 'users')
+      const constraints = []
+      if (debouncedSearch) {
+        constraints.push(where('displayNameLower', '>=', debouncedSearch))
+        constraints.push(where('displayNameLower', '<=', debouncedSearch + ''))
+        constraints.push(orderBy('displayNameLower'))
+      } else {
+        constraints.push(orderBy('createdAt', 'desc'))
+      }
+      if (cursor) constraints.push(startAfter(cursor))
+      constraints.push(limit(PAGE_SIZE))
+      return query(usersRef, ...constraints)
+    },
+    [debouncedSearch],
+  )
+
+  const { items: users, loading, loadingMore, hasMore, loadMore, error } = usePaginatedQuery<User>(
+    buildQuery,
+    PAGE_SIZE,
+    [debouncedSearch],
+    (snap) => snap.data() as User,
+  )
 
   function toggleReveal(uid: string) {
     setRevealed((prev) => {
@@ -115,35 +136,36 @@ export default function AdminMembers() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">Members</h1>
-          <p className="mt-1 text-sm text-white/50">
-            {loading ? 'Loading…' : `${users.length} user${users.length === 1 ? '' : 's'}`}
+          <p className="mt-1 flex items-center gap-2 text-sm text-white/50">
+            {loading && users.length === 0 ? (
+              'Loading…'
+            ) : (
+              <>
+                <span>
+                  Showing {users.length} user{users.length === 1 ? '' : 's'}
+                  {hasMore ? '+' : ''}
+                </span>
+                {loading && (
+                  <span
+                    className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-white/20 border-t-white/70"
+                    aria-label="Refreshing"
+                  />
+                )}
+              </>
+            )}
           </p>
         </div>
         <AdminActionBar />
       </div>
 
       <div className="mb-4 flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <svg
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or email"
-            className="w-full rounded-lg border border-white/10 bg-white/4 py-2.5 pl-9 pr-4 text-sm text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search members"
+          infoText="Matches member names that start with what you type. Search is case-insensitive."
+          className="flex-1 max-w-sm"
+        />
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/2">
@@ -160,22 +182,28 @@ export default function AdminMembers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {loading ? (
+              {loading && users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-white/40">
                     Loading members…
                   </td>
                 </tr>
-              ) : filtered.length === 0 ? (
+              ) : error ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-red-200/80">
+                    Couldn't load members. {error.message}
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-white/40">
-                    {users.length === 0
-                      ? 'No members yet. Click "+ New Member" to provision one.'
-                      : 'No members match your search.'}
+                    {debouncedSearch
+                      ? 'No members match your search.'
+                      : 'No members yet. Click "+ New Member" to provision one.'}
                   </td>
                 </tr>
               ) : (
-                filtered.map((u) => {
+                users.map((u) => {
                   const isSelf = firebaseUser?.uid === u.uid
                   const isRevealed = revealed.has(u.uid)
                   const isCopied = copiedId === u.uid
@@ -296,6 +324,26 @@ export default function AdminMembers() {
           </table>
         </div>
       </div>
+
+      {hasMore && (
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loadingMore ? (
+              <>
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/25 border-t-white/90" />
+                Loading…
+              </>
+            ) : (
+              'Load more'
+            )}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -264,11 +264,13 @@ export async function addProject(input: AddProjectInput): Promise<string> {
   const projectRef = doc(collection(db, 'projects'))
   batch.set(projectRef, {
     title: input.title,
+    titleLower: input.title.trim().toLowerCase(),
     description: input.description,
     ownerId: input.ownerId,
     createdBy: input.createdBy,
     status: 'in_progress',
     teamIds: [],
+    accessKeys: [input.ownerId],
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),
     // Tender bootstrap (every new project starts at stage 1):
@@ -351,6 +353,9 @@ export async function updateProjectStatus(input: UpdateProjectStatusInput): Prom
 export interface SetProjectTeamsInput {
   projectId: string
   projectTitle: string
+  // Needed to keep the denormalized `accessKeys` (= [ownerId, ...teamIds]) in
+  // sync, which powers non-admin visibility queries on the Projects list.
+  ownerId: string
   previousTeamIds: string[]
   newTeamIds: string[]
   actorId: string
@@ -368,6 +373,7 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
   const batch = writeBatch(db)
   batch.update(doc(db, 'projects', input.projectId), {
     teamIds: input.newTeamIds,
+    accessKeys: [input.ownerId, ...input.newTeamIds],
     updatedAt: serverTimestamp(),
   })
   for (const teamId of added) {

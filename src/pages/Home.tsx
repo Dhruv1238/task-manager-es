@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { useAccessibleProjects } from '../hooks/useAccessibleProjects'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import ProjectPicker from '../components/ui/ProjectPicker'
 
@@ -34,14 +33,11 @@ function HomeCard({ to, eyebrow, title, body, cta }: CardProps) {
 }
 
 function BoardViewCard() {
-  const { projects, loading } = useAccessibleProjects()
   const navigate = useNavigate()
   const [selected, setSelected] = useState<string | null>(null)
 
-  const effective = selected ?? projects[0]?.id ?? null
-
   const open = () => {
-    if (effective) navigate(`/projects/${effective}/boards`)
+    if (selected) navigate(`/projects/${selected}/boards`)
   }
 
   return (
@@ -73,16 +69,15 @@ function BoardViewCard() {
 
       <div className="mt-4 flex flex-col gap-2">
         <ProjectPicker
-          value={effective}
+          value={selected}
           onChange={setSelected}
-          projects={projects}
-          placeholder={loading ? 'Loading projects…' : 'No projects available'}
-          disabled={loading}
+          placeholder="Pick a project"
+          autoSelectFirst
         />
         <button
           type="button"
           onClick={open}
-          disabled={!effective}
+          disabled={!selected}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-3.5 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:from-white/10 disabled:to-white/10 disabled:text-white/30 disabled:shadow-none"
         >
           Open board

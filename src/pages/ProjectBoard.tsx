@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { useAccessibleProjects } from '../hooks/useAccessibleProjects'
 import { useAllProjectTasks } from '../hooks/useAllProjectTasks'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useAllUsers } from '../hooks/useAllUsers'
@@ -30,7 +29,6 @@ export default function ProjectBoard() {
   const { profile } = useAuth()
   const { users } = useAllUsers()
   const { teams: allTeams } = useAllTeams()
-  const { projects: accessibleProjects } = useAccessibleProjects()
   const { tasks, loading: tasksLoading, error: tasksError } = useAllProjectTasks(projectId)
   const { isAdmin, isProjectOwner } = usePermissions(projectId)
 
@@ -203,7 +201,7 @@ export default function ProjectBoard() {
             onChange={(next) => {
               if (next !== project.id) navigate(`/projects/${next}/boards`)
             }}
-            projects={accessibleProjects}
+            selectedLabel={project.title}
           />
           <div className="text-right text-xs text-white/40">
             {tasksLoading
