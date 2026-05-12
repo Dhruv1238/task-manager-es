@@ -22,23 +22,23 @@ interface Props {
 }
 
 const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
-  todo: { label: 'Todo', cls: 'border-white/15 bg-white/5 text-white/70' },
+  todo: { label: 'Todo', cls: 'border-line bg-fill-2 text-fg-muted' },
   in_progress: {
     label: 'In Progress',
-    cls: 'border-blue-400/40 bg-blue-500/15 text-blue-200',
+    cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg',
   },
   in_review: {
     label: 'In Review',
-    cls: 'border-purple-400/40 bg-purple-500/15 text-purple-200',
+    cls: 'border-brand-edge bg-brand-soft text-brand',
   },
-  done: { label: 'Done', cls: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' },
-  blocked: { label: 'Blocked', cls: 'border-red-400/40 bg-red-500/15 text-red-200' },
+  done: { label: 'Done', cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg' },
+  blocked: { label: 'Blocked', cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg' },
 }
 
 const PRIORITY_STYLES: Record<TaskPriority, { label: string; cls: string }> = {
-  low: { label: 'Low', cls: 'text-white/60' },
-  medium: { label: 'Medium', cls: 'text-amber-300' },
-  high: { label: 'High', cls: 'text-red-300' },
+  low: { label: 'Low', cls: 'text-fg-muted' },
+  medium: { label: 'Medium', cls: 'text-tone-warn-fg' },
+  high: { label: 'High', cls: 'text-tone-danger-fg' },
 }
 
 function StatusPill({ status }: { status: TaskStatus }) {
@@ -70,7 +70,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 22 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden
     >
@@ -89,34 +89,34 @@ function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
     task.dueDate.toDate().getTime() < Date.now()
 
   return (
-    <div className="flex items-center gap-3 border-b border-white/5 px-4 py-3 last:border-b-0">
+    <div className="flex items-center gap-3 border-b border-line-subtle px-4 py-3 last:border-b-0">
       <StatusPill status={task.status} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-white">{task.title}</div>
+        <div className="truncate text-sm font-medium text-fg">{task.title}</div>
         {task.description && (
-          <div className="mt-0.5 line-clamp-1 text-xs text-white/50">
+          <div className="mt-0.5 line-clamp-1 text-xs text-fg-subtle">
             {task.description}
           </div>
         )}
         {task.status === 'in_review' && (reviewer || task.reviewerName) && (
-          <div className="mt-0.5 text-[11px] text-purple-200/80">
+          <div className="mt-0.5 text-[11px] text-brand/80">
             🔍 In review by {reviewer?.displayName ?? task.reviewerName}
           </div>
         )}
       </div>
       <div className="hidden items-center gap-3 text-xs sm:flex">
         {assignee ? (
-          <span className="inline-flex items-center gap-1.5 text-white/70">
+          <span className="inline-flex items-center gap-1.5 text-fg-muted">
             <Avatar user={assignee} size={18} />
             <span className="truncate">{assignee.displayName}</span>
           </span>
         ) : task.assigneeName ? (
-          <span className="text-white/50">{task.assigneeName}</span>
+          <span className="text-fg-subtle">{task.assigneeName}</span>
         ) : (
-          <span className="text-white/30">Unassigned</span>
+          <span className="text-fg-faint">Unassigned</span>
         )}
         <span className={`font-medium ${priority.cls}`}>{priority.label}</span>
-        <span className={overdue ? 'text-red-300' : 'text-white/50'}>
+        <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
           {overdue ? 'Overdue · ' : ''}
           {formatDate(task.dueDate)}
         </span>
@@ -225,12 +225,12 @@ export default function TaskDetailContent({ task }: Props) {
   return (
     <div className="space-y-8">
       {task.status === 'in_review' && (
-        <div className="flex flex-col gap-3 rounded-xl border border-purple-400/30 bg-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm text-purple-100">
+        <div className="flex flex-col gap-3 rounded-xl border border-brand-edge bg-brand-soft p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-tone-brandtone-fg">
             <span aria-hidden>🔍</span>
             <span>
               In review by{' '}
-              <span className="font-medium text-white">
+              <span className="font-medium text-fg">
                 {reviewer?.displayName ?? task.reviewerName ?? 'someone'}
               </span>
             </span>
@@ -241,14 +241,14 @@ export default function TaskDetailContent({ task }: Props) {
                 type="button"
                 onClick={handleApproveClick}
                 disabled={approving}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-tone-success-bd bg-tone-success-bg px-3.5 py-1.5 text-sm font-medium text-tone-success-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {approving ? 'Approving…' : 'Approve →'}
               </button>
               <button
                 type="button"
                 onClick={() => setSendBackOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3.5 py-1.5 text-sm font-medium text-amber-100 transition hover:bg-amber-500/20"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3.5 py-1.5 text-sm font-medium text-tone-warn-fg transition hover:opacity-90"
               >
                 Send Back ↺
               </button>
@@ -257,7 +257,7 @@ export default function TaskDetailContent({ task }: Props) {
         </div>
       )}
       {approveError && (
-        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
           {approveError}
         </div>
       )}
@@ -265,34 +265,34 @@ export default function TaskDetailContent({ task }: Props) {
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
         <StatusMenu value={task.status} onChange={handleStatusChange} disabled={!canEdit} />
         {task.workType && (
-          <span className="inline-flex items-center rounded-md border border-white/10 bg-white/4 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-white/60">
+          <span className="inline-flex items-center rounded-md border border-line bg-fill-2 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-fg-muted">
             {task.workType}
           </span>
         )}
         {assignee && (
-          <span className="inline-flex items-center gap-1.5 text-white/70">
+          <span className="inline-flex items-center gap-1.5 text-fg-muted">
             <Avatar user={assignee.user} size={20} />
             <span>
               {assignee.user.displayName}
               {assignee.implicit && (
-                <span className="ml-1 text-white/40">· Lead</span>
+                <span className="ml-1 text-fg-subtle">· Lead</span>
               )}
             </span>
           </span>
         )}
         <span className={`font-medium ${priority.cls}`}>{priority.label} priority</span>
-        <span className={overdue ? 'text-red-300' : 'text-white/60'}>
+        <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-muted'}>
           {overdue ? 'Overdue · ' : ''}
           {task.dueDate ? `Due ${formatDate(task.dueDate)}` : 'No deadline'}
         </span>
-        <span className="text-white/50">
+        <span className="text-fg-subtle">
           {task.teamName ?? team?.name ?? '—'}
-          <span className="mx-2 text-white/20">·</span>
+          <span className="mx-2 text-fg-faint">·</span>
           {task.projectTitle ?? '—'}
         </span>
         <Link
           to={`/projects/${task.projectId}/boards`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/4 px-2 py-0.5 text-xs text-white/70 transition hover:bg-white/8 hover:text-white"
+          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill-2 px-2 py-0.5 text-xs text-fg-muted transition hover:bg-fill-4 hover:text-fg"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="6" height="16" rx="1" />
@@ -304,17 +304,17 @@ export default function TaskDetailContent({ task }: Props) {
       </div>
 
       {task.description ? (
-        <p className="whitespace-pre-wrap text-sm text-white/80">{task.description}</p>
+        <p className="whitespace-pre-wrap text-sm text-fg-muted">{task.description}</p>
       ) : (
-        <p className="text-sm italic text-white/40">No description.</p>
+        <p className="text-sm italic text-fg-subtle">No description.</p>
       )}
 
       {!task.parentTaskId && (
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-medium uppercase tracking-wider text-white/40">
+            <h3 className="text-sm font-medium uppercase tracking-wider text-fg-subtle">
               Subtasks{' '}
-              <span className="text-white/60">
+              <span className="text-fg-muted">
                 ({doneCount}/{totalCount})
               </span>
             </h3>
@@ -324,22 +324,22 @@ export default function TaskDetailContent({ task }: Props) {
           </div>
 
           {subtasksError ? (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+            <div className="rounded-xl border border-tone-danger-bd bg-tone-danger-bg p-4 text-sm text-tone-danger-fg">
               Couldn't load subtasks: {subtasksError}
               {subtasksError.includes('index') && (
-                <div className="mt-1 text-red-200/70">
+                <div className="mt-1 text-tone-danger-fg/70">
                   Firestore wants a composite index for this query. Open the link in your browser
                   console to create it.
                 </div>
               )}
             </div>
           ) : subtasksLoading ? (
-            <div className="rounded-xl border border-white/10 bg-white/2 p-6 text-center text-xs text-white/40">
+            <div className="rounded-xl border border-line bg-card p-6 text-center text-xs text-fg-subtle">
               Loading subtasks…
             </div>
           ) : subtasks.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 bg-white/1 p-6 text-center">
-              <p className="text-sm text-white/50">
+            <div className="rounded-xl border border-dashed border-line bg-card p-6 text-center">
+              <p className="text-sm text-fg-subtle">
                 No subtasks yet.{' '}
                 {canAddSubtask
                   ? 'Break this task down to delegate work.'
@@ -347,7 +347,7 @@ export default function TaskDetailContent({ task }: Props) {
               </p>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-white/2">
+            <div className="overflow-hidden rounded-xl border border-line bg-card">
               {subtasks.map((s) => (
                 <SubtaskRow key={s.id} task={s} users={userById} />
               ))}

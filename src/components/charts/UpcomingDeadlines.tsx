@@ -57,20 +57,20 @@ export default function UpcomingDeadlines({
               <Link
                 to={`/tasks/${t.id}`}
                 state={{ backgroundLocation: location }}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-white/3"
+                className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-fill-1"
               >
                 <span
-                  className={`inline-block h-8 w-1 shrink-0 rounded-full ${overdue ? 'bg-red-400' : 'bg-purple-400'}`}
+                  className={`inline-block h-8 w-1 shrink-0 rounded-full ${overdue ? 'bg-danger-dot' : 'bg-brandtone-dot'}`}
                   aria-hidden
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white">{t.title}</div>
-                  <div className="truncate text-xs text-white/40">
+                  <div className="truncate text-sm text-fg">{t.title}</div>
+                  <div className="truncate text-xs text-fg-subtle">
                     {t.projectTitle} · {t.teamName}
                   </div>
                 </div>
                 <span
-                  className={`shrink-0 text-xs ${overdue ? 'text-red-300' : 'text-white/60'}`}
+                  className={`shrink-0 text-xs ${overdue ? 'text-tone-danger-fg' : 'text-fg-muted'}`}
                 >
                   {overdue ? 'Overdue · ' : ''}
                   {dayLabel}

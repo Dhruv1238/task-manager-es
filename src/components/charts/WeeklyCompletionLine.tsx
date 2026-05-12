@@ -87,17 +87,17 @@ export default function WeeklyCompletionLine({
           <YAxis tick={AXIS_STYLE} stroke={GRID_COLOR} allowDecimals={false} width={32} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            itemStyle={{ color: 'rgba(255, 255, 255, 0.8)' }}
+            itemStyle={{ color: 'var(--color-fg-muted)' }}
             labelStyle={LABEL_STYLE}
-            cursor={{ stroke: 'rgba(255,255,255,0.15)' }}
+            cursor={{ stroke: 'var(--color-line-strong)' }}
           />
           <Line
             type="monotone"
             dataKey="count"
-            stroke="#c084fc"
+            stroke="var(--color-brandtone-dot)"
             strokeWidth={2}
-            dot={{ r: 3, fill: '#c084fc' }}
-            activeDot={{ r: 5, fill: '#d8b4fe' }}
+            dot={{ r: 3, fill: 'var(--color-brandtone-dot)' }}
+            activeDot={{ r: 5, fill: 'var(--color-brand)' }}
           />
         </LineChart>
       </ResponsiveContainer>

@@ -1,33 +1,340 @@
 @import "tailwindcss";
 
+@theme {
+  --color-canvas: #07070c;
+  --color-surface: #0b0b12;
+  --color-elevated: #0e0e16;
+  --color-overlay: #11111a;
+
+  --color-fg: #ffffff;
+  --color-fg-strong: rgb(255 255 255 / 0.95);
+  --color-fg-muted: rgb(255 255 255 / 0.7);
+  --color-fg-subtle: rgb(255 255 255 / 0.5);
+  --color-fg-faint: rgb(255 255 255 / 0.35);
+
+  --color-line-subtle: rgb(255 255 255 / 0.05);
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-line-strong: rgb(255 255 255 / 0.2);
+
+  --color-fill-1: rgb(255 255 255 / 0.02);
+  --color-fill-2: rgb(255 255 255 / 0.04);
+  --color-fill-3: rgb(255 255 255 / 0.06);
+  --color-fill-4: rgb(255 255 255 / 0.08);
+
+  /* Brand: purple-500 → fuchsia-500 in dark; deep violet → magenta in light. */
+  --color-brand: #a855f7;
+  --color-brand-from: #a855f7;
+  --color-brand-to: #d946ef;
+  --color-brand-hover-from: #c084fc;
+  --color-brand-hover-to: #e879f9;
+  --color-brand-soft: rgb(168 85 247 / 0.15);
+  --color-brand-ring: rgb(168 85 247 / 0.25);
+  --color-brand-edge: rgb(192 132 252 / 0.6);
+
+  /* Card surface — glassy in dark, solid white in light. Decouples card chrome
+     from the shell `bg-surface` so the navbar/modals stay solid while cards
+     keep their subtle dark-mode wash. */
+  --color-card: rgb(255 255 255 / 0.03);
+
+  /* Ambient gradient orbs — softened in dark so they don't compete with the
+     surface tones; brand-tinted in light so they read as deliberate atmosphere. */
+  --color-orb-a: rgb(124 58 237 / 0.18);
+  --color-orb-b: rgb(217 70 239 / 0.12);
+  --color-orb-c: rgb(99 102 241 / 0.08);
+
+  --color-info-dot: #60a5fa;
+  --color-success-dot: #34d399;
+  --color-warn-dot: #fbbf24;
+  --color-danger-dot: #f87171;
+  --color-brandtone-dot: #c084fc;
+  --color-accent-dot: #818cf8;
+  --color-cool-dot: #38bdf8;
+  --color-mint-dot: #2dd4bf;
+  --color-neutral-dot: rgb(255 255 255 / 0.5);
+
+  --color-tone-info-bg: rgb(59 130 246 / 0.15);
+  --color-tone-info-fg: #bfdbfe;
+  --color-tone-info-bd: rgb(96 165 250 / 0.4);
+  --color-tone-success-bg: rgb(16 185 129 / 0.15);
+  --color-tone-success-fg: #a7f3d0;
+  --color-tone-success-bd: rgb(52 211 153 / 0.4);
+  --color-tone-warn-bg: rgb(245 158 11 / 0.15);
+  --color-tone-warn-fg: #fde68a;
+  --color-tone-warn-bd: rgb(251 191 36 / 0.4);
+  --color-tone-danger-bg: rgb(239 68 68 / 0.15);
+  --color-tone-danger-fg: #fecaca;
+  --color-tone-danger-bd: rgb(248 113 113 / 0.4);
+  --color-tone-brandtone-bg: rgb(168 85 247 / 0.15);
+  --color-tone-brandtone-fg: #e9d5ff;
+  --color-tone-brandtone-bd: rgb(192 132 252 / 0.4);
+  --color-tone-accent-bg: rgb(99 102 241 / 0.15);
+  --color-tone-accent-fg: #c7d2fe;
+  --color-tone-accent-bd: rgb(129 140 248 / 0.4);
+  --color-tone-cool-bg: rgb(14 165 233 / 0.15);
+  --color-tone-cool-fg: #bae6fd;
+  --color-tone-cool-bd: rgb(56 189 248 / 0.4);
+  --color-tone-mint-bg: rgb(20 184 166 / 0.15);
+  --color-tone-mint-fg: #99f6e4;
+  --color-tone-mint-bd: rgb(45 212 191 / 0.4);
+  --color-tone-neutral-bg: rgb(255 255 255 / 0.04);
+  --color-tone-neutral-fg: rgb(255 255 255 / 0.7);
+  --color-tone-neutral-bd: rgb(255 255 255 / 0.15);
+
+  --color-tone-orange-bg: rgb(249 115 22 / 0.18);
+  --color-tone-orange-fg: #fed7aa;
+  --color-tone-orange-bd: rgb(251 146 60 / 0.45);
+  --color-tone-yellow-bg: rgb(234 179 8 / 0.18);
+  --color-tone-yellow-fg: #fef08a;
+  --color-tone-yellow-bd: rgb(250 204 21 / 0.45);
+  --color-tone-pink-bg: rgb(236 72 153 / 0.18);
+  --color-tone-pink-fg: #fbcfe8;
+  --color-tone-pink-bd: rgb(244 114 182 / 0.45);
+}
+
+.light {
+  /* Canvas tinted with the brand violet so white surfaces have something to lift off. */
+  --color-canvas: #f3effa;
+  --color-surface: #ffffff;
+  --color-elevated: #ffffff;
+  --color-overlay: #ffffff;
+
+  --color-fg: #0e0b14;
+  --color-fg-strong: rgb(14 11 20 / 0.95);
+  --color-fg-muted: rgb(14 11 20 / 0.66);
+  --color-fg-subtle: rgb(14 11 20 / 0.5);
+  --color-fg-faint: rgb(14 11 20 / 0.36);
+
+  /* Lines tinted with brand for quiet cohesion. */
+  --color-line-subtle: rgb(67 7 136 / 0.07);
+  --color-line: rgb(67 7 136 / 0.12);
+  --color-line-strong: rgb(67 7 136 / 0.22);
+
+  /* Fills get a hint of brand wash so cards aren't pure white-on-white. */
+  --color-fill-1: rgb(67 7 136 / 0.03);
+  --color-fill-2: rgb(67 7 136 / 0.05);
+  --color-fill-3: rgb(67 7 136 / 0.08);
+  --color-fill-4: rgb(67 7 136 / 0.12);
+
+  /* Card surface flips to solid white in light so cards lift off the canvas. */
+  --color-card: #ffffff;
+
+  /* Brand: monochromatic violet — deep brand violet melts into a brighter
+     violet, no hue jump. Reads as one confident color with a subtle lift. */
+  --color-brand: #430788;
+  --color-brand-from: #430788;
+  --color-brand-to: #7c3aed;
+  --color-brand-hover-from: #5b0db4;
+  --color-brand-hover-to: #9333ea;
+  --color-brand-soft: rgb(67 7 136 / 0.10);
+  --color-brand-ring: rgb(67 7 136 / 0.25);
+  --color-brand-edge: rgb(67 7 136 / 0.55);
+
+  /* Orbs use brand tones so the ambient glow reads as deliberate, not faded. */
+  --color-orb-a: rgb(67 7 136 / 0.18);
+  --color-orb-b: rgb(192 38 211 / 0.12);
+  --color-orb-c: rgb(99 102 241 / 0.10);
+
+  --color-info-dot: #2563eb;
+  --color-success-dot: #059669;
+  --color-warn-dot: #d97706;
+  --color-danger-dot: #dc2626;
+  --color-brandtone-dot: #9333ea;
+  --color-accent-dot: #4f46e5;
+  --color-cool-dot: #0284c7;
+  --color-mint-dot: #0d9488;
+  --color-neutral-dot: rgb(14 11 20 / 0.5);
+
+  --color-tone-info-bg: rgb(59 130 246 / 0.1);
+  --color-tone-info-fg: #1d4ed8;
+  --color-tone-info-bd: rgb(59 130 246 / 0.35);
+  --color-tone-success-bg: rgb(16 185 129 / 0.12);
+  --color-tone-success-fg: #047857;
+  --color-tone-success-bd: rgb(16 185 129 / 0.35);
+  --color-tone-warn-bg: rgb(245 158 11 / 0.14);
+  --color-tone-warn-fg: #b45309;
+  --color-tone-warn-bd: rgb(245 158 11 / 0.4);
+  --color-tone-danger-bg: rgb(239 68 68 / 0.1);
+  --color-tone-danger-fg: #b91c1c;
+  --color-tone-danger-bd: rgb(239 68 68 / 0.35);
+  --color-tone-brandtone-bg: rgb(67 7 136 / 0.1);
+  --color-tone-brandtone-fg: #430788;
+  --color-tone-brandtone-bd: rgb(67 7 136 / 0.4);
+  --color-tone-accent-bg: rgb(99 102 241 / 0.1);
+  --color-tone-accent-fg: #4338ca;
+  --color-tone-accent-bd: rgb(99 102 241 / 0.4);
+  --color-tone-cool-bg: rgb(14 165 233 / 0.1);
+  --color-tone-cool-fg: #0369a1;
+  --color-tone-cool-bd: rgb(14 165 233 / 0.4);
+  --color-tone-mint-bg: rgb(20 184 166 / 0.1);
+  --color-tone-mint-fg: #0f766e;
+  --color-tone-mint-bd: rgb(20 184 166 / 0.4);
+  --color-tone-neutral-bg: rgb(14 11 20 / 0.04);
+  --color-tone-neutral-fg: rgb(14 11 20 / 0.62);
+  --color-tone-neutral-bd: rgb(14 11 20 / 0.14);
+
+  --color-tone-orange-bg: rgb(249 115 22 / 0.12);
+  --color-tone-orange-fg: #c2410c;
+  --color-tone-orange-bd: rgb(249 115 22 / 0.4);
+  --color-tone-yellow-bg: rgb(234 179 8 / 0.16);
+  --color-tone-yellow-fg: #a16207;
+  --color-tone-yellow-bd: rgb(234 179 8 / 0.4);
+  --color-tone-pink-bg: rgb(236 72 153 / 0.1);
+  --color-tone-pink-fg: #be185d;
+  --color-tone-pink-bd: rgb(236 72 153 / 0.4);
+}
+
+html {
+  color-scheme: dark;
+}
+html.light {
+  color-scheme: light;
+}
+body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+}
+
+/* Subtle elevation for white surfaces in light mode so cards / modals /
+   the navbar feel lifted off the brand-tinted canvas. Dark mode keeps its
+   contrast purely through bg/border values — no shadow needed there. */
+.light .bg-card,
+.light .bg-surface,
+.light .bg-elevated,
+.light .bg-overlay {
+  box-shadow: 0 1px 2px rgb(67 7 136 / 0.05), 0 8px 24px rgb(67 7 136 / 0.04);
+}
+
+/* When the theme is being switched, suspend every transition for two frames
+   so colors snap to the new theme instead of fading through intermediate
+   values (which reads as a flicker on text/buttons). */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}
+
+/* Gradient utilities — interpolate in oklab to match Tailwind's default
+   `bg-linear-to-r` rendering. sRGB interpolation produces a muddier middle. */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(in oklab to right, var(--color-brand-from), var(--color-brand-to));
+}
+@utility bg-brand-gradient-br {
+  background-image: linear-gradient(in oklab to bottom right, var(--color-brand-from), var(--color-brand-to));
+}
+@utility hover-brand-gradient {
+  &:hover {
+    background-image: linear-gradient(in oklab to right, var(--color-brand-hover-from), var(--color-brand-hover-to));
+  }
+}
+@utility bg-orb-a {
+  background-color: var(--color-orb-a);
+}
+@utility bg-orb-b {
+  background-color: var(--color-orb-b);
+}
+@utility bg-orb-c {
+  background-color: var(--color-orb-c);
+}
+
+@utility pill-info {
+  background-color: var(--color-tone-info-bg);
+  color: var(--color-tone-info-fg);
+  border-color: var(--color-tone-info-bd);
+}
+@utility pill-success {
+  background-color: var(--color-tone-success-bg);
+  color: var(--color-tone-success-fg);
+  border-color: var(--color-tone-success-bd);
+}
+@utility pill-warn {
+  background-color: var(--color-tone-warn-bg);
+  color: var(--color-tone-warn-fg);
+  border-color: var(--color-tone-warn-bd);
+}
+@utility pill-danger {
+  background-color: var(--color-tone-danger-bg);
+  color: var(--color-tone-danger-fg);
+  border-color: var(--color-tone-danger-bd);
+}
+@utility pill-brandtone {
+  background-color: var(--color-tone-brandtone-bg);
+  color: var(--color-tone-brandtone-fg);
+  border-color: var(--color-tone-brandtone-bd);
+}
+@utility pill-accent {
+  background-color: var(--color-tone-accent-bg);
+  color: var(--color-tone-accent-fg);
+  border-color: var(--color-tone-accent-bd);
+}
+@utility pill-cool {
+  background-color: var(--color-tone-cool-bg);
+  color: var(--color-tone-cool-fg);
+  border-color: var(--color-tone-cool-bd);
+}
+@utility pill-mint {
+  background-color: var(--color-tone-mint-bg);
+  color: var(--color-tone-mint-fg);
+  border-color: var(--color-tone-mint-bd);
+}
+@utility pill-neutral {
+  background-color: var(--color-tone-neutral-bg);
+  color: var(--color-tone-neutral-fg);
+  border-color: var(--color-tone-neutral-bd);
+}
+@utility pill-orange {
+  background-color: var(--color-tone-orange-bg);
+  color: var(--color-tone-orange-fg);
+  border-color: var(--color-tone-orange-bd);
+}
+@utility pill-yellow {
+  background-color: var(--color-tone-yellow-bg);
+  color: var(--color-tone-yellow-fg);
+  border-color: var(--color-tone-yellow-bd);
+}
+@utility pill-pink {
+  background-color: var(--color-tone-pink-bg);
+  color: var(--color-tone-pink-fg);
+  border-color: var(--color-tone-pink-bd);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: ease;
+  }
+}
+
 @layer utilities {
-  .scrollbar-dark {
+  .scrollbar-themed {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+    scrollbar-color: var(--color-line-strong) transparent;
   }
 
-  .scrollbar-dark::-webkit-scrollbar {
+  .scrollbar-themed::-webkit-scrollbar {
     height: 10px;
     width: 10px;
   }
 
-  .scrollbar-dark::-webkit-scrollbar-track {
+  .scrollbar-themed::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .scrollbar-dark::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.1);
+  .scrollbar-themed::-webkit-scrollbar-thumb {
+    background-color: var(--color-line-strong);
     border-radius: 6px;
     border: 2px solid transparent;
     background-clip: padding-box;
   }
 
-  .scrollbar-dark::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(192, 132, 252, 0.35);
+  .scrollbar-themed::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-brand-edge);
     background-clip: padding-box;
   }
 
-  .scrollbar-dark::-webkit-scrollbar-corner {
+  .scrollbar-themed::-webkit-scrollbar-corner {
     background: transparent;
   }
 }

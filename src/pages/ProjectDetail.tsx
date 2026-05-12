@@ -33,7 +33,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 32 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white ring-2 ring-[#0b0b12]"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white ring-2 ring-surface"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden
     >
@@ -76,49 +76,49 @@ function TeamCard({
   return (
     <Link
       to={`/projects/${projectId}/teams/${team.id}`}
-      className="group flex flex-col rounded-2xl border border-white/10 bg-white/2 p-4 transition hover:border-white/20 hover:bg-white/4"
+      className="group flex flex-col rounded-2xl border border-line bg-card p-4 transition hover:border-line-strong hover:bg-fill-2"
     >
-      <h3 className="text-base font-semibold text-white">{team.name}</h3>
+      <h3 className="text-base font-semibold text-fg">{team.name}</h3>
       {team.description && (
-        <p className="mt-1 line-clamp-2 text-xs text-white/55">{team.description}</p>
+        <p className="mt-1 line-clamp-2 text-xs text-fg-subtle">{team.description}</p>
       )}
 
-      <div className="mt-3 flex items-center gap-2 text-xs text-white/60">
+      <div className="mt-3 flex items-center gap-2 text-xs text-fg-muted">
         {lead ? (
           <>
             <Avatar user={lead} size={20} />
             <span className="truncate">
-              <span className="text-white/80">{lead.displayName}</span>
-              <span className="ml-1 text-white/40">· Lead</span>
+              <span className="text-fg-muted">{lead.displayName}</span>
+              <span className="ml-1 text-fg-subtle">· Lead</span>
             </span>
           </>
         ) : (
-          <span className="text-white/40">No lead</span>
+          <span className="text-fg-subtle">No lead</span>
         )}
       </div>
 
       <div className="mt-4">
         {teamTasks.length === 0 ? (
-          <div className="text-xs text-white/40">No tasks yet</div>
+          <div className="text-xs text-fg-subtle">No tasks yet</div>
         ) : (
           <ProgressBar progress={progress} size="sm" showLabel={false} />
         )}
         <div className="mt-2 flex items-center justify-between text-xs">
-          <span className="text-white/50">
+          <span className="text-fg-subtle">
             {teamTasks.length === 0
               ? '—'
               : `${openCount} open · ${formatPercent(progress)}`}
           </span>
-          <span className="text-white/40">
+          <span className="text-fg-subtle">
             {teamTasks.length} task{teamTasks.length === 1 ? '' : 's'}
           </span>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3 text-xs text-white/50">
+      <div className="mt-3 flex items-center justify-between border-t border-line-subtle pt-3 text-xs text-fg-subtle">
         <div className="flex -space-x-2">
           {visible.length === 0 ? (
-            <span className="text-white/40">No other members</span>
+            <span className="text-fg-subtle">No other members</span>
           ) : (
             <>
               {visible.map((m) => (
@@ -126,7 +126,7 @@ function TeamCard({
               ))}
               {extra > 0 && (
                 <div
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/8 text-[9px] font-semibold text-white/70 ring-2 ring-[#0b0b12]"
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-line bg-fill-4 text-[9px] font-semibold text-fg-muted ring-2 ring-surface"
                   aria-hidden
                 >
                   +{extra}
@@ -207,7 +207,7 @@ export default function ProjectDetail() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center text-white/40 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center text-fg-subtle sm:px-6 lg:px-8">
         Loading project…
       </div>
     )
@@ -216,11 +216,11 @@ export default function ProjectDetail() {
   if (notFound || !project) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-white">Project not found</h1>
-        <p className="mt-2 text-white/50">It may have been deleted or the link is invalid.</p>
+        <h1 className="text-2xl font-semibold text-fg">Project not found</h1>
+        <p className="mt-2 text-fg-subtle">It may have been deleted or the link is invalid.</p>
         <Link
           to="/projects"
-          className="mt-6 inline-block rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/80 transition hover:bg-white/8"
+          className="mt-6 inline-block rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm text-fg-muted transition hover:bg-fill-4"
         >
           Back to projects
         </Link>
@@ -247,7 +247,7 @@ export default function ProjectDetail() {
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <Link
         to="/projects"
-        className="inline-flex items-center gap-1 text-sm text-white/50 transition hover:text-white/80"
+        className="inline-flex items-center gap-1 text-sm text-fg-subtle transition hover:text-fg-muted"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -262,27 +262,27 @@ export default function ProjectDetail() {
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight text-white">{project.title}</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-fg">{project.title}</h1>
             <ProjectStatusPill
               status={project.status}
               onClick={canUpdateStatus ? () => setStatusUpdateOpen(true) : undefined}
             />
           </div>
           {project.statusNote && (
-            <p className="mt-1 text-xs text-white/45">
-              <span className="text-white/30">Latest note:</span> {project.statusNote}
+            <p className="mt-1 text-xs text-fg-subtle">
+              <span className="text-fg-faint">Latest note:</span> {project.statusNote}
             </p>
           )}
           {project.description && (
-            <p className="mt-2 max-w-2xl text-white/60">{project.description}</p>
+            <p className="mt-2 max-w-2xl text-fg-muted">{project.description}</p>
           )}
-          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white/50">
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-fg-subtle">
             {owner && (
               <div className="flex items-center gap-2">
                 <Avatar user={owner} size={22} />
                 <span>
-                  <span className="text-white/80">{owner.displayName}</span>
-                  <span className="ml-1 text-white/40">· Owner</span>
+                  <span className="text-fg-muted">{owner.displayName}</span>
+                  <span className="ml-1 text-fg-subtle">· Owner</span>
                 </span>
               </div>
             )}
@@ -290,12 +290,12 @@ export default function ProjectDetail() {
               <div className="flex items-center gap-2">
                 <Avatar user={vh} size={22} />
                 <span>
-                  <span className="text-white/80">{vh.displayName}</span>
-                  <span className="ml-1 text-white/40">· VH</span>
+                  <span className="text-fg-muted">{vh.displayName}</span>
+                  <span className="ml-1 text-fg-subtle">· VH</span>
                 </span>
               </div>
             )}
-            <span className={overdue ? 'text-red-300' : undefined}>
+            <span className={overdue ? 'text-tone-danger-fg' : undefined}>
               {overdue ? 'Overdue · ' : ''}
               {submissionDeadline
                 ? `Submit by ${formatDate(submissionDeadline)}`
@@ -325,7 +325,7 @@ export default function ProjectDetail() {
         <div className="flex shrink-0 flex-wrap gap-2">
           <Link
             to={`/projects/${project.id}/boards`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm font-medium text-white/85 transition hover:bg-white/8 hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="6" height="16" rx="1" />
@@ -338,7 +338,7 @@ export default function ProjectDetail() {
             <button
               type="button"
               onClick={() => setNewTaskOpen(true)}
-              className="rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+              className="rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient"
             >
               + New Task
             </button>
@@ -347,7 +347,7 @@ export default function ProjectDetail() {
             <button
               type="button"
               onClick={() => setManageOpen(true)}
-              className="rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm font-medium text-white/85 transition hover:bg-white/8 hover:text-white"
+              className="rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg"
             >
               Manage Teams
             </button>
@@ -355,7 +355,7 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <div className="mb-6 inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/2 p-0.5">
+      <div className="mb-6 inline-flex items-center gap-1 rounded-lg border border-line bg-card p-0.5">
         {(['overview', 'analytics'] as const).map((t) => (
           <button
             key={t}
@@ -363,8 +363,8 @@ export default function ProjectDetail() {
             onClick={() => setTab(t)}
             className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
               tab === t
-                ? 'bg-white/8 text-white'
-                : 'text-white/60 hover:bg-white/4 hover:text-white/90'
+                ? 'bg-fill-4 text-fg'
+                : 'text-fg-muted hover:bg-fill-2 hover:text-fg-strong'
             }`}
           >
             {t}
@@ -397,14 +397,14 @@ export default function ProjectDetail() {
       ) : (
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-white/40">
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
             Teams
           </h2>
 
           {assignedTeams.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-10 text-center">
-              <h3 className="text-base font-medium text-white">No teams assigned yet</h3>
-              <p className="mt-2 text-sm text-white/50">
+            <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
+              <h3 className="text-base font-medium text-fg">No teams assigned yet</h3>
+              <p className="mt-2 text-sm text-fg-subtle">
                 {canManageTeams
                   ? 'Click Manage Teams to pick global teams for this project.'
                   : 'The project owner will assign teams here soon.'}
@@ -426,7 +426,7 @@ export default function ProjectDetail() {
 
           {project.attachments && project.attachments.length > 0 && (
             <div className="mt-6">
-              <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-white/40">
+              <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
                 Attachments
               </h2>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -436,12 +436,12 @@ export default function ProjectDetail() {
                     href={a.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/2 p-3 transition hover:border-white/20 hover:bg-white/4"
+                    className="flex items-center gap-3 rounded-xl border border-line bg-card p-3 transition hover:border-line-strong hover:bg-fill-2"
                   >
                     <FileBadge mimeType={a.mimeType} fileName={a.name} size={40} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-white">{a.name}</div>
-                      <div className="text-xs text-white/40">{formatFileSize(a.sizeBytes)}</div>
+                      <div className="truncate text-sm font-medium text-fg">{a.name}</div>
+                      <div className="text-xs text-fg-subtle">{formatFileSize(a.sizeBytes)}</div>
                     </div>
                     <svg
                       width="14"
@@ -452,7 +452,7 @@ export default function ProjectDetail() {
                       strokeWidth="2"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="shrink-0 text-white/30"
+                      className="shrink-0 text-fg-faint"
                     >
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
                       <polyline points="15 3 21 3 21 9" />
@@ -466,35 +466,35 @@ export default function ProjectDetail() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-white/40">
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
             Details
           </h2>
-          <div className="rounded-2xl border border-white/10 bg-white/2 p-5 text-sm">
+          <div className="rounded-2xl border border-line bg-card p-5 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-white/50">Owner</span>
-              <span className="text-white/85">{owner?.displayName ?? '—'}</span>
+              <span className="text-fg-subtle">Owner</span>
+              <span className="text-fg-strong">{owner?.displayName ?? '—'}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Vertical Head</span>
-              <span className="text-white/85">{vh?.displayName ?? '— not allocated —'}</span>
+              <span className="text-fg-subtle">Vertical Head</span>
+              <span className="text-fg-strong">{vh?.displayName ?? '— not allocated —'}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Submission</span>
-              <span className={overdue ? 'text-red-300' : 'text-white/85'}>
+              <span className="text-fg-subtle">Submission</span>
+              <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-strong'}>
                 {formatDate(project.submissionDate)}
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Presentation</span>
-              <span className="text-white/85">{formatDate(project.presentationDate)}</span>
+              <span className="text-fg-subtle">Presentation</span>
+              <span className="text-fg-strong">{formatDate(project.presentationDate)}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Created</span>
-              <span className="text-white/85">{formatDate(project.createdAt)}</span>
+              <span className="text-fg-subtle">Created</span>
+              <span className="text-fg-strong">{formatDate(project.createdAt)}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Last updated</span>
-              <span className="text-white/85">{formatDate(project.updatedAt)}</span>
+              <span className="text-fg-subtle">Last updated</span>
+              <span className="text-fg-strong">{formatDate(project.updatedAt)}</span>
             </div>
           </div>
         </div>

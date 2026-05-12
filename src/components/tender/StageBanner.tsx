@@ -48,7 +48,7 @@ export default function StageBanner({ project }: Props) {
         key="allocate"
         type="button"
         onClick={() => setAllocateOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient"
       >
         Allocate to VH
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -65,7 +65,7 @@ export default function StageBanner({ project }: Props) {
         key="accept"
         type="button"
         onClick={() => setAcceptOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-success-bd bg-tone-success-bg px-4 py-2 text-sm font-medium text-tone-success-fg transition hover:opacity-90"
       >
         Accept
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -76,7 +76,7 @@ export default function StageBanner({ project }: Props) {
         key="escalate"
         type="button"
         onClick={() => setEscalateOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-2 text-sm font-medium text-tone-danger-fg transition hover:opacity-90"
       >
         Escalate Back
       </button>,
@@ -89,7 +89,7 @@ export default function StageBanner({ project }: Props) {
         key="eligibility-approve"
         type="button"
         onClick={() => setEligibilityDecision('approve')}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-success-bd bg-tone-success-bg px-4 py-2 text-sm font-medium text-tone-success-fg transition hover:opacity-90"
       >
         Approve & continue
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -101,7 +101,7 @@ export default function StageBanner({ project }: Props) {
         key="eligibility-reject"
         type="button"
         onClick={() => setEligibilityDecision('reject')}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-2 text-sm font-medium text-tone-danger-fg transition hover:opacity-90"
       >
         Reject — close tender
       </button>,
@@ -114,7 +114,7 @@ export default function StageBanner({ project }: Props) {
     actionButtons.push(
       <span
         key="add-tasks-hint"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/55"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm text-fg-subtle"
       >
         Use “+ New Task” to assign work to teams.
       </span>,
@@ -127,7 +127,7 @@ export default function StageBanner({ project }: Props) {
         key="signoff"
         type="button"
         onClick={() => setSignOffOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient"
       >
         Validation complete — sign off
       </button>,
@@ -140,7 +140,7 @@ export default function StageBanner({ project }: Props) {
         key="vh-approve"
         type="button"
         onClick={() => setVhDecision('approve')}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-success-bd bg-tone-success-bg px-4 py-2 text-sm font-medium text-tone-success-fg transition hover:opacity-90"
       >
         Approve
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -152,7 +152,7 @@ export default function StageBanner({ project }: Props) {
         key="vh-reject"
         type="button"
         onClick={() => setVhDecision('reject')}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-2 text-sm font-medium text-tone-danger-fg transition hover:opacity-90"
       >
         Reject — Send Back
       </button>,
@@ -165,7 +165,7 @@ export default function StageBanner({ project }: Props) {
         key="update-status"
         type="button"
         onClick={() => setStatusUpdateOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-500/20"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-tone-success-bd bg-tone-success-bg px-4 py-2 text-sm font-medium text-tone-success-fg transition hover:opacity-90"
       >
         Update status
       </button>,
@@ -181,7 +181,7 @@ export default function StageBanner({ project }: Props) {
 
   return (
     <div
-      className={`mb-6 rounded-2xl border ${tone.ring} bg-white/3 p-5`}
+      className={`mb-6 rounded-2xl border ${tone.ring} bg-fill-1 p-5`}
       role="status"
       aria-label={`Project phase: ${phase.label}`}
     >
@@ -198,20 +198,20 @@ export default function StageBanner({ project }: Props) {
                 flight, which is actionable context. The escalation counter is
                 an audit fact only — it lives in Project history, not the banner. */}
             {iterations > 0 && (
-              <span className="inline-flex items-center rounded-full border border-indigo-400/40 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-200">
+              <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
                 Iteration {iterations + 1}
               </span>
             )}
           </div>
-          <p className="mt-2 text-sm text-white/75">
+          <p className="mt-2 text-sm text-fg-muted">
             {phase.isEscalated ? phase.hint : headline}
           </p>
           {!closedTone && !phase.isEscalated && actionButtons.length === 0 && (
-            <p className="mt-1 text-xs text-white/45">{phase.hint}</p>
+            <p className="mt-1 text-xs text-fg-subtle">{phase.hint}</p>
           )}
           {stage === 5 && project.eligibilityNote && (
-            <blockquote className="mt-3 rounded-lg border-l-2 border-sky-400/50 bg-sky-500/5 px-3 py-2 text-sm text-white/80">
-              <span className="block text-[10px] uppercase tracking-wider text-white/40">
+            <blockquote className="mt-3 rounded-lg border-l-2 border-tone-cool-bd bg-tone-cool-bg px-3 py-2 text-sm text-fg-muted">
+              <span className="block text-[10px] uppercase tracking-wider text-fg-subtle">
                 VH's assessment
               </span>
               <span className="mt-1 block">{project.eligibilityNote}</span>
@@ -224,7 +224,7 @@ export default function StageBanner({ project }: Props) {
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-xs font-medium text-white/75 transition hover:bg-white/8 hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-fill-2 px-3 py-2 text-xs font-medium text-fg-muted transition hover:bg-fill-4 hover:text-fg"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />

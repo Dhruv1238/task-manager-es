@@ -81,7 +81,7 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   return (
     <Modal
@@ -99,8 +99,8 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
         {/* VH's eligibility note — shown in both modes so the super admin's
             decision context is right where they're deciding. */}
         {project.eligibilityNote && (
-          <blockquote className="rounded-lg border-l-2 border-sky-400/50 bg-sky-500/5 px-3 py-2.5 text-sm text-white/80">
-            <span className="block text-[10px] uppercase tracking-wider text-white/40">
+          <blockquote className="rounded-lg border-l-2 border-tone-cool-bd bg-tone-cool-bg px-3 py-2.5 text-sm text-fg-muted">
+            <span className="block text-[10px] uppercase tracking-wider text-fg-subtle">
               VH's assessment
             </span>
             <span className="mt-1 block">{project.eligibilityNote}</span>
@@ -109,7 +109,7 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
 
         {isReject && (
           <div className="space-y-1.5">
-            <label htmlFor="rej-reason" className="text-sm font-medium text-white/80">
+            <label htmlFor="rej-reason" className="text-sm font-medium text-fg-muted">
               Reason
             </label>
             <textarea
@@ -125,7 +125,7 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
         )}
 
         {error && (
-          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
             {error}
           </div>
         )}
@@ -135,7 +135,7 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
@@ -144,7 +144,7 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
               type="button"
               onClick={handleReject}
               disabled={submitting || !reason.trim()}
-              className="flex-1 rounded-lg border border-red-400/40 bg-red-500/15 px-4 py-3 text-sm font-medium text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex-1 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm font-medium text-tone-danger-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? 'Closing tender…' : 'Reject — close tender'}
             </button>
@@ -153,7 +153,7 @@ export default function EligibilityReviewModal({ open, decision, onClose, projec
               type="button"
               onClick={handleApprove}
               disabled={submitting}
-              className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? 'Approving…' : 'Approve & continue to task setup'}
             </button>

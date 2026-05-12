@@ -12,28 +12,28 @@ const ORDER: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'blocke
 const STYLES: Record<TaskStatus, { label: string; cls: string; dot: string }> = {
   todo: {
     label: 'Todo',
-    cls: 'border-white/15 bg-white/5 text-white/80',
-    dot: 'bg-white/40',
+    cls: 'border-line bg-fill-2 text-fg-muted',
+    dot: 'bg-neutral-dot',
   },
   in_progress: {
     label: 'In Progress',
-    cls: 'border-blue-400/40 bg-blue-500/15 text-blue-200',
-    dot: 'bg-blue-400',
+    cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg',
+    dot: 'bg-info-dot',
   },
   in_review: {
     label: 'In Review',
-    cls: 'border-purple-400/40 bg-purple-500/15 text-purple-200',
-    dot: 'bg-purple-400',
+    cls: 'border-brand-edge bg-brand-soft text-brand',
+    dot: 'bg-brandtone-dot',
   },
   done: {
     label: 'Done',
-    cls: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
-    dot: 'bg-emerald-400',
+    cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg',
+    dot: 'bg-success-dot',
   },
   blocked: {
     label: 'Blocked',
-    cls: 'border-red-400/40 bg-red-500/15 text-red-200',
-    dot: 'bg-red-400',
+    cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg',
+    dot: 'bg-danger-dot',
   },
 }
 
@@ -98,7 +98,7 @@ export default function StatusMenu({ value, onChange, disabled = false }: Props)
       </button>
 
       {open && !disabled && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#0e0e16] shadow-2xl">
+        <div className="absolute left-0 top-full z-30 mt-1.5 w-44 overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl">
           {ORDER.map((s) => {
             const style = STYLES[s]
             const active = s === value
@@ -108,13 +108,13 @@ export default function StatusMenu({ value, onChange, disabled = false }: Props)
                 type="button"
                 onClick={() => select(s)}
                 className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
-                  active ? 'bg-white/5' : 'hover:bg-white/4'
+                  active ? 'bg-fill-2' : 'hover:bg-fill-2'
                 }`}
               >
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} aria-hidden />
-                <span className="flex-1 text-white/90">{style.label}</span>
+                <span className="flex-1 text-fg-strong">{style.label}</span>
                 {active && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 )}

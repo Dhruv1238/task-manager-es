@@ -120,7 +120,7 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
   const selected = value ? teamById.get(value) ?? null : null
 
   const triggerCls =
-    'flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/4 px-3 py-2.5 text-left text-sm text-white outline-none transition focus-within:border-purple-400/60 focus-within:bg-white/6 focus-within:ring-2 focus-within:ring-purple-500/20 hover:bg-white/6'
+    'flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-fill-2 px-3 py-2.5 text-left text-sm text-fg outline-none transition focus-within:border-brand-edge focus-within:bg-fill-3 focus-within:ring-2 focus-within:ring-brand-ring hover:bg-fill-3'
 
   const popoverStyle: React.CSSProperties = {
     position: 'fixed',
@@ -147,17 +147,17 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {selected ? (
               <span className="inline-flex min-w-0 items-center gap-2">
-                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-linear-to-br from-purple-500/30 to-fuchsia-500/30 text-[10px] font-semibold text-white/90">
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand-soft text-[10px] font-semibold text-fg-strong">
                   {selected.name
                     .split(/\s+/)
                     .slice(0, 2)
                     .map((p) => p[0]?.toUpperCase() ?? '')
                     .join('')}
                 </span>
-                <span className="truncate text-white/90">{selected.name}</span>
+                <span className="truncate text-fg-strong">{selected.name}</span>
               </span>
             ) : (
-              <span className="text-white/40">{placeholder ?? 'Select a team'}</span>
+              <span className="text-fg-subtle">{placeholder ?? 'Select a team'}</span>
             )}
           </div>
           <svg
@@ -169,7 +169,7 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={`shrink-0 text-white/50 transition ${open ? 'rotate-180' : ''}`}
+            className={`shrink-0 text-fg-subtle transition ${open ? 'rotate-180' : ''}`}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -181,21 +181,21 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
           <div
             ref={popoverRef}
             style={popoverStyle}
-            className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0e0e16] shadow-2xl"
+            className="flex flex-col overflow-hidden rounded-xl border border-line bg-elevated shadow-2xl"
           >
-            <div className="shrink-0 border-b border-white/10 p-2">
+            <div className="shrink-0 border-b border-line p-2">
               <input
                 ref={searchRef}
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search teams…"
-                className="w-full rounded-md bg-white/4 px-3 py-2 text-sm text-white placeholder-white/40 outline-none transition focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-md bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
               />
             </div>
             <div className="max-h-64 overflow-y-auto">
               {filtered.length === 0 ? (
-                <div className="px-3 py-4 text-center text-sm text-white/40">
+                <div className="px-3 py-4 text-center text-sm text-fg-subtle">
                   No teams match.
                 </div>
               ) : (
@@ -207,10 +207,10 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
                       type="button"
                       onClick={() => handleSelect(t.id)}
                       className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition ${
-                        active ? 'bg-white/6' : 'hover:bg-white/4'
+                        active ? 'bg-fill-3' : 'hover:bg-fill-2'
                       }`}
                     >
-                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-linear-to-br from-purple-500/30 to-fuchsia-500/30 text-[11px] font-semibold text-white/90">
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-soft text-[11px] font-semibold text-fg-strong">
                         {t.name
                           .split(/\s+/)
                           .slice(0, 2)
@@ -218,9 +218,9 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
                           .join('')}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-white/90">{t.name}</span>
+                        <span className="block truncate text-fg-strong">{t.name}</span>
                         {t.description && (
-                          <span className="block truncate text-xs text-white/40">
+                          <span className="block truncate text-xs text-fg-subtle">
                             {t.description}
                           </span>
                         )}
@@ -235,7 +235,7 @@ export default function TeamPicker({ value, onChange, placeholder, includeIds, i
                           strokeWidth="2.5"
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          className="shrink-0 text-purple-300"
+                          className="shrink-0 text-brand"
                         >
                           <polyline points="20 6 9 17 4 12" />
                         </svg>

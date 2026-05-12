@@ -59,7 +59,7 @@ export default function AcceptProjectModal({ open, onClose, project }: Props) {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   return (
     <Modal
@@ -76,15 +76,15 @@ export default function AcceptProjectModal({ open, onClose, project }: Props) {
         }}
         className="space-y-5"
       >
-        <div className="rounded-xl border border-white/10 bg-white/3 p-4 text-sm text-white/75">
-          <p className="font-medium text-white">{project.title}</p>
+        <div className="rounded-xl border border-line bg-card p-4 text-sm text-fg-muted">
+          <p className="font-medium text-fg">{project.title}</p>
           {project.description && (
-            <p className="mt-1 text-white/55">{project.description}</p>
+            <p className="mt-1 text-fg-subtle">{project.description}</p>
           )}
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="eligibility-note" className="text-sm font-medium text-white/80">
+          <label htmlFor="eligibility-note" className="text-sm font-medium text-fg-muted">
             Eligibility assessment
           </label>
           <textarea
@@ -96,13 +96,13 @@ export default function AcceptProjectModal({ open, onClose, project }: Props) {
             className={`${inputCls} resize-none`}
             required
           />
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-fg-subtle">
             The super admin reads this before the project moves into task setup.
           </p>
         </div>
 
         {error && (
-          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
             {error}
           </div>
         )}
@@ -112,14 +112,14 @@ export default function AcceptProjectModal({ open, onClose, project }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting || !note.trim()}
-            className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Submitting…' : 'Accept & send for review'}
           </button>

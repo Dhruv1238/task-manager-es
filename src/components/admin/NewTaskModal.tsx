@@ -28,9 +28,9 @@ function friendlyError(err: unknown): string {
 }
 
 const PRIORITIES: { value: TaskPriority; label: string; cls: string }[] = [
-  { value: 'low', label: 'Low', cls: 'text-white/70' },
-  { value: 'medium', label: 'Medium', cls: 'text-amber-200' },
-  { value: 'high', label: 'High', cls: 'text-red-200' },
+  { value: 'low', label: 'Low', cls: 'text-fg-muted' },
+  { value: 'medium', label: 'Medium', cls: 'text-tone-warn-fg' },
+  { value: 'high', label: 'High', cls: 'text-tone-danger-fg' },
 ]
 
 const CUSTOM = 'custom' as const
@@ -150,7 +150,7 @@ export default function NewTaskModal({
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
   const canSubmit = !!title.trim() && !!teamId && !submitting
 
   const description2 = initialTeamName
@@ -176,7 +176,7 @@ export default function NewTaskModal({
         noValidate
       >
         <div className="space-y-1.5">
-          <label htmlFor="task-template" className="text-sm font-medium text-white/80">
+          <label htmlFor="task-template" className="text-sm font-medium text-fg-muted">
             Template
           </label>
           <select
@@ -185,11 +185,11 @@ export default function NewTaskModal({
             onChange={(e) => applyTemplate(e.target.value as WorkType | typeof CUSTOM)}
             className={inputCls}
           >
-            <option value={CUSTOM} className="bg-[#11111a]">
+            <option value={CUSTOM} className="bg-overlay">
               Custom task — no pre-fill
             </option>
             {templates.map((t) => (
-              <option key={t.code} value={t.code} className="bg-[#11111a]">
+              <option key={t.code} value={t.code} className="bg-overlay">
                 {t.label}
               </option>
             ))}
@@ -197,7 +197,7 @@ export default function NewTaskModal({
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="task-title" className="text-sm font-medium text-white/80">
+          <label htmlFor="task-title" className="text-sm font-medium text-fg-muted">
             Title
           </label>
           <input
@@ -213,8 +213,8 @@ export default function NewTaskModal({
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="task-description" className="text-sm font-medium text-white/80">
-            Description <span className="font-normal text-white/40">(optional)</span>
+          <label htmlFor="task-description" className="text-sm font-medium text-fg-muted">
+            Description <span className="font-normal text-fg-subtle">(optional)</span>
           </label>
           <textarea
             id="task-description"
@@ -228,7 +228,7 @@ export default function NewTaskModal({
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="task-team" className="text-sm font-medium text-white/80">
+            <label htmlFor="task-team" className="text-sm font-medium text-fg-muted">
               Team
             </label>
             <TeamPicker
@@ -244,8 +244,8 @@ export default function NewTaskModal({
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="task-assignee" className="text-sm font-medium text-white/80">
-              Assignee <span className="font-normal text-white/40">(optional)</span>
+            <label htmlFor="task-assignee" className="text-sm font-medium text-fg-muted">
+              Assignee <span className="font-normal text-fg-subtle">(optional)</span>
             </label>
             {teamId ? (
               <UserPicker
@@ -257,7 +257,7 @@ export default function NewTaskModal({
                 includeUids={teamMemberUids}
               />
             ) : (
-              <div className="flex w-full items-center rounded-lg border border-white/10 bg-white/2 px-3 py-2.5 text-sm text-white/30">
+              <div className="flex w-full items-center rounded-lg border border-line bg-card px-3 py-2.5 text-sm text-fg-faint">
                 Pick a team first
               </div>
             )}
@@ -266,7 +266,7 @@ export default function NewTaskModal({
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-white/80">Priority</label>
+            <label className="text-sm font-medium text-fg-muted">Priority</label>
             <div className="flex gap-2">
               {PRIORITIES.map((p) => {
                 const active = priority === p.value
@@ -277,8 +277,8 @@ export default function NewTaskModal({
                     onClick={() => setPriority(p.value)}
                     className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition ${
                       active
-                        ? 'border-purple-400/60 bg-purple-500/15 text-white'
-                        : `border-white/10 bg-white/4 ${p.cls} hover:bg-white/8`
+                        ? 'border-brand-edge bg-brand-soft text-fg'
+                        : `border-line bg-fill-2 ${p.cls} hover:bg-fill-4`
                     }`}
                   >
                     {p.label}
@@ -289,8 +289,8 @@ export default function NewTaskModal({
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="task-due" className="text-sm font-medium text-white/80">
-              Due date <span className="font-normal text-white/40">(optional)</span>
+            <label htmlFor="task-due" className="text-sm font-medium text-fg-muted">
+              Due date <span className="font-normal text-fg-subtle">(optional)</span>
             </label>
             <input
               id="task-due"
@@ -305,7 +305,7 @@ export default function NewTaskModal({
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+            className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg"
           >
             {error}
           </div>
@@ -316,18 +316,18 @@ export default function NewTaskModal({
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <span className="inline-flex items-center justify-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
                 Creating…
               </span>
             ) : (

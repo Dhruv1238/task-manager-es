@@ -65,19 +65,19 @@ export default function AtRiskProjects({
           <li key={project.id}>
             <Link
               to={`/projects/${project.id}`}
-              className="flex items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 transition hover:border-amber-500/40 hover:bg-amber-500/10"
+              className="flex items-center gap-3 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3 py-2.5 transition hover:border-tone-warn-bd hover:opacity-90"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-white">
+                <div className="truncate text-sm font-medium text-fg">
                   {project.title}
                 </div>
-                <div className="text-xs text-white/50">
+                <div className="text-xs text-fg-subtle">
                   {formatPercent(progress)} complete
                 </div>
               </div>
               <span
                 className={`shrink-0 text-xs ${
-                  daysToDeadline < 0 ? 'text-red-300' : 'text-amber-200'
+                  daysToDeadline < 0 ? 'text-tone-danger-fg' : 'text-tone-warn-fg'
                 }`}
               >
                 {daysToDeadline < 0

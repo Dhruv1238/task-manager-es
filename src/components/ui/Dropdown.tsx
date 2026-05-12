@@ -57,14 +57,14 @@ export default function Dropdown({
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         title={disabled ? disabledTooltip : undefined}
-        className={`flex w-full items-center gap-2 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-sm transition focus:border-purple-400/60 focus:bg-white/6 focus:outline-none focus:ring-2 focus:ring-purple-500/20 ${
+        className={`flex w-full items-center gap-2 rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm transition focus:border-brand-edge focus:bg-fill-3 focus:outline-none focus:ring-2 focus:ring-brand-ring ${
           disabled
-            ? 'cursor-not-allowed text-white/30'
-            : 'text-white/80 hover:bg-white/6'
+            ? 'cursor-not-allowed text-fg-faint'
+            : 'text-fg-muted hover:bg-fill-3'
         }`}
       >
         {current?.leading}
-        <span className={`flex-1 truncate text-left ${current ? '' : 'text-white/40'}`}>
+        <span className={`flex-1 truncate text-left ${current ? '' : 'text-fg-faint'}`}>
           {current?.label ?? placeholder ?? 'Select…'}
         </span>
         <svg
@@ -76,7 +76,7 @@ export default function Dropdown({
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-white/40"
+          className="text-fg-subtle"
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -85,7 +85,7 @@ export default function Dropdown({
       {open && !disabled && (
         <div
           role="listbox"
-          className={`absolute top-full z-30 mt-1.5 min-w-full overflow-hidden rounded-lg border border-white/10 bg-[#0e0e16] shadow-2xl ${
+          className={`absolute top-full z-30 mt-1.5 min-w-full overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl ${
             align === 'right' ? 'right-0' : 'left-0'
           } ${menuClassName ?? ''}`}
         >
@@ -103,7 +103,7 @@ export default function Dropdown({
                     setOpen(false)
                   }}
                   className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${
-                    active ? 'bg-purple-500/10 text-white' : 'text-white/80 hover:bg-white/4'
+                    active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
                   }`}
                 >
                   {opt.leading}
@@ -118,7 +118,7 @@ export default function Dropdown({
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="text-purple-300"
+                      className="text-brand"
                     >
                       <polyline points="20 6 9 17 4 12" />
                     </svg>

@@ -14,16 +14,16 @@ interface Props {
 const STAGES: Stage[] = [1, 2, 5, 6, 7, 8, 10]
 
 const COLOR_BY_STAGE: Record<Stage, string> = {
-  1: '#F59E0B',
-  2: '#F59E0B',
-  3: '#EF4444',
-  4: '#3B82F6',
-  5: '#38BDF8', // sky-400 — eligibility review
-  6: '#3B82F6',
-  7: '#A855F7',
-  8: '#6366F1',
-  9: '#EF4444',
-  10: '#10B981',
+  1: 'var(--color-warn-dot)',
+  2: 'var(--color-warn-dot)',
+  3: 'var(--color-danger-dot)',
+  4: 'var(--color-info-dot)',
+  5: 'var(--color-cool-dot)', // sky-400 — eligibility review
+  6: 'var(--color-info-dot)',
+  7: 'var(--color-brandtone-dot)',
+  8: 'var(--color-accent-dot)',
+  9: 'var(--color-danger-dot)',
+  10: 'var(--color-success-dot)',
 }
 
 // Count of projects in each phase. Surfaces where tenders are getting stuck.
@@ -55,18 +55,18 @@ export default function TenderPipelineFunnel({ projects }: Props) {
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+          <CartesianGrid stroke="var(--color-line-subtle)" vertical={false} />
           <XAxis
             dataKey="phase"
-            stroke="rgba(255,255,255,0.4)"
+            stroke="var(--color-fg-subtle)"
             fontSize={11}
             tickLine={false}
             axisLine={false}
             interval={0}
           />
-          <YAxis stroke="rgba(255,255,255,0.4)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+          <YAxis stroke="var(--color-fg-subtle)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
           <Tooltip
-            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+            cursor={{ fill: 'var(--color-line-subtle)' }}
             contentStyle={TOOLTIP_STYLE}
             itemStyle={ITEM_STYLE}
             labelStyle={LABEL_STYLE}

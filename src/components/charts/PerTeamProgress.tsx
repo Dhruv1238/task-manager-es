@@ -67,12 +67,12 @@ export default function PerTeamProgress({
           />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            itemStyle={{ color: 'rgba(255, 255, 255, 0.8)' }}
+            itemStyle={{ color: 'var(--color-fg-muted)' }}
             labelStyle={LABEL_STYLE}
-            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            cursor={{ fill: 'var(--color-fill-2)' }}
           />
           <Legend
-            wrapperStyle={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}
+            wrapperStyle={{ fontSize: 11, color: 'var(--color-fg-muted)' }}
             iconType="circle"
           />
           {COUNT_STATUSES.map((s, idx) => (

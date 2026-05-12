@@ -84,16 +84,16 @@ export default function NewVsCompleted({
           <YAxis tick={AXIS_STYLE} stroke={GRID_COLOR} allowDecimals={false} width={32} />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            itemStyle={{ color: 'rgba(255, 255, 255, 0.8)' }}
+            itemStyle={{ color: 'var(--color-fg-muted)' }}
             labelStyle={LABEL_STYLE}
-            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            cursor={{ fill: 'var(--color-fill-2)' }}
           />
           <Legend
-            wrapperStyle={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}
+            wrapperStyle={{ fontSize: 11, color: 'var(--color-fg-muted)' }}
             iconType="circle"
           />
-          <Bar dataKey="created" name="Created" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="completed" name="Completed" fill="#34d399" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="created" name="Created" fill="var(--color-info-dot)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="completed" name="Completed" fill="var(--color-success-dot)" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

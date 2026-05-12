@@ -6,8 +6,8 @@ export default function AdminRoute() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-white/50">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+      <div className="flex min-h-[60vh] items-center justify-center text-fg-subtle">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-fg-strong" />
       </div>
     )
   }
@@ -27,8 +27,8 @@ export function SuperAdminRoute() {
   const { profile, loading } = useAuth()
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-white/50">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+      <div className="flex min-h-[60vh] items-center justify-center text-fg-subtle">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-fg-strong" />
       </div>
     )
   }

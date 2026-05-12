@@ -37,17 +37,17 @@ export function applyFilters(
 }
 
 const STATUS_PILLS: { value: TaskStatus; label: string; activeCls: string }[] = [
-  { value: 'todo', label: 'Todo', activeCls: 'bg-white/10 text-white' },
-  { value: 'in_progress', label: 'In Progress', activeCls: 'bg-blue-500/20 text-blue-200' },
-  { value: 'in_review', label: 'In Review', activeCls: 'bg-purple-500/20 text-purple-200' },
-  { value: 'done', label: 'Done', activeCls: 'bg-emerald-500/20 text-emerald-200' },
-  { value: 'blocked', label: 'Blocked', activeCls: 'bg-red-500/20 text-red-200' },
+  { value: 'todo', label: 'Todo', activeCls: 'bg-fill-4 text-fg' },
+  { value: 'in_progress', label: 'In Progress', activeCls: 'bg-tone-info-bg text-tone-info-fg' },
+  { value: 'in_review', label: 'In Review', activeCls: 'bg-brand-soft text-brand' },
+  { value: 'done', label: 'Done', activeCls: 'bg-tone-success-bg text-tone-success-fg' },
+  { value: 'blocked', label: 'Blocked', activeCls: 'bg-tone-danger-bg text-tone-danger-fg' },
 ]
 
 const PRIORITY_PILLS: { value: TaskPriority; label: string; activeCls: string }[] = [
-  { value: 'low', label: 'Low', activeCls: 'bg-white/10 text-white' },
-  { value: 'medium', label: 'Medium', activeCls: 'bg-amber-500/15 text-amber-200' },
-  { value: 'high', label: 'High', activeCls: 'bg-red-500/15 text-red-200' },
+  { value: 'low', label: 'Low', activeCls: 'bg-fill-4 text-fg' },
+  { value: 'medium', label: 'Medium', activeCls: 'bg-tone-warn-bg text-tone-warn-fg' },
+  { value: 'high', label: 'High', activeCls: 'bg-tone-danger-bg text-tone-danger-fg' },
 ]
 
 function toggle<T>(set: Set<T>, value: T): Set<T> {
@@ -66,7 +66,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 18 }: { user: User; size?: number }) {
   return (
     <span
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.45) }}
       aria-hidden
     >
@@ -110,7 +110,7 @@ function AssigneeDropdown({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-xs text-white/85 transition hover:bg-white/6"
+        className="inline-flex items-center gap-2 rounded-md border border-line bg-fill-2 px-2.5 py-1 text-xs text-fg-strong transition hover:bg-fill-3"
       >
         {current ? (
           <>
@@ -118,15 +118,15 @@ function AssigneeDropdown({
             <span className="max-w-32 truncate">{current.displayName}</span>
           </>
         ) : (
-          <span className="text-white/70">Anyone</span>
+          <span className="text-fg-muted">Anyone</span>
         )}
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/40">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-fg-subtle">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-white/10 bg-[#0e0e16] shadow-2xl">
+        <div className="absolute left-0 top-full z-30 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl">
           <button
             type="button"
             onClick={() => {
@@ -134,20 +134,20 @@ function AssigneeDropdown({
               setOpen(false)
             }}
             className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
-              value === null ? 'bg-white/5 text-white' : 'text-white/80 hover:bg-white/4'
+              value === null ? 'bg-fill-2 text-fg' : 'text-fg-muted hover:bg-fill-2'
             }`}
           >
             <span className="inline-block h-4 w-4" aria-hidden />
             <span className="flex-1">Anyone</span>
             {value === null && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
           </button>
-          <div className="max-h-56 overflow-y-auto border-t border-white/10">
+          <div className="max-h-56 overflow-y-auto border-t border-line">
             {members.length === 0 ? (
-              <div className="px-3 py-3 text-center text-xs text-white/40">
+              <div className="px-3 py-3 text-center text-xs text-fg-subtle">
                 No members to filter by.
               </div>
             ) : (
@@ -162,13 +162,13 @@ function AssigneeDropdown({
                       setOpen(false)
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
-                      active ? 'bg-purple-500/10 text-white' : 'text-white/80 hover:bg-white/4'
+                      active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
                     }`}
                   >
                     <Avatar user={m} size={18} />
                     <span className="flex-1 truncate">{m.displayName}</span>
                     {active && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
@@ -218,18 +218,18 @@ function TeamDropdown({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-xs text-white/85 transition hover:bg-white/6"
+        className="inline-flex items-center gap-2 rounded-md border border-line bg-fill-2 px-2.5 py-1 text-xs text-fg-strong transition hover:bg-fill-3"
       >
         <span className="max-w-32 truncate">
           {current ? current.name : 'All teams'}
         </span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-white/40">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-fg-subtle">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-white/10 bg-[#0e0e16] shadow-2xl">
+        <div className="absolute left-0 top-full z-30 mt-1.5 min-w-56 overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl">
           <button
             type="button"
             onClick={() => {
@@ -237,19 +237,19 @@ function TeamDropdown({
               setOpen(false)
             }}
             className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
-              value === null ? 'bg-white/5 text-white' : 'text-white/80 hover:bg-white/4'
+              value === null ? 'bg-fill-2 text-fg' : 'text-fg-muted hover:bg-fill-2'
             }`}
           >
             <span className="flex-1">All teams</span>
             {value === null && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}
           </button>
-          <div className="max-h-56 overflow-y-auto border-t border-white/10">
+          <div className="max-h-56 overflow-y-auto border-t border-line">
             {teams.length === 0 ? (
-              <div className="px-3 py-3 text-center text-xs text-white/40">
+              <div className="px-3 py-3 text-center text-xs text-fg-subtle">
                 No teams on this project.
               </div>
             ) : (
@@ -264,12 +264,12 @@ function TeamDropdown({
                       setOpen(false)
                     }}
                     className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition ${
-                      active ? 'bg-purple-500/10 text-white' : 'text-white/80 hover:bg-white/4'
+                      active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
                     }`}
                   >
                     <span className="flex-1 truncate">{t.name}</span>
                     {active && (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
@@ -311,7 +311,7 @@ export default function TaskFilters({
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
       {showStatus && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs uppercase tracking-wider text-white/40">Status</span>
+          <span className="text-xs uppercase tracking-wider text-fg-subtle">Status</span>
           {STATUS_PILLS.map((p) => {
             const active = value.statuses.has(p.value)
             return (
@@ -324,7 +324,7 @@ export default function TaskFilters({
                 className={
                   active
                     ? `${basePill} border-transparent ${p.activeCls}`
-                    : `${basePill} border-white/10 bg-white/2 text-white/50 hover:bg-white/4`
+                    : `${basePill} border-line bg-fill-1 text-fg-subtle hover:bg-fill-2`
                 }
               >
                 {p.label}
@@ -335,7 +335,7 @@ export default function TaskFilters({
       )}
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs uppercase tracking-wider text-white/40">Priority</span>
+        <span className="text-xs uppercase tracking-wider text-fg-subtle">Priority</span>
         {PRIORITY_PILLS.map((p) => {
           const active = value.priorities.has(p.value)
           return (
@@ -348,7 +348,7 @@ export default function TaskFilters({
               className={
                 active
                   ? `${basePill} border-transparent ${p.activeCls}`
-                  : `${basePill} border-white/10 bg-white/2 text-white/50 hover:bg-white/4`
+                  : `${basePill} border-line bg-fill-1 text-fg-subtle hover:bg-fill-2`
               }
             >
               {p.label}
@@ -358,7 +358,7 @@ export default function TaskFilters({
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-xs uppercase tracking-wider text-white/40">Assignee</span>
+        <span className="text-xs uppercase tracking-wider text-fg-subtle">Assignee</span>
         <AssigneeDropdown
           value={value.assigneeId}
           onChange={(next) => onChange({ ...value, assigneeId: next })}
@@ -368,7 +368,7 @@ export default function TaskFilters({
 
       {teams && (
         <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-white/40">Team</span>
+          <span className="text-xs uppercase tracking-wider text-fg-subtle">Team</span>
           <TeamDropdown
             value={value.teamId}
             onChange={(next) => onChange({ ...value, teamId: next })}
@@ -381,7 +381,7 @@ export default function TaskFilters({
         <button
           type="button"
           onClick={() => onChange(EMPTY_FILTERS)}
-          className="text-xs text-purple-300 transition hover:text-purple-200"
+          className="text-xs text-brand transition hover:text-brand"
         >
           Clear filters
         </button>

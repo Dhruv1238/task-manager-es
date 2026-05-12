@@ -14,23 +14,23 @@ import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
 import type { Task, TaskPriority, TaskStatus } from '../types/models'
 
 const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
-  todo: { label: 'Todo', cls: 'border-white/15 bg-white/5 text-white/70' },
+  todo: { label: 'Todo', cls: 'border-line bg-fill-2 text-fg-muted' },
   in_progress: {
     label: 'In Progress',
-    cls: 'border-blue-400/40 bg-blue-500/15 text-blue-200',
+    cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg',
   },
   in_review: {
     label: 'In Review',
-    cls: 'border-purple-400/40 bg-purple-500/15 text-purple-200',
+    cls: 'border-brand-edge bg-brand-soft text-brand',
   },
-  done: { label: 'Done', cls: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' },
-  blocked: { label: 'Blocked', cls: 'border-red-400/40 bg-red-500/15 text-red-200' },
+  done: { label: 'Done', cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg' },
+  blocked: { label: 'Blocked', cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg' },
 }
 
 const PRIORITY_STYLES: Record<TaskPriority, { label: string; cls: string }> = {
-  low: { label: 'Low', cls: 'text-white/50' },
-  medium: { label: 'Medium', cls: 'text-amber-300' },
-  high: { label: 'High', cls: 'text-red-300' },
+  low: { label: 'Low', cls: 'text-fg-subtle' },
+  medium: { label: 'Medium', cls: 'text-tone-warn-fg' },
+  high: { label: 'High', cls: 'text-tone-danger-fg' },
 }
 
 function StatusPill({ status }: { status: TaskStatus }) {
@@ -99,29 +99,29 @@ function TaskRow({ task, showSubtaskProgress = false }: { task: Task; showSubtas
   const priority = PRIORITY_STYLES[task.priority]
 
   return (
-    <li className="border-b border-white/5 last:border-b-0">
+    <li className="border-b border-line-subtle last:border-b-0">
       <Link
         to={`/tasks/${task.id}`}
         state={{ backgroundLocation: location }}
-        className="flex items-center gap-3 px-5 py-3 transition hover:bg-white/2"
+        className="flex items-center gap-3 px-5 py-3 transition hover:bg-fill-1"
       >
         <StatusPill status={task.status} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-white">{task.title}</div>
+          <div className="truncate text-sm font-medium text-fg">{task.title}</div>
           {task.description && (
-            <div className="mt-0.5 line-clamp-1 text-xs text-white/50">
+            <div className="mt-0.5 line-clamp-1 text-xs text-fg-subtle">
               {task.description}
             </div>
           )}
         </div>
-        <div className="hidden items-center gap-4 text-xs text-white/50 sm:flex">
+        <div className="hidden items-center gap-4 text-xs text-fg-subtle sm:flex">
           <span className={`font-medium ${priority.cls}`}>{priority.label}</span>
-          <span className={overdue ? 'text-red-300' : 'text-white/50'}>
+          <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
             {overdue ? 'Overdue · ' : ''}
             {formatDate(task.dueDate)}
           </span>
           {showSubtaskProgress && (
-            <span className="text-white/40">
+            <span className="text-fg-subtle">
               {task.subtaskDoneCount ?? 0}/{task.subtaskCount ?? 0}
             </span>
           )}
@@ -144,10 +144,10 @@ function GroupedTaskList({
         <section key={proj.projectId}>
           <Link
             to={`/projects/${proj.projectId}`}
-            className="group inline-flex items-center gap-2 text-sm text-white/50 transition hover:text-white/80"
+            className="group inline-flex items-center gap-2 text-sm text-fg-subtle transition hover:text-fg-muted"
           >
-            <span className="text-xs uppercase tracking-wider text-white/40">Project</span>
-            <span className="font-medium text-white/85 group-hover:text-white">
+            <span className="text-xs uppercase tracking-wider text-fg-subtle">Project</span>
+            <span className="font-medium text-fg-strong group-hover:text-fg">
               {proj.projectTitle}
             </span>
             <svg
@@ -159,7 +159,7 @@ function GroupedTaskList({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="text-white/30"
+              className="text-fg-faint"
             >
               <polyline points="9 18 15 12 9 6" />
             </svg>
@@ -169,15 +169,15 @@ function GroupedTaskList({
             {Array.from(proj.teams.values()).map((team) => (
               <div
                 key={team.teamId}
-                className="overflow-hidden rounded-2xl border border-white/10 bg-white/2"
+                className="overflow-hidden rounded-2xl border border-line bg-card"
               >
-                <div className="flex items-center justify-between border-b border-white/5 px-5 py-3">
-                  <span className="text-xs font-medium uppercase tracking-wider text-white/50">
+                <div className="flex items-center justify-between border-b border-line-subtle px-5 py-3">
+                  <span className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
                     {team.teamName}
                   </span>
                   <Link
                     to={`/projects/${proj.projectId}/teams/${team.teamId}`}
-                    className="text-xs text-purple-300 transition hover:text-purple-200"
+                    className="text-xs text-brand transition hover:text-brand"
                   >
                     Open workspace →
                   </Link>
@@ -206,10 +206,10 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
   return (
     <section className="mb-10">
       <div className="mb-3">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-purple-200">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-brand">
           🔍 Awaiting my review
         </h2>
-        <p className="mt-1 text-xs text-white/40">
+        <p className="mt-1 text-xs text-fg-subtle">
           Tasks where you're the named reviewer. Open one to approve or send back.
         </p>
       </div>
@@ -219,26 +219,26 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
             <Link
               to={`/tasks/${t.id}`}
               state={{ backgroundLocation: location }}
-              className="flex items-center gap-3 rounded-xl border border-purple-400/30 bg-purple-500/5 px-4 py-3 transition hover:bg-purple-500/10"
+              className="flex items-center gap-3 rounded-xl border border-brand-edge bg-brand-soft px-4 py-3 transition hover:bg-brand-soft"
             >
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-purple-400/40 bg-purple-500/20 text-base">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-brand-edge bg-brand-soft text-base">
                 🔍
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-white">{t.title}</div>
-                <div className="mt-0.5 text-xs text-white/55">
+                <div className="truncate text-sm font-medium text-fg">{t.title}</div>
+                <div className="mt-0.5 text-xs text-fg-subtle">
                   {t.projectTitle ?? '—'}
-                  <span className="mx-1.5 text-white/25">·</span>
+                  <span className="mx-1.5 text-fg-faint">·</span>
                   {t.teamName ?? '—'}
                   {t.assigneeName && (
                     <>
-                      <span className="mx-1.5 text-white/25">·</span>
+                      <span className="mx-1.5 text-fg-faint">·</span>
                       from {t.assigneeName}
                     </>
                   )}
                 </div>
               </div>
-              <span className="hidden text-xs text-purple-200/80 sm:block">Review →</span>
+              <span className="hidden text-xs text-brand/80 sm:block">Review →</span>
             </Link>
           </li>
         ))}
@@ -253,10 +253,10 @@ function ProjectsAwaitingActionSection() {
   return (
     <section className="mb-10">
       <div className="mb-3">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-amber-200">
+        <h2 className="text-xs font-medium uppercase tracking-wider text-tone-warn-fg">
           🚦 Projects awaiting my action
         </h2>
-        <p className="mt-1 text-xs text-white/40">
+        <p className="mt-1 text-xs text-fg-subtle">
           The workflow is blocked on you. Take an action to move things forward.
         </p>
       </div>
@@ -267,11 +267,11 @@ function ProjectsAwaitingActionSection() {
           // When a project comes back via escalation, the whole card should
           // visually communicate urgency — red border + red CTA, not the default amber.
           const cardCls = phase.isEscalated
-            ? 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-red-400/40 bg-red-500/5 p-4 transition hover:bg-red-500/10'
-            : 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/5 p-4 transition hover:bg-amber-500/10'
+            ? 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-tone-danger-bd bg-tone-danger-bg p-4 transition hover:opacity-90'
+            : 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-tone-warn-bd bg-tone-warn-bg p-4 transition hover:opacity-90'
           const ctaCls = phase.isEscalated
-            ? 'inline-flex items-center justify-between gap-2 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-100 transition group-hover:bg-red-500/15'
-            : 'inline-flex items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition group-hover:bg-amber-500/15'
+            ? 'inline-flex items-center justify-between gap-2 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-1.5 text-xs font-medium text-tone-danger-fg transition group-hover:bg-tone-danger-bg'
+            : 'inline-flex items-center justify-between gap-2 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3 py-1.5 text-xs font-medium text-tone-warn-fg transition group-hover:bg-tone-warn-bg'
           return (
             <li key={project.id}>
               <Link to={`/projects/${project.id}`} className={cardCls}>
@@ -282,9 +282,9 @@ function ProjectsAwaitingActionSection() {
                       {phase.label}
                     </span>
                   </div>
-                  <h3 className="mt-2 text-sm font-medium text-white">{project.title}</h3>
+                  <h3 className="mt-2 text-sm font-medium text-fg">{project.title}</h3>
                   {project.description && (
-                    <p className="mt-1 line-clamp-2 text-xs text-white/55">{project.description}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-fg-subtle">{project.description}</p>
                   )}
                 </div>
                 <span className={ctaCls}>
@@ -354,36 +354,36 @@ export default function Me() {
     <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm text-white/40">My workspace</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">
+          <p className="text-sm text-fg-subtle">My workspace</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-fg">
             Hi{firstName ? `, ${firstName}` : ''}. Here's what's on your plate.
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-            <span className="text-white/60">
-              <span className="font-semibold text-white">{openCount}</span> open
+            <span className="text-fg-muted">
+              <span className="font-semibold text-fg">{openCount}</span> open
             </span>
-            <span className="text-white/60">
-              <span className="font-semibold text-white">{doneCount}</span> done
+            <span className="text-fg-muted">
+              <span className="font-semibold text-fg">{doneCount}</span> done
             </span>
             {ledOpenCount > 0 && (
-              <span className="text-white/60">
-                <span className="font-semibold text-white">{ledOpenCount}</span> led
+              <span className="text-fg-muted">
+                <span className="font-semibold text-fg">{ledOpenCount}</span> led
               </span>
             )}
             {overdueCount > 0 && (
-              <span className="text-red-300">
+              <span className="text-tone-danger-fg">
                 <span className="font-semibold">{overdueCount}</span> overdue
               </span>
             )}
           </div>
         </div>
 
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-white/70">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-fg-muted">
           <input
             type="checkbox"
             checked={showCompleted}
             onChange={(e) => setShowCompleted(e.target.checked)}
-            className="h-4 w-4 rounded border-white/20 bg-white/5 text-purple-500 accent-purple-500"
+            className="h-4 w-4 rounded border-line-strong bg-fill-2 text-brand accent-brand"
           />
           Show completed
         </label>
@@ -394,33 +394,33 @@ export default function Me() {
 
       <section className="mb-10">
         <div className="mb-3">
-          <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
             Assigned to me
           </h2>
         </div>
 
         {myError ? (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
+          <div className="rounded-2xl border border-tone-danger-bd bg-tone-danger-bg p-6 text-sm text-tone-danger-fg">
             Couldn't load your tasks: {myError}
             {myError.includes('index') && (
-              <div className="mt-2 text-red-200/70">
+              <div className="mt-2 text-tone-danger-fg/70">
                 Firestore wants a composite index on{' '}
-                <code className="rounded bg-white/5 px-1">assigneeId</code> +{' '}
-                <code className="rounded bg-white/5 px-1">updatedAt</code>. Open the link in your
+                <code className="rounded bg-fill-2 px-1">assigneeId</code> +{' '}
+                <code className="rounded bg-fill-2 px-1">updatedAt</code>. Open the link in your
                 browser console to create it.
               </div>
             )}
           </div>
         ) : myLoading ? (
-          <div className="rounded-2xl border border-white/10 bg-white/2 p-10 text-center text-sm text-white/40">
+          <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-fg-subtle">
             Loading your tasks…
           </div>
         ) : groupedMine.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-10 text-center">
-            <h3 className="text-base font-medium text-white">
+          <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
+            <h3 className="text-base font-medium text-fg">
               {myTasks.length === 0 ? 'Nothing assigned to you yet' : 'All caught up'}
             </h3>
-            <p className="mt-2 text-sm text-white/50">
+            <p className="mt-2 text-sm text-fg-subtle">
               {myTasks.length === 0
                 ? 'When a team lead delegates a subtask to you, it will show up here.'
                 : 'Toggle "Show completed" to see what you finished.'}
@@ -434,24 +434,24 @@ export default function Me() {
       {(ledLoading || ledTasks.length > 0) && (
         <section>
           <div className="mb-3">
-            <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
+            <h2 className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
               Led by me
             </h2>
-            <p className="mt-1 text-xs text-white/40">
+            <p className="mt-1 text-xs text-fg-subtle">
               Team-level tasks on teams where you're the lead. You own delegation for these.
             </p>
           </div>
 
           {ledError ? (
-            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
+            <div className="rounded-2xl border border-tone-danger-bd bg-tone-danger-bg p-6 text-sm text-tone-danger-fg">
               Couldn't load led tasks: {ledError}
             </div>
           ) : ledLoading ? (
-            <div className="rounded-2xl border border-white/10 bg-white/2 p-10 text-center text-sm text-white/40">
+            <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-fg-subtle">
               Loading team tasks…
             </div>
           ) : groupedLed.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-10 text-center text-sm text-white/50">
+            <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center text-sm text-fg-subtle">
               No open team-level tasks on the teams you lead.
             </div>
           ) : (
@@ -466,17 +466,17 @@ export default function Me() {
             type="button"
             onClick={() => setShowDashboard((s) => !s)}
             aria-expanded={showDashboard}
-            className="flex w-full items-center justify-between gap-4 border-t border-white/5 pt-6 text-left transition hover:text-white"
+            className="flex w-full items-center justify-between gap-4 border-t border-line-subtle pt-6 text-left transition hover:text-fg"
           >
             <div>
-              <h2 className="text-xs font-medium uppercase tracking-wider text-white/40">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
                 Your dashboard
               </h2>
-              <p className="mt-1 text-xs text-white/40">
+              <p className="mt-1 text-xs text-fg-subtle">
                 Status, priorities, upcoming deadlines, and your weekly throughput.
               </p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-xs text-white/70 transition hover:bg-white/8 hover:text-white">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-line bg-fill-2 px-2.5 py-1 text-xs text-fg-muted transition hover:bg-fill-4 hover:text-fg">
               {showDashboard ? 'Hide' : 'Show'}
               <svg
                 width="12"

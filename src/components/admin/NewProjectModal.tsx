@@ -128,7 +128,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   const canSubmit = !!title.trim() && !!ownerId && !submitting
 
@@ -151,7 +151,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
         noValidate
       >
         <div className="space-y-1.5">
-          <label htmlFor="project-title" className="text-sm font-medium text-white/80">
+          <label htmlFor="project-title" className="text-sm font-medium text-fg-muted">
             Title
           </label>
           <input
@@ -167,8 +167,8 @@ export default function NewProjectModal({ open, onClose }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="project-description" className="text-sm font-medium text-white/80">
-            Description <span className="font-normal text-white/40">(optional)</span>
+          <label htmlFor="project-description" className="text-sm font-medium text-fg-muted">
+            Description <span className="font-normal text-fg-subtle">(optional)</span>
           </label>
           <textarea
             id="project-description"
@@ -182,16 +182,16 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-white/80">
-              Attachments <span className="font-normal text-white/40">(optional)</span>
+            <label className="text-sm font-medium text-fg-muted">
+              Attachments <span className="font-normal text-fg-subtle">(optional)</span>
             </label>
-            <span className="text-xs text-white/40">10 MB max per file</span>
+            <span className="text-xs text-fg-subtle">10 MB max per file</span>
           </div>
 
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-white/2 px-4 py-5 text-sm text-white/60 transition hover:border-white/25 hover:bg-white/4 hover:text-white/80"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-card px-4 py-5 text-sm text-fg-muted transition hover:border-line-strong hover:bg-fill-2 hover:text-fg-muted"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -211,18 +211,18 @@ export default function NewProjectModal({ open, onClose }: Props) {
               {files.map((f, i) => (
                 <li
                   key={`${f.name}-${i}`}
-                  className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/2 p-2"
+                  className="flex items-center gap-3 rounded-lg border border-line bg-card p-2"
                 >
                   <FileBadge mimeType={f.type} fileName={f.name} size={36} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-white">{f.name}</div>
-                    <div className="text-xs text-white/40">{formatFileSize(f.size)}</div>
+                    <div className="truncate text-sm font-medium text-fg">{f.name}</div>
+                    <div className="text-xs text-fg-subtle">{formatFileSize(f.size)}</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeFile(i)}
                     disabled={submitting}
-                    className="shrink-0 rounded-md p-1.5 text-white/40 transition hover:bg-white/5 hover:text-white/80 disabled:opacity-40"
+                    className="shrink-0 rounded-md p-1.5 text-fg-subtle transition hover:bg-fill-2 hover:text-fg-muted disabled:opacity-40"
                     aria-label={`Remove ${f.name}`}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -238,8 +238,8 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="project-submission" className="text-sm font-medium text-white/80">
-              Submission date <span className="font-normal text-white/40">(to client)</span>
+            <label htmlFor="project-submission" className="text-sm font-medium text-fg-muted">
+              Submission date <span className="font-normal text-fg-subtle">(to client)</span>
             </label>
             <input
               id="project-submission"
@@ -251,8 +251,8 @@ export default function NewProjectModal({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="project-presentation" className="text-sm font-medium text-white/80">
-              Presentation date <span className="font-normal text-white/40">(optional)</span>
+            <label htmlFor="project-presentation" className="text-sm font-medium text-fg-muted">
+              Presentation date <span className="font-normal text-fg-subtle">(optional)</span>
             </label>
             <input
               id="project-presentation"
@@ -264,7 +264,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
           </div>
 
           <div className="space-y-1.5 sm:col-span-2">
-            <label htmlFor="project-owner" className="text-sm font-medium text-white/80">
+            <label htmlFor="project-owner" className="text-sm font-medium text-fg-muted">
               Owner
             </label>
             <UserPicker
@@ -281,7 +281,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+            className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg"
           >
             {error}
           </div>
@@ -292,18 +292,18 @@ export default function NewProjectModal({ open, onClose }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <span className="inline-flex items-center justify-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
                 {uploadStatus ?? 'Creating…'}
               </span>
             ) : (

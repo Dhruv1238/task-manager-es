@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Task Manager</title>
+    <script>
+      (function () {
+        try {
+          var m = localStorage.getItem('theme') || 'system';
+          var sysLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+          var resolved = m === 'system' ? (sysLight ? 'light' : 'dark') : m;
+          if (resolved === 'light') document.documentElement.classList.add('light');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

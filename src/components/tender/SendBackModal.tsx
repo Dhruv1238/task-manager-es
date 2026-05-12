@@ -74,7 +74,7 @@ export default function SendBackModal({ open, onClose, task }: Props) {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   return (
     <Modal
@@ -92,7 +92,7 @@ export default function SendBackModal({ open, onClose, task }: Props) {
         className="space-y-5"
       >
         <div className="space-y-1.5">
-          <label htmlFor="rev-feedback" className="text-sm font-medium text-white/80">
+          <label htmlFor="rev-feedback" className="text-sm font-medium text-fg-muted">
             Feedback
           </label>
           <textarea
@@ -107,8 +107,8 @@ export default function SendBackModal({ open, onClose, task }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="rev-reassign" className="text-sm font-medium text-white/80">
-            Reassign to <span className="font-normal text-white/40">(optional)</span>
+          <label htmlFor="rev-reassign" className="text-sm font-medium text-fg-muted">
+            Reassign to <span className="font-normal text-fg-subtle">(optional)</span>
           </label>
           <select
             id="rev-reassign"
@@ -116,11 +116,11 @@ export default function SendBackModal({ open, onClose, task }: Props) {
             onChange={(e) => setNewAssigneeId(e.target.value)}
             className={inputCls}
           >
-            <option value="" className="bg-[#11111a]">
+            <option value="" className="bg-overlay">
               Keep current assignee
             </option>
             {assignees.map((u) => (
-              <option key={u.uid} value={u.uid} className="bg-[#11111a]">
+              <option key={u.uid} value={u.uid} className="bg-overlay">
                 {u.displayName}
               </option>
             ))}
@@ -128,7 +128,7 @@ export default function SendBackModal({ open, onClose, task }: Props) {
         </div>
 
         {error && (
-          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
             {error}
           </div>
         )}
@@ -138,14 +138,14 @@ export default function SendBackModal({ open, onClose, task }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!feedback.trim() || submitting}
-            className="flex-1 rounded-lg border border-red-400/40 bg-red-500/15 px-4 py-3 text-sm font-medium text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm font-medium text-tone-danger-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Sending back…' : 'Send Back'}
           </button>

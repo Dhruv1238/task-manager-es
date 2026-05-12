@@ -80,7 +80,7 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   const canSubmit = !!name.trim() && !!leadId && !submitting
 
@@ -102,7 +102,7 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
         noValidate
       >
         <div className="space-y-1.5">
-          <label htmlFor="team-name" className="text-sm font-medium text-white/80">
+          <label htmlFor="team-name" className="text-sm font-medium text-fg-muted">
             Name
           </label>
           <input
@@ -118,8 +118,8 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="team-description" className="text-sm font-medium text-white/80">
-            Description <span className="font-normal text-white/40">(optional)</span>
+          <label htmlFor="team-description" className="text-sm font-medium text-fg-muted">
+            Description <span className="font-normal text-fg-subtle">(optional)</span>
           </label>
           <textarea
             id="team-description"
@@ -132,7 +132,7 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="team-lead" className="text-sm font-medium text-white/80">
+          <label htmlFor="team-lead" className="text-sm font-medium text-fg-muted">
             Team lead
           </label>
           <UserPicker
@@ -147,10 +147,10 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="team-members" className="text-sm font-medium text-white/80">
+            <label htmlFor="team-members" className="text-sm font-medium text-fg-muted">
               Additional members
             </label>
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-fg-subtle">
               {leadId ? 'Lead is always a member' : 'Pick a lead first'}
             </span>
           </div>
@@ -168,7 +168,7 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+            className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg"
           >
             {error}
           </div>
@@ -179,18 +179,18 @@ export default function NewTeamModal({ open, onClose, onCreated }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
-            className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <span className="inline-flex items-center justify-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
                 Creating…
               </span>
             ) : (

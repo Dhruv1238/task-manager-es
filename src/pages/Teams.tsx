@@ -16,7 +16,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 28 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white ring-2 ring-[#0b0b12]"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white ring-2 ring-surface"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
       title={user.displayName}
       aria-hidden
@@ -71,8 +71,8 @@ export default function Teams() {
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Teams</h1>
-          <p className="mt-1 text-sm text-white/50">
+          <h1 className="text-3xl font-semibold tracking-tight text-fg">Teams</h1>
+          <p className="mt-1 text-sm text-fg-subtle">
             {loading
               ? 'Loading…'
               : `${visibleTeams.length} team${visibleTeams.length === 1 ? '' : 's'}`}
@@ -84,7 +84,7 @@ export default function Teams() {
       <div className="mb-6 max-w-sm">
         <div className="relative">
           <svg
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -100,24 +100,24 @@ export default function Teams() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search teams"
-            className="w-full rounded-lg border border-white/10 bg-white/4 py-2.5 pl-9 pr-4 text-sm text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
+            className="w-full rounded-lg border border-line bg-fill-2 py-2.5 pl-9 pr-4 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
           />
         </div>
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-white/10 bg-white/2 p-12 text-center text-white/40">
+        <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
           Loading teams…
         </div>
       ) : visibleTeams.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-12 text-center">
-          <h2 className="text-lg font-medium text-white">
+        <div className="rounded-2xl border border-dashed border-line bg-card p-12 text-center">
+          <h2 className="text-lg font-medium text-fg">
             {isAdmin ? 'No teams yet' : "You're not on any teams yet"}
           </h2>
-          <p className="mt-2 text-sm text-white/50">
+          <p className="mt-2 text-sm text-fg-subtle">
             {isAdmin ? (
               <>
-                Click <span className="font-medium text-white/80">+ New Team</span> to spin one up.
+                Click <span className="font-medium text-fg-muted">+ New Team</span> to spin one up.
               </>
             ) : (
               'An admin will add you to a team.'
@@ -125,7 +125,7 @@ export default function Teams() {
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/2 p-12 text-center text-white/40">
+        <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
           No teams match your search.
         </div>
       ) : (
@@ -143,33 +143,33 @@ export default function Teams() {
               <Link
                 key={t.id}
                 to={`/teams/${t.id}`}
-                className="group flex flex-col rounded-2xl border border-white/10 bg-white/2 p-5 transition hover:border-white/20 hover:bg-white/4"
+                className="group flex flex-col rounded-2xl border border-line bg-card p-5 transition hover:border-line-strong hover:bg-fill-2"
               >
-                <h3 className="text-lg font-semibold text-white group-hover:text-white">
+                <h3 className="text-lg font-semibold text-fg group-hover:text-fg">
                   {t.name}
                 </h3>
                 {t.description && (
-                  <p className="mt-1 line-clamp-2 text-sm text-white/55">{t.description}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-fg-subtle">{t.description}</p>
                 )}
 
-                <div className="mt-4 flex items-center gap-2 text-xs text-white/60">
+                <div className="mt-4 flex items-center gap-2 text-xs text-fg-muted">
                   {lead ? (
                     <>
                       <Avatar user={lead} size={22} />
                       <span className="truncate">
-                        <span className="text-white/80">{lead.displayName}</span>
-                        <span className="ml-1 text-white/40">· Lead</span>
+                        <span className="text-fg-muted">{lead.displayName}</span>
+                        <span className="ml-1 text-fg-subtle">· Lead</span>
                       </span>
                     </>
                   ) : (
-                    <span className="text-white/40">No lead</span>
+                    <span className="text-fg-subtle">No lead</span>
                   )}
                 </div>
 
-                <div className="mt-5 flex items-center justify-between border-t border-white/5 pt-4">
+                <div className="mt-5 flex items-center justify-between border-t border-line-subtle pt-4">
                   <div className="flex items-center">
                     {visibleMembers.length === 0 ? (
-                      <span className="text-xs text-white/40">No other members</span>
+                      <span className="text-xs text-fg-subtle">No other members</span>
                     ) : (
                       <div className="flex -space-x-2">
                         {visibleMembers.map((m) => (
@@ -177,7 +177,7 @@ export default function Teams() {
                         ))}
                         {extra > 0 && (
                           <div
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/8 text-[10px] font-semibold text-white/70 ring-2 ring-[#0b0b12]"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-line bg-fill-4 text-[10px] font-semibold text-fg-muted ring-2 ring-surface"
                             aria-hidden
                           >
                             +{extra}
@@ -186,9 +186,9 @@ export default function Teams() {
                       </div>
                     )}
                   </div>
-                  <div className="text-xs text-white/50">
+                  <div className="text-xs text-fg-subtle">
                     {t.memberIds.length} member{t.memberIds.length === 1 ? '' : 's'}
-                    <span className="mx-2 text-white/20">·</span>
+                    <span className="mx-2 text-fg-faint">·</span>
                     {t.projectIds?.length ?? 0} project
                     {(t.projectIds?.length ?? 0) === 1 ? '' : 's'}
                   </div>

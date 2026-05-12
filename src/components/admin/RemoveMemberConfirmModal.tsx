@@ -95,27 +95,27 @@ export default function RemoveMemberConfirmModal({
       closeOnBackdrop={!submitting}
     >
       <div className="space-y-4">
-        <div className="rounded-xl border border-white/10 bg-white/2 p-4 text-sm">
-          <p className="text-white/80">
+        <div className="rounded-xl border border-line bg-card p-4 text-sm">
+          <p className="text-fg-muted">
             They'll lose access to every project this team is on.
           </p>
           {counting ? (
-            <p className="mt-2 text-xs text-white/50">Checking open tasks…</p>
+            <p className="mt-2 text-xs text-fg-subtle">Checking open tasks…</p>
           ) : openTaskCount !== null && openTaskCount > 0 ? (
-            <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <div className="mt-3 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3 py-2 text-xs text-tone-warn-fg">
               <strong className="font-semibold">{openTaskCount} open task{openTaskCount === 1 ? '' : 's'}</strong>{' '}
               will remain assigned to {member.displayName}. Reassign them manually after the
               removal.
             </div>
           ) : openTaskCount === 0 ? (
-            <p className="mt-2 text-xs text-white/50">No open tasks assigned to them.</p>
+            <p className="mt-2 text-xs text-fg-subtle">No open tasks assigned to them.</p>
           ) : null}
         </div>
 
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+            className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg"
           >
             {error}
           </div>
@@ -126,7 +126,7 @@ export default function RemoveMemberConfirmModal({
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
@@ -134,11 +134,11 @@ export default function RemoveMemberConfirmModal({
             type="button"
             onClick={handleConfirm}
             disabled={submitting || counting}
-            className="flex-1 rounded-lg border border-red-500/40 bg-red-500/20 px-4 py-3 text-sm font-medium text-red-100 transition hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm font-medium text-tone-danger-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <span className="inline-flex items-center justify-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
                 Removing…
               </span>
             ) : (

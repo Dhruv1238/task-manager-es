@@ -53,16 +53,16 @@ export default function OverdueTasksList({
               <Link
                 to={`/tasks/${t.id}`}
                 state={{ backgroundLocation: location }}
-                className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 transition hover:border-red-500/40 hover:bg-red-500/10"
+                className="flex items-center gap-3 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 transition hover:border-tone-danger-bd hover:opacity-90"
               >
-                <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-400" aria-hidden />
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-danger-dot" aria-hidden />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-white">{t.title}</div>
-                  <div className="truncate text-xs text-white/40">
+                  <div className="truncate text-sm text-fg">{t.title}</div>
+                  <div className="truncate text-xs text-fg-subtle">
                     {t.projectTitle} · {t.teamName}
                   </div>
                 </div>
-                <span className="shrink-0 text-xs text-red-300">
+                <span className="shrink-0 text-xs text-tone-danger-fg">
                   {daysLate}d late
                 </span>
               </Link>

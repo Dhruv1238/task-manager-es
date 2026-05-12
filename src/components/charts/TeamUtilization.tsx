@@ -62,11 +62,11 @@ export default function TeamUtilization({
           />
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            itemStyle={{ color: 'rgba(255, 255, 255, 0.8)' }}
+            itemStyle={{ color: 'var(--color-fg-muted)' }}
             labelStyle={LABEL_STYLE}
-            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            cursor={{ fill: 'var(--color-fill-2)' }}
           />
-          <Bar dataKey="open" fill="#a855f7" radius={[0, 4, 4, 0]} />
+          <Bar dataKey="open" fill="var(--color-brandtone-dot)" radius={[0, 4, 4, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>

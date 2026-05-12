@@ -7,13 +7,13 @@ import ChartCard from './ChartCard'
 
 // Hex colors aligned with the pill tones in projectStatus.ts.
 const COLOR: Record<ProjectStatus, string> = {
-  in_progress: 'rgba(255,255,255,0.45)',
-  submitted: '#60A5FA',
-  not_submitted: 'rgba(255,255,255,0.35)',
-  awarded: '#34D399',
-  completed: '#2DD4BF',
-  lost: '#F87171',
-  on_hold: '#FBBF24',
+  in_progress: 'var(--color-fg-subtle)',
+  submitted: 'var(--color-info-dot)',
+  not_submitted: 'var(--color-fg-faint)',
+  awarded: 'var(--color-success-dot)',
+  completed: 'var(--color-mint-dot)',
+  lost: 'var(--color-danger-dot)',
+  on_hold: 'var(--color-warn-dot)',
 }
 
 interface Props {
@@ -61,14 +61,14 @@ export default function ProjectsByStatus({
             </Pie>
             <Tooltip
               contentStyle={TOOLTIP_STYLE}
-              itemStyle={{ color: 'rgba(255, 255, 255, 0.8)' }}
+              itemStyle={{ color: 'var(--color-fg-muted)' }}
               labelStyle={LABEL_STYLE}
-              cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              cursor={{ fill: 'var(--color-fill-2)' }}
             />
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/60">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">
         {data.map((d) => (
           <span key={d.name} className="inline-flex items-center gap-1.5">
             <span
@@ -78,7 +78,7 @@ export default function ProjectsByStatus({
             />
             <span>
               {d.name}
-              <span className="ml-1 text-white/40">· {d.value}</span>
+              <span className="ml-1 text-fg-subtle">· {d.value}</span>
             </span>
           </span>
         ))}

@@ -72,7 +72,7 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
         className="space-y-5"
       >
         <div className="space-y-1.5">
-          <label htmlFor="vh-pick" className="text-sm font-medium text-white/80">
+          <label htmlFor="vh-pick" className="text-sm font-medium text-fg-muted">
             Vertical Head
           </label>
           <UserPicker
@@ -84,14 +84,14 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
             includeUids={candidateUids}
           />
           {candidateUids.length === 0 && (
-            <p className="text-xs text-amber-300/80">
+            <p className="text-xs text-tone-warn-fg/80">
               No users with the Admin role yet. Create one from Members first.
             </p>
           )}
         </div>
 
         {error && (
-          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
             {error}
           </div>
         )}
@@ -101,14 +101,14 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!vhId || submitting}
-            className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Allocating…' : 'Allocate'}
           </button>

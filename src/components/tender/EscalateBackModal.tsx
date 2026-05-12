@@ -72,7 +72,7 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   return (
     <Modal
@@ -90,7 +90,7 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
         className="space-y-5"
       >
         <div className="space-y-1.5">
-          <label htmlFor="esc-reason" className="text-sm font-medium text-white/80">
+          <label htmlFor="esc-reason" className="text-sm font-medium text-fg-muted">
             Reason
           </label>
           <textarea
@@ -106,8 +106,8 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="esc-eta" className="text-sm font-medium text-white/80">
-              ETA <span className="font-normal text-white/40">(optional)</span>
+            <label htmlFor="esc-eta" className="text-sm font-medium text-fg-muted">
+              ETA <span className="font-normal text-fg-subtle">(optional)</span>
             </label>
             <input
               id="esc-eta"
@@ -119,7 +119,7 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="esc-priority" className="text-sm font-medium text-white/80">
+            <label htmlFor="esc-priority" className="text-sm font-medium text-fg-muted">
               Priority
             </label>
             <select
@@ -128,15 +128,15 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
               onChange={(e) => setPriority(e.target.value as StagePriority)}
               className={inputCls}
             >
-              <option value="low" className="bg-[#11111a]">Low</option>
-              <option value="medium" className="bg-[#11111a]">Medium</option>
-              <option value="high" className="bg-[#11111a]">High</option>
+              <option value="low" className="bg-overlay">Low</option>
+              <option value="medium" className="bg-overlay">Medium</option>
+              <option value="high" className="bg-overlay">High</option>
             </select>
           </div>
         </div>
 
         {error && (
-          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
             {error}
           </div>
         )}
@@ -146,14 +146,14 @@ export default function EscalateBackModal({ open, onClose, project }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!reason.trim() || submitting}
-            className="flex-1 rounded-lg border border-red-400/40 bg-red-500/15 px-4 py-3 text-sm font-medium text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm font-medium text-tone-danger-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Submitting…' : 'Submit Escalation'}
           </button>

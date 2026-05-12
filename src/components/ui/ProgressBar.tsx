@@ -27,14 +27,14 @@ export default function ProgressBar({
   return (
     <div className={className}>
       {showLabel && (
-        <div className="mb-1 flex items-center justify-between text-xs text-white/60">
+        <div className="mb-1 flex items-center justify-between text-xs text-fg-muted">
           <span>{label ?? 'Progress'}</span>
-          <span className="font-medium text-white/85">{formatPercent(pct)}</span>
+          <span className="font-medium text-fg-strong">{formatPercent(pct)}</span>
         </div>
       )}
-      <div className={`overflow-hidden rounded-full bg-white/8 ${HEIGHTS[size]}`}>
+      <div className={`overflow-hidden rounded-full bg-fill-4 ${HEIGHTS[size]}`}>
         <div
-          className="h-full rounded-full bg-linear-to-r from-purple-500 to-fuchsia-500 transition-[width] duration-500 ease-out"
+          className="h-full rounded-full bg-brand-gradient transition-[width] duration-500 ease-out"
           style={{ width: `${widthPercent}%` }}
           aria-valuenow={Math.round(widthPercent)}
           aria-valuemin={0}

@@ -19,7 +19,7 @@ function initialsFor(name: string, email?: string): string {
 function Avatar({ name, email, size = 28 }: { name: string; email?: string; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden
     >
@@ -53,12 +53,12 @@ function CommentItem({ comment, users }: { comment: Comment; users: Map<string, 
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm font-medium text-fg">
             {comment.authorName || author?.displayName || 'Unknown'}
           </span>
-          <span className="text-xs text-white/40">{formatWhen(comment.createdAt)}</span>
+          <span className="text-xs text-fg-subtle">{formatWhen(comment.createdAt)}</span>
         </div>
-        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-white/85">
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg-strong">
           {comment.content}
         </p>
       </div>
@@ -96,16 +96,16 @@ export default function CommentsSection({ taskId, users }: Props) {
 
   return (
     <div>
-      <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-white/40">
-        Comments <span className="text-white/60">({comments.length})</span>
+      <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-fg-subtle">
+        Comments <span className="text-fg-muted">({comments.length})</span>
       </h3>
 
       {loading ? (
-        <div className="rounded-xl border border-white/10 bg-white/2 p-4 text-center text-xs text-white/40">
+        <div className="rounded-xl border border-line bg-card p-4 text-center text-xs text-fg-subtle">
           Loading…
         </div>
       ) : comments.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/10 bg-white/1 p-6 text-center text-sm text-white/50">
+        <div className="rounded-xl border border-dashed border-line bg-card p-6 text-center text-sm text-fg-subtle">
           No comments yet. Be the first to share context.
         </div>
       ) : (
@@ -133,12 +133,12 @@ export default function CommentsSection({ taskId, users }: Props) {
               placeholder="Write a comment…"
               rows={2}
               disabled={submitting}
-              className="w-full resize-none rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-sm text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20 disabled:opacity-60"
+              className="w-full resize-none rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring disabled:opacity-60"
             />
             {error && (
               <div
                 role="alert"
-                className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+                className="mt-2 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 text-xs text-tone-danger-fg"
               >
                 {error}
               </div>
@@ -147,7 +147,7 @@ export default function CommentsSection({ taskId, users }: Props) {
               <button
                 type="submit"
                 disabled={!draft.trim() || submitting}
-                className="rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-1.5 text-xs font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-brand-gradient px-4 py-1.5 text-xs font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? 'Posting…' : 'Comment'}
               </button>

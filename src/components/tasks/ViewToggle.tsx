@@ -37,7 +37,7 @@ const OPTIONS: { value: TaskView; label: string; icon: ReactNode }[] = [
 
 export default function ViewToggle({ value, onChange }: Props) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/2 p-0.5">
+    <div className="inline-flex items-center gap-1 rounded-lg border border-line bg-card p-0.5">
       {OPTIONS.map((o) => {
         const active = value === o.value
         return (
@@ -47,8 +47,8 @@ export default function ViewToggle({ value, onChange }: Props) {
             onClick={() => onChange(o.value)}
             className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
               active
-                ? 'bg-white/8 text-white'
-                : 'text-white/60 hover:bg-white/4 hover:text-white/90'
+                ? 'bg-fill-4 text-fg'
+                : 'text-fg-muted hover:bg-fill-2 hover:text-fg-strong'
             }`}
           >
             {o.icon}

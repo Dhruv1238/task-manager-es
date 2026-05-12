@@ -44,7 +44,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 24 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden
     >
@@ -182,7 +182,7 @@ export default function UserPicker(props: Props) {
       : []
 
   const triggerCls =
-    'flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/4 px-3 py-2.5 text-left text-sm text-white outline-none transition focus-within:border-purple-400/60 focus-within:bg-white/6 focus-within:ring-2 focus-within:ring-purple-500/20 hover:bg-white/6'
+    'flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-fill-2 px-3 py-2.5 text-left text-sm text-fg outline-none transition focus-within:border-brand-edge focus-within:bg-fill-3 focus-within:ring-2 focus-within:ring-brand-ring hover:bg-fill-3'
 
   const popoverStyle: React.CSSProperties = {
     position: 'fixed',
@@ -211,19 +211,19 @@ export default function UserPicker(props: Props) {
               selectedSingle ? (
                 <span className="inline-flex items-center gap-2">
                   <Avatar user={selectedSingle} size={22} />
-                  <span className="truncate text-white/90">{selectedSingle.displayName}</span>
-                  <span className="truncate text-xs text-white/40">{selectedSingle.email}</span>
+                  <span className="truncate text-fg-strong">{selectedSingle.displayName}</span>
+                  <span className="truncate text-xs text-fg-subtle">{selectedSingle.email}</span>
                 </span>
               ) : (
-                <span className="text-white/40">{placeholder ?? 'Select a user'}</span>
+                <span className="text-fg-subtle">{placeholder ?? 'Select a user'}</span>
               )
             ) : selectedMulti.length === 0 ? (
-              <span className="text-white/40">{placeholder ?? 'Select users'}</span>
+              <span className="text-fg-subtle">{placeholder ?? 'Select users'}</span>
             ) : (
               selectedMulti.map((u) => (
                 <span
                   key={u.uid}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/8 py-0.5 pl-0.5 pr-2 text-xs text-white/90"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-fill-4 py-0.5 pl-0.5 pr-2 text-xs text-fg-strong"
                 >
                   <Avatar user={u} size={18} />
                   <span className="truncate">{u.displayName}</span>
@@ -233,7 +233,7 @@ export default function UserPicker(props: Props) {
                       e.stopPropagation()
                       handleSelect(u.uid)
                     }}
-                    className="ml-0.5 rounded p-0.5 text-white/50 transition hover:bg-white/10 hover:text-white"
+                    className="ml-0.5 rounded p-0.5 text-fg-subtle transition hover:bg-fill-4 hover:text-fg"
                     aria-label={`Remove ${u.displayName}`}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -254,7 +254,7 @@ export default function UserPicker(props: Props) {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={`shrink-0 text-white/50 transition ${open ? 'rotate-180' : ''}`}
+            className={`shrink-0 text-fg-subtle transition ${open ? 'rotate-180' : ''}`}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -266,9 +266,9 @@ export default function UserPicker(props: Props) {
           <div
             ref={popoverRef}
             style={popoverStyle}
-            className="flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0e0e16] shadow-2xl"
+            className="flex flex-col overflow-hidden rounded-xl border border-line bg-elevated shadow-2xl"
           >
-            <div className="shrink-0 border-b border-white/10 p-2">
+            <div className="shrink-0 border-b border-line p-2">
               <input
                 ref={searchRef}
                 autoFocus
@@ -276,12 +276,12 @@ export default function UserPicker(props: Props) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or email"
-                className="w-full rounded-md bg-white/4 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-md bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
               />
             </div>
             <div className="max-h-44 overflow-y-auto py-1">
               {filtered.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-white/40">
+                <div className="px-4 py-6 text-center text-sm text-fg-subtle">
                   No users found.
                 </div>
               ) : (
@@ -293,16 +293,16 @@ export default function UserPicker(props: Props) {
                       type="button"
                       onClick={() => handleSelect(u.uid)}
                       className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition ${
-                        selected ? 'bg-purple-500/10 text-white' : 'text-white/85 hover:bg-white/4'
+                        selected ? 'bg-brand-soft text-fg' : 'text-fg-strong hover:bg-fill-2'
                       }`}
                     >
                       <Avatar user={u} size={28} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{u.displayName}</div>
-                        <div className="truncate text-xs text-white/50">{u.email}</div>
+                        <div className="truncate text-xs text-fg-subtle">{u.email}</div>
                       </div>
                       {selected && (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-purple-300">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       )}
@@ -318,7 +318,7 @@ export default function UserPicker(props: Props) {
                   setOpen(false)
                   setNewMemberOpen(true)
                 }}
-                className="flex shrink-0 w-full items-center gap-2 border-t border-white/10 bg-white/2 px-4 py-3 text-sm font-medium text-purple-300 transition hover:bg-white/4 hover:text-purple-200"
+                className="flex shrink-0 w-full items-center gap-2 border-t border-line bg-fill-1 px-4 py-3 text-sm font-medium text-brand transition hover:bg-fill-2 hover:text-brand"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19" />

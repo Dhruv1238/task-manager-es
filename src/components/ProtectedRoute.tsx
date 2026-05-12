@@ -8,8 +8,8 @@ export default function ProtectedRoute() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#07070c] text-white/40">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+      <div className="flex min-h-screen items-center justify-center bg-canvas text-fg-subtle">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-fg-strong" />
       </div>
     )
   }
@@ -19,9 +19,9 @@ export default function ProtectedRoute() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#07070c] text-white">
-      <div className="pointer-events-none absolute -left-40 -top-40 h-135 w-135 rounded-full bg-purple-600/15 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -right-32 h-130 w-130 rounded-full bg-fuchsia-500/10 blur-3xl" />
+    <div className="relative min-h-screen overflow-hidden bg-canvas text-fg">
+      <div className="pointer-events-none absolute -left-40 -top-40 h-135 w-135 rounded-full bg-orb-a blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-32 h-130 w-130 rounded-full bg-orb-b blur-3xl" />
       <div className="relative z-10">
         <Navbar />
         <Outlet />

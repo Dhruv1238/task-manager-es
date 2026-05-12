@@ -20,9 +20,9 @@ export default function TaskDetailModal() {
       {task ? (
         <TaskDetailContent task={task} />
       ) : loading ? (
-        <div className="py-10 text-center text-sm text-white/40">Loading task…</div>
+        <div className="py-10 text-center text-sm text-fg-subtle">Loading task…</div>
       ) : (
-        <div className="py-10 text-center text-sm text-white/40">
+        <div className="py-10 text-center text-sm text-fg-subtle">
           Task not found. It may have been deleted.
         </div>
       )}

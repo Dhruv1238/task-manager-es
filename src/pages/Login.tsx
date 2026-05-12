@@ -54,18 +54,18 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#07070c] text-white">
+    <div className="relative min-h-screen overflow-hidden bg-canvas text-fg">
       {/* Ambient gradient orbs */}
-      <div className="pointer-events-none absolute -left-40 -top-40 h-135 w-135 rounded-full bg-purple-600/30 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -right-32 h-130 w-130 rounded-full bg-fuchsia-500/20 blur-3xl" />
-      <div className="pointer-events-none absolute left-1/2 top-1/3 h-95 w-95 -translate-x-1/2 rounded-full bg-indigo-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -left-40 -top-40 h-135 w-135 rounded-full bg-orb-a blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -right-32 h-130 w-130 rounded-full bg-orb-b blur-3xl" />
+      <div className="pointer-events-none absolute left-1/2 top-1/3 h-95 w-95 -translate-x-1/2 rounded-full bg-orb-c blur-3xl" />
 
       {/* Subtle grid */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.07]"
         style={{
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.8) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.8) 1px, transparent 1px)',
+            'linear-gradient(var(--color-fg) 1px, transparent 1px), linear-gradient(90deg, var(--color-fg) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
           maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 75%)',
         }}
@@ -75,25 +75,25 @@ export default function Login() {
         {/* Left: brand panel */}
         <div className="hidden p-6 sm:p-10 lg:flex lg:justify-center">
           <div className="flex w-full max-w-md flex-col justify-between py-2">
-            <Logo height={36} className="brightness-0 invert self-start" />
+            <Logo height={36} className="self-start" />
             <div className="space-y-6">
               <h1 className="text-5xl font-semibold leading-tight tracking-tight">
-                Plan less. <span className="text-purple-300">Ship more.</span>
+                Plan less. <span className="text-brand">Ship more.</span>
               </h1>
-              <p className="text-lg text-white/60">
+              <p className="text-lg text-fg-muted">
                 A focused task workspace for teams that care about momentum. Track work, hand off
                 cleanly, and keep everyone on the same page.
               </p>
               <div className="flex items-center gap-3 pt-4">
                 <div className="flex -space-x-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-purple-400 to-pink-400 text-xs font-semibold text-white ring-2 ring-[#07070c]">SJ</div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-indigo-400 to-purple-500 text-xs font-semibold text-white ring-2 ring-[#07070c]">AK</div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-fuchsia-400 to-purple-600 text-xs font-semibold text-white ring-2 ring-[#07070c]">MR</div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-purple-400 to-pink-400 text-xs font-semibold text-white ring-2 ring-canvas">SJ</div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-indigo-400 to-purple-500 text-xs font-semibold text-white ring-2 ring-canvas">AK</div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-fuchsia-400 to-purple-600 text-xs font-semibold text-white ring-2 ring-canvas">MR</div>
                 </div>
-                <p className="text-sm text-white/50">Trusted by product teams at Eventstrat</p>
+                <p className="text-sm text-fg-subtle">Trusted by product teams at Eventstrat</p>
               </div>
             </div>
-            <p className="text-xs text-white/40">© {new Date().getFullYear()} Eventstrat Labs. All rights reserved.</p>
+            <p className="text-xs text-fg-subtle">© {new Date().getFullYear()} Eventstrat Labs. All rights reserved.</p>
           </div>
         </div>
 
@@ -101,13 +101,13 @@ export default function Login() {
         <div className="flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-md">
             <div className="mb-8 flex justify-center lg:hidden">
-              <Logo height={32} className="brightness-0 invert" />
+              <Logo height={32} />
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/3 p-8 shadow-2xl backdrop-blur-xl sm:p-10">
+            <div className="rounded-2xl border border-line bg-card p-8 shadow-2xl backdrop-blur-xl sm:p-10">
               <div className="mb-8">
                 <h2 className="text-3xl font-semibold tracking-tight">Welcome back</h2>
-                <p className="mt-2 text-sm text-white/50">
+                <p className="mt-2 text-sm text-fg-subtle">
                   Sign in to your workspace to continue.
                 </p>
               </div>
@@ -121,7 +121,7 @@ export default function Login() {
                 noValidate
               >
                 <div className="space-y-1.5">
-                  <label htmlFor="email" className="text-sm font-medium text-white/80">
+                  <label htmlFor="email" className="text-sm font-medium text-fg-muted">
                     Email
                   </label>
                   <input
@@ -132,19 +132,19 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@company.com"
-                    className="w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
+                    className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
                   />
                 </div>
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label htmlFor="password" className="text-sm font-medium text-white/80">
+                    <label htmlFor="password" className="text-sm font-medium text-fg-muted">
                       Password
                     </label>
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="text-xs text-white/50 transition hover:text-white/80"
+                      className="text-xs text-fg-subtle transition hover:text-fg-muted"
                     >
                       {showPassword ? 'Hide' : 'Show'}
                     </button>
@@ -157,14 +157,14 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
+                    className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
                   />
                 </div>
 
                 {error && (
                   <div
                     role="alert"
-                    className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+                    className="pill-danger rounded-lg border px-4 py-3 text-sm"
                   >
                     {error}
                   </div>
@@ -173,12 +173,12 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={submitting || !email || !password}
-                  className="group relative w-full overflow-hidden rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="group relative w-full overflow-hidden rounded-lg bg-brand-gradient px-4 py-3 font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span className="relative z-10 inline-flex items-center justify-center gap-2">
                     {submitting ? (
                       <>
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
                         Signing in…
                       </>
                     ) : (
@@ -188,12 +188,12 @@ export default function Login() {
                 </button>
               </form>
 
-              <p className="mt-6 text-center text-xs text-white/40">
+              <p className="mt-6 text-center text-xs text-fg-subtle">
                 Protected by enterprise-grade authentication.
               </p>
             </div>
 
-            <p className="mt-6 text-center text-xs text-white/40 lg:hidden">
+            <p className="mt-6 text-center text-xs text-fg-subtle lg:hidden">
               © {new Date().getFullYear()} Eventstrat. All rights reserved.
             </p>
           </div>

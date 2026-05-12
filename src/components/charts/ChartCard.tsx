@@ -21,18 +21,18 @@ export default function ChartCard({
 }: Props) {
   return (
     <div
-      className={`flex flex-col rounded-2xl border border-white/10 bg-white/2 p-5 ${className}`}
+      className={`flex flex-col rounded-2xl border border-line bg-card p-5 ${className}`}
       style={{ height: height + 80 }}
     >
       <div className="mb-4">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-white/60">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-fg-muted">
           {title}
         </h3>
-        {subtitle && <p className="mt-0.5 text-xs text-white/40">{subtitle}</p>}
+        {subtitle && <p className="mt-0.5 text-xs text-fg-subtle">{subtitle}</p>}
       </div>
       {empty ? (
         <div
-          className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/1 text-xs text-white/40"
+          className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-line bg-card text-xs text-fg-subtle"
         >
           {emptyLabel}
         </div>

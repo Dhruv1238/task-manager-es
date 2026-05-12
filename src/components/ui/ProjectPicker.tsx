@@ -258,10 +258,10 @@ export default function ProjectPicker({
           type="button"
           onClick={() => !isDisabled && setOpen((o) => !o)}
           disabled={isDisabled}
-          className={`flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/4 px-3 py-2 text-sm transition ${
+          className={`flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm transition ${
             isDisabled
-              ? 'cursor-not-allowed text-white/30'
-              : 'text-white/85 hover:bg-white/6'
+              ? 'cursor-not-allowed text-fg-faint'
+              : 'text-fg-strong hover:bg-fill-3'
           }`}
         >
           <span className="min-w-0 truncate text-left">{triggerLabel}</span>
@@ -274,7 +274,7 @@ export default function ProjectPicker({
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={`shrink-0 text-white/40 transition ${open ? 'rotate-180' : ''}`}
+            className={`shrink-0 text-fg-subtle transition ${open ? 'rotate-180' : ''}`}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -286,23 +286,23 @@ export default function ProjectPicker({
           <div
             ref={popoverRef}
             style={popoverStyle}
-            className="flex flex-col overflow-hidden rounded-lg border border-white/10 bg-[#0e0e16] shadow-2xl"
+            className="flex flex-col overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl"
           >
-            <div className="shrink-0 border-b border-white/10 p-2">
+            <div className="shrink-0 border-b border-line p-2">
               <input
                 autoFocus
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Start typing a project name…"
-                className="w-full rounded-md bg-white/4 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-md bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
               />
             </div>
-            <div className="scrollbar-dark max-h-64 overflow-y-auto py-1">
+            <div className="scrollbar-themed max-h-64 overflow-y-auto py-1">
               {loading && items.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-white/40">Loading…</div>
+                <div className="px-3 py-6 text-center text-sm text-fg-subtle">Loading…</div>
               ) : items.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-white/40">
+                <div className="px-3 py-6 text-center text-sm text-fg-subtle">
                   {debouncedSearch ? 'No projects match.' : 'No projects to show.'}
                 </div>
               ) : (
@@ -318,11 +318,11 @@ export default function ProjectPicker({
                           setOpen(false)
                         }}
                         className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${
-                          active ? 'bg-purple-500/10 text-white' : 'text-white/80 hover:bg-white/4'
+                          active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
                         }`}
                       >
                         <span className="min-w-0 flex-1 truncate">{p.title}</span>
-                        <span className="shrink-0 text-[10px] uppercase tracking-wider text-white/40">
+                        <span className="shrink-0 text-[10px] uppercase tracking-wider text-fg-subtle">
                           {p.status}
                         </span>
                         {active && (
@@ -335,7 +335,7 @@ export default function ProjectPicker({
                             strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            className="text-purple-300"
+                            className="text-brand"
                           >
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
@@ -349,11 +349,11 @@ export default function ProjectPicker({
                         type="button"
                         onClick={loadMore}
                         disabled={loadingMore}
-                        className="flex w-full items-center justify-center gap-2 rounded-md border border-white/10 bg-white/4 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-md border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {loadingMore ? (
                           <>
-                            <span className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-white/25 border-t-white/90" />
+                            <span className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line-strong border-t-fg-strong" />
                             Loading…
                           </>
                         ) : (

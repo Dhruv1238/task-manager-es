@@ -27,7 +27,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 36 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
       aria-hidden
     >
@@ -38,13 +38,13 @@ function Avatar({ user, size = 36 }: { user: User; size?: number }) {
 
 function StatusDot({ status }: { status: ProjectStatus }) {
   const cls: Record<ProjectStatus, string> = {
-    in_progress: 'bg-white/40',
-    submitted: 'bg-blue-400',
-    not_submitted: 'bg-white/30',
-    awarded: 'bg-emerald-400',
-    completed: 'bg-teal-400',
-    lost: 'bg-red-400',
-    on_hold: 'bg-amber-400',
+    in_progress: 'bg-neutral-dot',
+    submitted: 'bg-info-dot',
+    not_submitted: 'bg-neutral-dot',
+    awarded: 'bg-success-dot',
+    completed: 'bg-mint-dot',
+    lost: 'bg-danger-dot',
+    on_hold: 'bg-warn-dot',
   }
   return (
     <span
@@ -105,7 +105,7 @@ export default function TeamDetail() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center text-white/40 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center text-fg-subtle sm:px-6 lg:px-8">
         Loading team…
       </div>
     )
@@ -114,11 +114,11 @@ export default function TeamDetail() {
   if (notFound || !team) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-white">Team not found</h1>
-        <p className="mt-2 text-white/50">It may have been deleted or the link is invalid.</p>
+        <h1 className="text-2xl font-semibold text-fg">Team not found</h1>
+        <p className="mt-2 text-fg-subtle">It may have been deleted or the link is invalid.</p>
         <Link
           to="/teams"
-          className="mt-6 inline-block rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/80 transition hover:bg-white/8"
+          className="mt-6 inline-block rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm text-fg-muted transition hover:bg-fill-4"
         >
           Back to teams
         </Link>
@@ -138,7 +138,7 @@ export default function TeamDetail() {
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <Link
         to="/teams"
-        className="inline-flex items-center gap-1 text-sm text-white/50 transition hover:text-white/80"
+        className="inline-flex items-center gap-1 text-sm text-fg-subtle transition hover:text-fg-muted"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -147,11 +147,11 @@ export default function TeamDetail() {
       </Link>
 
       <div className="mt-4 mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-white">{team.name}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-fg">{team.name}</h1>
         {team.description && (
-          <p className="mt-2 max-w-2xl text-white/60">{team.description}</p>
+          <p className="mt-2 max-w-2xl text-fg-muted">{team.description}</p>
         )}
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white/50">
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-fg-subtle">
           <span>
             {team.memberIds.length} member{team.memberIds.length === 1 ? '' : 's'}
           </span>
@@ -162,7 +162,7 @@ export default function TeamDetail() {
         </div>
       </div>
 
-      <div className="mb-6 inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/2 p-0.5">
+      <div className="mb-6 inline-flex items-center gap-1 rounded-lg border border-line bg-card p-0.5">
         {(['overview', 'analytics'] as const).map((t) => (
           <button
             key={t}
@@ -170,8 +170,8 @@ export default function TeamDetail() {
             onClick={() => setTab(t)}
             className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
               tab === t
-                ? 'bg-white/8 text-white'
-                : 'text-white/60 hover:bg-white/4 hover:text-white/90'
+                ? 'bg-fill-4 text-fg'
+                : 'text-fg-muted hover:bg-fill-2 hover:text-fg-strong'
             }`}
           >
             {t}
@@ -205,14 +205,14 @@ export default function TeamDetail() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-white/40">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-fg-subtle">
               Members
             </h2>
             {canManageRoster && (
               <button
                 type="button"
                 onClick={() => setAddOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-3 py-1.5 text-xs font-medium text-white/85 transition hover:bg-white/8 hover:text-white"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19" />
@@ -222,13 +222,13 @@ export default function TeamDetail() {
               </button>
             )}
           </div>
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/2">
+          <div className="overflow-hidden rounded-2xl border border-line bg-card">
             {members.length === 0 ? (
-              <div className="px-6 py-8 text-center text-sm text-white/40">
+              <div className="px-6 py-8 text-center text-sm text-fg-subtle">
                 No members hydrated yet.
               </div>
             ) : (
-              <ul className="divide-y divide-white/5">
+              <ul className="divide-y divide-line-subtle">
                 {members.map((m) => {
                   const isLead = m.uid === team.leadId
                   const showRemove = canManageRoster && !isLead
@@ -238,13 +238,13 @@ export default function TeamDetail() {
                     <li key={m.uid} className="group flex items-center gap-3 px-5 py-3">
                       <Avatar user={m} size={36} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white">
+                        <div className="truncate text-sm font-medium text-fg">
                           {m.displayName}
                         </div>
-                        <div className="truncate text-xs text-white/50">{m.email}</div>
+                        <div className="truncate text-xs text-fg-subtle">{m.email}</div>
                       </div>
                       {isLead && (
-                        <span className="inline-flex items-center rounded-full border border-purple-400/40 bg-purple-500/15 px-2.5 py-0.5 text-xs font-medium text-purple-200">
+                        <span className="inline-flex items-center rounded-full border border-brand-edge bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand">
                           Lead
                         </span>
                       )}
@@ -270,7 +270,7 @@ export default function TeamDetail() {
                           }}
                           disabled={promoting}
                           title={`Promote ${m.displayName} to team lead`}
-                          className="rounded-md border border-white/10 bg-white/4 px-2.5 py-1 text-[11px] font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
+                          className="rounded-md border border-line bg-fill-2 px-2.5 py-1 text-[11px] font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
                         >
                           {promoting ? 'Promoting…' : 'Make lead'}
                         </button>
@@ -281,7 +281,7 @@ export default function TeamDetail() {
                           onClick={() => setRemoving(m)}
                           aria-label={`Remove ${m.displayName}`}
                           title="Remove from team"
-                          className="rounded-md p-1.5 text-white/30 transition hover:bg-white/5 hover:text-red-300 sm:opacity-0 sm:group-hover:opacity-100"
+                          className="rounded-md p-1.5 text-fg-faint transition hover:bg-fill-2 hover:text-tone-danger-fg sm:opacity-0 sm:group-hover:opacity-100"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="3 6 5 6 21 6" />
@@ -298,32 +298,32 @@ export default function TeamDetail() {
         </div>
 
         <div>
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-white/40">
+          <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
             Projects
           </h2>
           {assignedProjects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-6 text-sm text-white/40">
+            <div className="rounded-2xl border border-dashed border-line bg-card p-6 text-sm text-fg-subtle">
               Not assigned to any projects yet.
             </div>
           ) : (
-            <ul className="overflow-hidden rounded-2xl border border-white/10 bg-white/2">
+            <ul className="overflow-hidden rounded-2xl border border-line bg-card">
               {assignedProjects.map((p) => {
                 const overdue =
                   p.deadline &&
                   isProjectLive(p.status) &&
                   p.deadline.toDate().getTime() < Date.now()
                 return (
-                  <li key={p.id} className="border-b border-white/5 last:border-b-0">
+                  <li key={p.id} className="border-b border-line-subtle last:border-b-0">
                     <Link
                       to={`/projects/${p.id}`}
-                      className="flex items-center gap-3 px-4 py-3 transition hover:bg-white/4"
+                      className="flex items-center gap-3 px-4 py-3 transition hover:bg-fill-2"
                     >
                       <StatusDot status={p.status} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-white">
+                        <div className="truncate text-sm font-medium text-fg">
                           {p.title}
                         </div>
-                        <div className={`text-xs ${overdue ? 'text-red-300' : 'text-white/40'}`}>
+                        <div className={`text-xs ${overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}`}>
                           {overdue ? 'Overdue · ' : ''}
                           {p.deadline ? `Due ${formatDate(p.deadline)}` : 'No deadline'}
                         </div>
@@ -337,7 +337,7 @@ export default function TeamDetail() {
                         strokeWidth="2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="shrink-0 text-white/30"
+                        className="shrink-0 text-fg-faint"
                       >
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
@@ -348,17 +348,17 @@ export default function TeamDetail() {
             </ul>
           )}
 
-          <h2 className="mt-6 mb-3 text-sm font-medium uppercase tracking-wider text-white/40">
+          <h2 className="mt-6 mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
             Details
           </h2>
-          <div className="rounded-2xl border border-white/10 bg-white/2 p-5 text-sm">
+          <div className="rounded-2xl border border-line bg-card p-5 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-white/50">Lead</span>
-              <span className="text-white/85">{lead?.displayName ?? '—'}</span>
+              <span className="text-fg-subtle">Lead</span>
+              <span className="text-fg-strong">{lead?.displayName ?? '—'}</span>
             </div>
             <div className="mt-3 flex items-center justify-between">
-              <span className="text-white/50">Created</span>
-              <span className="text-white/85">
+              <span className="text-fg-subtle">Created</span>
+              <span className="text-fg-strong">
                 {team.createdAt?.toDate().toLocaleDateString(undefined, {
                   year: 'numeric',
                   month: 'short',

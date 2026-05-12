@@ -95,7 +95,7 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-3 py-1.5 text-xs font-medium text-white/85 transition hover:bg-white/8 hover:text-white"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="5" x2="12" y2="19" />
@@ -107,7 +107,7 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-3 py-2.5 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   return (
     <form
@@ -116,7 +116,7 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
         e.stopPropagation()
         void handleSubmit()
       }}
-      className="space-y-3 rounded-xl border border-white/10 bg-white/3 p-4"
+      className="space-y-3 rounded-xl border border-line bg-card p-4"
       noValidate
     >
       <input
@@ -157,8 +157,8 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
               onClick={() => setPriority(p.value)}
               className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition ${
                 active
-                  ? 'border-purple-400/60 bg-purple-500/15 text-white'
-                  : 'border-white/10 bg-white/4 text-white/70 hover:bg-white/8'
+                  ? 'border-brand-edge bg-brand-soft text-fg'
+                  : 'border-line bg-fill-2 text-fg-muted hover:bg-fill-4'
               }`}
             >
               {p.label}
@@ -178,7 +178,7 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
       {error && (
         <div
           role="alert"
-          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 text-xs text-tone-danger-fg"
         >
           {error}
         </div>
@@ -189,18 +189,18 @@ export default function AddSubtaskForm({ parent, team, users }: Props) {
           type="button"
           onClick={close}
           disabled={submitting}
-          className="rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-xs font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+          className="rounded-lg border border-line bg-fill-2 px-4 py-2 text-xs font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={submitting || !title.trim() || !assigneeId}
-          className="rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-xs font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-brand-gradient px-4 py-2 text-xs font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? (
             <span className="inline-flex items-center gap-2">
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-line-strong border-t-white" />
               Adding…
             </span>
           ) : (

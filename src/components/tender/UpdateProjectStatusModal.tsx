@@ -70,7 +70,7 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
   }
 
   const inputCls =
-    'w-full rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-white placeholder-white/30 outline-none transition focus:border-purple-400/60 focus:bg-white/6 focus:ring-2 focus:ring-purple-500/20'
+    'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
   return (
     <Modal
@@ -89,7 +89,7 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
         className="space-y-5"
       >
         <div className="space-y-2">
-          <p className="text-sm font-medium text-white/80">Status</p>
+          <p className="text-sm font-medium text-fg-muted">Status</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {STATUS_OPTIONS.map((opt) => {
               const meta = STATUS_DISPLAY[opt]
@@ -102,8 +102,8 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
                   onClick={() => setNext(opt)}
                   className={`flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition ${
                     active
-                      ? 'border-purple-400/60 bg-purple-500/10 ring-2 ring-purple-500/30'
-                      : 'border-white/10 bg-white/2 hover:border-white/20 hover:bg-white/4'
+                      ? 'border-brand-edge bg-brand-soft ring-2 ring-brand-ring'
+                      : 'border-line bg-fill-1 hover:border-line-strong hover:bg-fill-2'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -114,10 +114,10 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
                       {meta.label}
                     </span>
                     {isCurrent && (
-                      <span className="text-[10px] uppercase tracking-wider text-white/45">current</span>
+                      <span className="text-[10px] uppercase tracking-wider text-fg-subtle">current</span>
                     )}
                   </div>
-                  <p className="text-xs text-white/55">{meta.description}</p>
+                  <p className="text-xs text-fg-subtle">{meta.description}</p>
                 </button>
               )
             })}
@@ -125,8 +125,8 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="status-note" className="text-sm font-medium text-white/80">
-            Note <span className="text-white/40">(required)</span>
+          <label htmlFor="status-note" className="text-sm font-medium text-fg-muted">
+            Note <span className="text-fg-subtle">(required)</span>
           </label>
           <textarea
             id="status-note"
@@ -140,7 +140,7 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
         </div>
 
         {error && (
-          <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
             {error}
           </div>
         )}
@@ -150,14 +150,14 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-white/10 bg-white/4 px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:opacity-60"
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-3 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting || !note.trim() || next === currentStatus}
-            className="flex-1 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Updating…' : 'Update status'}
           </button>

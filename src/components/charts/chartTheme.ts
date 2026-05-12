@@ -1,11 +1,14 @@
 import type { TaskPriority, TaskStatus } from '../../types/models'
 
+// Chart colors reference CSS custom properties so they automatically switch
+// with the active theme. Recharts forwards these strings directly to SVG
+// fill/stroke attributes, where the browser resolves them at render time.
 export const STATUS_COLOR: Record<TaskStatus, string> = {
-  todo: '#94a3b8', // slate-400
-  in_progress: '#60a5fa', // blue-400
-  in_review: '#c084fc', // purple-400
-  done: '#34d399', // emerald-400
-  blocked: '#f87171', // red-400
+  todo: 'var(--color-neutral-dot)',
+  in_progress: 'var(--color-info-dot)',
+  in_review: 'var(--color-brandtone-dot)',
+  done: 'var(--color-success-dot)',
+  blocked: 'var(--color-danger-dot)',
 }
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -17,9 +20,9 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 }
 
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {
-  low: '#94a3b8',
-  medium: '#fbbf24', // amber-400
-  high: '#f87171',
+  low: 'var(--color-neutral-dot)',
+  medium: 'var(--color-warn-dot)',
+  high: 'var(--color-danger-dot)',
 }
 
 export const PRIORITY_LABEL: Record<TaskPriority, string> = {
@@ -29,27 +32,27 @@ export const PRIORITY_LABEL: Record<TaskPriority, string> = {
 }
 
 export const TOOLTIP_STYLE = {
-  backgroundColor: '#0e0e16',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
+  backgroundColor: 'var(--color-elevated)',
+  border: '1px solid var(--color-line)',
   borderRadius: 8,
   padding: '8px 12px',
   fontSize: 12,
-  color: 'rgba(255, 255, 255, 0.9)',
+  color: 'var(--color-fg-strong)',
 } as const
 
 export const ITEM_STYLE = {
-  color: 'rgba(255, 255, 255, 0.8)',
+  color: 'var(--color-fg-muted)',
 } as const
 
 export const LABEL_STYLE = {
-  color: 'rgba(255, 255, 255, 0.95)',
+  color: 'var(--color-fg-strong)',
   fontWeight: 500,
   marginBottom: 4,
 } as const
 
 export const AXIS_STYLE = {
   fontSize: 11,
-  fill: 'rgba(255, 255, 255, 0.5)',
+  fill: 'var(--color-fg-subtle)',
 } as const
 
-export const GRID_COLOR = 'rgba(255, 255, 255, 0.06)'
+export const GRID_COLOR = 'var(--color-line-subtle)'

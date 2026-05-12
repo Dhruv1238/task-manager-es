@@ -34,7 +34,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 22 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden
     >
@@ -164,8 +164,8 @@ export default function Projects() {
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-white">Projects</h1>
-          <p className="mt-1 flex items-center gap-2 text-sm text-white/50">
+          <h1 className="text-3xl font-semibold tracking-tight text-fg">Projects</h1>
+          <p className="mt-1 flex items-center gap-2 text-sm text-fg-subtle">
             {loading && items.length === 0 ? (
               'Loading…'
             ) : (
@@ -176,7 +176,7 @@ export default function Projects() {
                 </span>
                 {loading && (
                   <span
-                    className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-white/20 border-t-white/70"
+                    className="inline-block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line-strong border-t-fg-strong"
                     aria-label="Refreshing"
                   />
                 )}
@@ -215,27 +215,27 @@ export default function Projects() {
       </div>
 
       {loading && items.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/2 p-12 text-center text-white/40">
+        <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
           Loading projects…
         </div>
       ) : error ? (
-        <div className="rounded-2xl border border-red-400/20 bg-red-500/5 p-12 text-center text-red-200/80">
+        <div className="rounded-2xl border border-tone-danger-bd bg-tone-danger-bg p-12 text-center text-tone-danger-fg/80">
           Couldn't load projects. {error.message}
         </div>
       ) : items.length === 0 ? (
         debouncedSearch ? (
-          <div className="rounded-2xl border border-white/10 bg-white/2 p-12 text-center text-white/40">
+          <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
             No projects match your search.
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-12 text-center">
-            <h2 className="text-lg font-medium text-white">
+          <div className="rounded-2xl border border-dashed border-line bg-card p-12 text-center">
+            <h2 className="text-lg font-medium text-fg">
               {isAdmin ? 'No projects yet' : 'No projects to show'}
             </h2>
-            <p className="mt-2 text-sm text-white/50">
+            <p className="mt-2 text-sm text-fg-subtle">
               {isAdmin ? (
                 <>
-                  Click <span className="font-medium text-white/80">+ New Project</span> to start one.
+                  Click <span className="font-medium text-fg-muted">+ New Project</span> to start one.
                 </>
               ) : (
                 'Projects you own, or projects where one of your teams is assigned, will show up here.'
@@ -254,10 +254,10 @@ export default function Projects() {
                 <Link
                   key={p.id}
                   to={`/projects/${p.id}`}
-                  className="group flex flex-col rounded-2xl border border-white/10 bg-white/2 p-5 transition hover:border-white/20 hover:bg-white/4"
+                  className="group flex flex-col rounded-2xl border border-line bg-card p-5 transition hover:border-line-strong hover:bg-fill-2"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <h3 className="min-w-0 text-lg font-semibold text-white">{p.title}</h3>
+                    <h3 className="min-w-0 text-lg font-semibold text-fg">{p.title}</h3>
                     <div className="shrink-0">
                       <ProjectStatusPill status={p.status} size="sm" />
                     </div>
@@ -266,36 +266,36 @@ export default function Projects() {
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     {p.stage && <StagePill project={p} />}
                     {(p.vhIterationCount ?? 0) > 0 && (
-                      <span className="inline-flex items-center rounded-full border border-indigo-400/40 bg-indigo-500/10 px-2 py-0.5 text-[11px] font-medium text-indigo-200">
+                      <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
                         Iter {(p.vhIterationCount ?? 0) + 1}
                       </span>
                     )}
                   </div>
 
                   {p.description && (
-                    <p className="mt-1 line-clamp-2 text-sm text-white/55">{p.description}</p>
+                    <p className="mt-1 line-clamp-2 text-sm text-fg-subtle">{p.description}</p>
                   )}
 
-                  <div className="mt-4 flex items-center gap-2 text-xs text-white/60">
+                  <div className="mt-4 flex items-center gap-2 text-xs text-fg-muted">
                     {owner ? (
                       <>
                         <Avatar user={owner} size={22} />
                         <span className="truncate">
-                          <span className="text-white/80">{owner.displayName}</span>
-                          <span className="ml-1 text-white/40">· Owner</span>
+                          <span className="text-fg-muted">{owner.displayName}</span>
+                          <span className="ml-1 text-fg-subtle">· Owner</span>
                         </span>
                       </>
                     ) : (
-                      <span className="text-white/40">No owner</span>
+                      <span className="text-fg-subtle">No owner</span>
                     )}
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between border-t border-white/5 pt-4 text-xs">
-                    <span className={overdue ? 'text-red-300' : 'text-white/50'}>
+                  <div className="mt-5 flex items-center justify-between border-t border-line-subtle pt-4 text-xs">
+                    <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
                       {overdue ? 'Overdue · ' : ''}
                       {formatDeadline(submissionDeadline(p))}
                     </span>
-                    <div className="flex items-center gap-3 text-white/50">
+                    <div className="flex items-center gap-3 text-fg-subtle">
                       {p.attachments && p.attachments.length > 0 && (
                         <span
                           className="inline-flex items-center gap-1"
@@ -324,11 +324,11 @@ export default function Projects() {
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/8 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loadingMore ? (
                   <>
-                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-white/25 border-t-white/90" />
+                    <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line-strong border-t-fg-strong" />
                     Loading…
                   </>
                 ) : (

@@ -16,12 +16,12 @@ function HomeCard({ to, eyebrow, title, body, cta }: CardProps) {
   return (
     <Link
       to={to}
-      className="group rounded-2xl border border-white/10 bg-white/2 p-6 transition hover:border-white/20 hover:bg-white/4"
+      className="group rounded-2xl border border-line bg-card p-6 transition hover:border-line-strong hover:bg-fill-2"
     >
-      <div className="text-xs uppercase tracking-wider text-white/40">{eyebrow}</div>
-      <div className="mt-2 text-lg font-medium text-white">{title}</div>
-      <p className="mt-1 text-sm text-white/50">{body}</p>
-      <div className="mt-4 inline-flex items-center gap-1 text-sm text-purple-300 group-hover:text-purple-200">
+      <div className="text-xs uppercase tracking-wider text-fg-subtle">{eyebrow}</div>
+      <div className="mt-2 text-lg font-medium text-fg">{title}</div>
+      <p className="mt-1 text-sm text-fg-subtle">{body}</p>
+      <div className="mt-4 inline-flex items-center gap-1 text-sm text-brand group-hover:text-brand">
         {cta}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="5" y1="12" x2="19" y2="12" />
@@ -41,10 +41,10 @@ function BoardViewCard() {
   }
 
   return (
-    <div className="flex flex-col justify-between rounded-2xl border border-white/10 bg-white/2 p-6 transition hover:border-white/20 hover:bg-white/4">
+    <div className="flex flex-col justify-between rounded-2xl border border-line bg-card p-6 transition hover:border-line-strong hover:bg-fill-2">
       <div>
         <div className="flex items-center justify-between">
-          <div className="text-xs uppercase tracking-wider text-white/40">Visualize</div>
+          <div className="text-xs uppercase tracking-wider text-fg-subtle">Visualize</div>
           <svg
             width="16"
             height="16"
@@ -54,15 +54,15 @@ function BoardViewCard() {
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="text-white/40"
+            className="text-fg-subtle"
           >
             <rect x="3" y="4" width="6" height="16" rx="1" />
             <rect x="10" y="4" width="6" height="10" rx="1" />
             <rect x="17" y="4" width="4" height="7" rx="1" />
           </svg>
         </div>
-        <div className="mt-2 text-lg font-medium text-white">Board View</div>
-        <p className="mt-1 text-sm text-white/50">
+        <div className="mt-2 text-lg font-medium text-fg">Board View</div>
+        <p className="mt-1 text-sm text-fg-subtle">
           Kanban across every team on a project. Pick a project and jump straight in.
         </p>
       </div>
@@ -78,7 +78,7 @@ function BoardViewCard() {
           type="button"
           onClick={open}
           disabled={!selected}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-3.5 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400 disabled:cursor-not-allowed disabled:from-white/10 disabled:to-white/10 disabled:text-white/30 disabled:shadow-none"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand-gradient px-3.5 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient disabled:cursor-not-allowed disabled:bg-none disabled:bg-fill-4 disabled:text-fg-faint disabled:shadow-none"
         >
           Open board
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -99,13 +99,13 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="mb-10">
-        <p className="text-sm text-white/40">
+        <p className="text-sm text-fg-subtle">
           {isAdmin ? 'Admin workspace' : 'Workspace'}
         </p>
-        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-fg sm:text-5xl">
           Welcome back{firstName ? `, ${firstName}` : ''}.
         </h1>
-        <p className="mt-3 max-w-2xl text-white/60">
+        <p className="mt-3 max-w-2xl text-fg-muted">
           {isAdmin
             ? 'Provision new members, spin up teams, and kick off projects from anywhere.'
             : 'Jump into your tasks or see what your teams are shipping.'}

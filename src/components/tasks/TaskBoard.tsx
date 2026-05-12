@@ -9,11 +9,11 @@ interface Props {
 }
 
 const COLUMNS: { status: TaskStatus; label: string; dotCls: string }[] = [
-  { status: 'todo', label: 'Todo', dotCls: 'bg-white/40' },
-  { status: 'in_progress', label: 'In Progress', dotCls: 'bg-blue-400' },
-  { status: 'in_review', label: 'In Review', dotCls: 'bg-purple-400' },
-  { status: 'done', label: 'Done', dotCls: 'bg-emerald-400' },
-  { status: 'blocked', label: 'Blocked', dotCls: 'bg-red-400' },
+  { status: 'todo', label: 'Todo', dotCls: 'bg-neutral-dot' },
+  { status: 'in_progress', label: 'In Progress', dotCls: 'bg-info-dot' },
+  { status: 'in_review', label: 'In Review', dotCls: 'bg-brandtone-dot' },
+  { status: 'done', label: 'Done', dotCls: 'bg-success-dot' },
+  { status: 'blocked', label: 'Blocked', dotCls: 'bg-danger-dot' },
 ]
 
 export default function TaskBoard({ tasks, users, teams, tasksById }: Props) {
@@ -25,26 +25,26 @@ export default function TaskBoard({ tasks, users, teams, tasksById }: Props) {
   }
 
   return (
-    <div className="scrollbar-dark flex gap-4 overflow-x-auto pb-3">
+    <div className="scrollbar-themed flex gap-4 overflow-x-auto pb-3">
       {COLUMNS.map((col) => {
         const items = byStatus.get(col.status) ?? []
         return (
           <div
             key={col.status}
-            className="flex w-72 shrink-0 flex-col rounded-2xl border border-white/10 bg-white/2"
+            className="flex w-72 shrink-0 flex-col rounded-2xl border border-line bg-card"
           >
-            <div className="flex items-center justify-between border-b border-white/5 px-3 py-2.5">
+            <div className="flex items-center justify-between border-b border-line-subtle px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <span className={`h-1.5 w-1.5 rounded-full ${col.dotCls}`} aria-hidden />
-                <span className="text-xs font-medium uppercase tracking-wider text-white/60">
+                <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">
                   {col.label}
                 </span>
               </div>
-              <span className="text-xs text-white/40">{items.length}</span>
+              <span className="text-xs text-fg-subtle">{items.length}</span>
             </div>
             <div className="flex flex-col gap-2 p-2">
               {items.length === 0 ? (
-                <div className="rounded-md border border-dashed border-white/10 p-4 text-center text-xs text-white/30">
+                <div className="rounded-md border border-dashed border-line p-4 text-center text-xs text-fg-faint">
                   Empty
                 </div>
               ) : (

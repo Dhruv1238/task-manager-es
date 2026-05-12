@@ -90,8 +90,8 @@ export default function TaskAttachmentsSection({
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-white/40">
-          Attachments <span className="text-white/60">({attachments.length})</span>
+        <h3 className="text-sm font-medium uppercase tracking-wider text-fg-subtle">
+          Attachments <span className="text-fg-muted">({attachments.length})</span>
         </h3>
         {canEdit && (
           <>
@@ -99,11 +99,11 @@ export default function TaskAttachmentsSection({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/4 px-3 py-1.5 text-xs font-medium text-white/85 transition hover:bg-white/8 hover:text-white disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg disabled:opacity-60"
             >
               {uploading ? (
                 <>
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-line-strong border-t-white" />
                   Uploading…
                 </>
               ) : (
@@ -130,14 +130,14 @@ export default function TaskAttachmentsSection({
       {error && (
         <div
           role="alert"
-          className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          className="mb-3 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 text-xs text-tone-danger-fg"
         >
           {error}
         </div>
       )}
 
       {attachments.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/10 bg-white/1 p-6 text-center text-xs text-white/40">
+        <div className="rounded-xl border border-dashed border-line bg-card p-6 text-center text-xs text-fg-subtle">
           No attachments yet.
         </div>
       ) : (
@@ -148,7 +148,7 @@ export default function TaskAttachmentsSection({
             return (
               <div
                 key={a.id}
-                className="group relative flex items-center gap-3 rounded-xl border border-white/10 bg-white/2 p-3 transition hover:border-white/20 hover:bg-white/4"
+                className="group relative flex items-center gap-3 rounded-xl border border-line bg-card p-3 transition hover:border-line-strong hover:bg-fill-2"
               >
                 <a
                   href={a.url}
@@ -158,8 +158,8 @@ export default function TaskAttachmentsSection({
                 >
                   <FileBadge mimeType={a.mimeType} fileName={a.name} size={36} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-white">{a.name}</div>
-                    <div className="text-xs text-white/40">{formatFileSize(a.sizeBytes)}</div>
+                    <div className="truncate text-sm font-medium text-fg">{a.name}</div>
+                    <div className="text-xs text-fg-subtle">{formatFileSize(a.sizeBytes)}</div>
                   </div>
                 </a>
                 {canRemove && (
@@ -171,7 +171,7 @@ export default function TaskAttachmentsSection({
                       void removeAttachment(a)
                     }}
                     aria-label={`Remove ${a.name}`}
-                    className="shrink-0 rounded-md p-1.5 text-white/30 transition hover:bg-white/5 hover:text-red-300 sm:opacity-0 sm:group-hover:opacity-100"
+                    className="shrink-0 rounded-md p-1.5 text-fg-faint transition hover:bg-fill-2 hover:text-tone-danger-fg sm:opacity-0 sm:group-hover:opacity-100"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />

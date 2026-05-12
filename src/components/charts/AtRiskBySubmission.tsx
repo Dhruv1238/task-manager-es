@@ -33,7 +33,7 @@ export default function AtRiskBySubmission({ projects }: Props) {
       empty={items.length === 0}
       emptyLabel="Nothing's on fire — all submissions are comfortably ahead."
     >
-      <ul className="divide-y divide-white/5 overflow-y-auto pr-1">
+      <ul className="divide-y divide-line-subtle overflow-y-auto pr-1">
         {items.map(({ p, days }) => {
           const phase = displayedPhase(p)
           const tone = STAGE_TONE[phase.toneStage]
@@ -42,18 +42,18 @@ export default function AtRiskBySubmission({ projects }: Props) {
             <li key={p.id}>
               <Link
                 to={`/projects/${p.id}`}
-                className="flex items-center justify-between gap-3 px-2 py-3 transition hover:bg-white/2"
+                className="flex items-center justify-between gap-3 px-2 py-3 transition hover:bg-fill-1"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-white">{p.title}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-white/55">
+                  <div className="truncate text-sm font-medium text-fg">{p.title}</div>
+                  <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] ${tone.pill}`}>
                       <span className={`h-1 w-1 rounded-full ${tone.dot}`} aria-hidden />
                       {phase.shortLabel}
                     </span>
                   </div>
                 </div>
-                <span className={`text-xs font-medium ${overdue ? 'text-red-300' : days < 3 ? 'text-amber-200' : 'text-white/60'}`}>
+                <span className={`text-xs font-medium ${overdue ? 'text-tone-danger-fg' : days < 3 ? 'text-tone-warn-fg' : 'text-fg-muted'}`}>
                   {overdue ? `${Math.abs(days)}d overdue` : `${days}d to go`}
                 </span>
               </Link>

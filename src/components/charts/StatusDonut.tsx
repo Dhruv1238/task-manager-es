@@ -61,14 +61,14 @@ export default function StatusDonut({
             </Pie>
             <Tooltip
               contentStyle={TOOLTIP_STYLE}
-              itemStyle={{ color: 'rgba(255, 255, 255, 0.8)' }}
+              itemStyle={{ color: 'var(--color-fg-muted)' }}
               labelStyle={LABEL_STYLE}
-              cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+              cursor={{ fill: 'var(--color-fill-2)' }}
             />
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-white/60">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-muted">
         {data.map((d) => (
           <span key={d.name} className="inline-flex items-center gap-1.5">
             <span
@@ -78,7 +78,7 @@ export default function StatusDonut({
             />
             <span>
               {d.name}
-              <span className="ml-1 text-white/40">· {d.value}</span>
+              <span className="ml-1 text-fg-subtle">· {d.value}</span>
             </span>
           </span>
         ))}

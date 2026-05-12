@@ -1,59 +1,63 @@
 import type { Project, Stage } from '../../types/models'
 import { STAGE_NAMES, STAGE_SHORT_NAMES } from '../../types/models'
 
-// Visual treatment for each stage's pill / banner border.
-// Aligned with v1's chartTheme palette: amber for pending, blue for in-flight,
-// purple for review, indigo for VH review, red for escalation/rework, emerald for delivery.
+// Visual treatment for each stage. Each entry references the semantic pill
+// utilities defined in index.css (pill-warn, pill-info, etc.) so the same
+// tone reads correctly under both dark and light themes — saturated brand
+// hues with light text in dark mode, softened fills with deep text in light.
+// Tones: warn (amber/pending), danger (red/escalation), info (blue/in-flight),
+// cool (sky/eligibility), brandtone (purple/review), accent (indigo/VH review),
+// success (emerald/delivery).
 export const STAGE_TONE: Record<Stage, { pill: string; ring: string; dot: string }> = {
   1: {
-    pill: 'border-amber-400/40 bg-amber-500/15 text-amber-200',
-    ring: 'border-amber-400/30',
-    dot: 'bg-amber-400',
+    pill: 'pill-warn border',
+    ring: 'border-warn-dot/30',
+    dot: 'bg-warn-dot',
   },
   2: {
-    pill: 'border-amber-400/40 bg-amber-500/15 text-amber-200',
-    ring: 'border-amber-400/30',
-    dot: 'bg-amber-400',
+    pill: 'pill-warn border',
+    ring: 'border-warn-dot/30',
+    dot: 'bg-warn-dot',
   },
   3: {
-    pill: 'border-red-400/40 bg-red-500/15 text-red-200',
-    ring: 'border-red-400/30',
-    dot: 'bg-red-400',
+    pill: 'pill-danger border',
+    ring: 'border-danger-dot/30',
+    dot: 'bg-danger-dot',
   },
   4: {
-    pill: 'border-blue-400/40 bg-blue-500/15 text-blue-200',
-    ring: 'border-blue-400/30',
-    dot: 'bg-blue-400',
+    pill: 'pill-info border',
+    ring: 'border-info-dot/30',
+    dot: 'bg-info-dot',
   },
   5: {
-    pill: 'border-sky-400/40 bg-sky-500/15 text-sky-200',
-    ring: 'border-sky-400/30',
-    dot: 'bg-sky-400',
+    pill: 'pill-cool border',
+    ring: 'border-cool-dot/30',
+    dot: 'bg-cool-dot',
   },
   6: {
-    pill: 'border-blue-400/40 bg-blue-500/15 text-blue-200',
-    ring: 'border-blue-400/30',
-    dot: 'bg-blue-400',
+    pill: 'pill-info border',
+    ring: 'border-info-dot/30',
+    dot: 'bg-info-dot',
   },
   7: {
-    pill: 'border-purple-400/40 bg-purple-500/15 text-purple-200',
-    ring: 'border-purple-400/30',
-    dot: 'bg-purple-400',
+    pill: 'pill-brandtone border',
+    ring: 'border-brandtone-dot/30',
+    dot: 'bg-brandtone-dot',
   },
   8: {
-    pill: 'border-indigo-400/40 bg-indigo-500/15 text-indigo-200',
-    ring: 'border-indigo-400/30',
-    dot: 'bg-indigo-400',
+    pill: 'pill-accent border',
+    ring: 'border-accent-dot/30',
+    dot: 'bg-accent-dot',
   },
   9: {
-    pill: 'border-red-400/40 bg-red-500/15 text-red-200',
-    ring: 'border-red-400/30',
-    dot: 'bg-red-400',
+    pill: 'pill-danger border',
+    ring: 'border-danger-dot/30',
+    dot: 'bg-danger-dot',
   },
   10: {
-    pill: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
-    ring: 'border-emerald-400/30',
-    dot: 'bg-emerald-400',
+    pill: 'pill-success border',
+    ring: 'border-success-dot/30',
+    dot: 'bg-success-dot',
   },
 }
 

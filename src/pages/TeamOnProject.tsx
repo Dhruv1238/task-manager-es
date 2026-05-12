@@ -33,7 +33,7 @@ function initialsFor(u: User): string {
 function Avatar({ user, size = 22 }: { user: User; size?: number }) {
   return (
     <div
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-purple-500 to-fuchsia-500 font-semibold text-white"
+      className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-gradient-br font-semibold text-white"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       aria-hidden
     >
@@ -43,17 +43,17 @@ function Avatar({ user, size = 22 }: { user: User; size?: number }) {
 }
 
 const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
-  todo: { label: 'Todo', cls: 'border-white/15 bg-white/5 text-white/70' },
-  in_progress: { label: 'In Progress', cls: 'border-blue-400/40 bg-blue-500/15 text-blue-200' },
-  in_review: { label: 'In Review', cls: 'border-purple-400/40 bg-purple-500/15 text-purple-200' },
-  done: { label: 'Done', cls: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' },
-  blocked: { label: 'Blocked', cls: 'border-red-400/40 bg-red-500/15 text-red-200' },
+  todo: { label: 'Todo', cls: 'border-line bg-fill-2 text-fg-muted' },
+  in_progress: { label: 'In Progress', cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg' },
+  in_review: { label: 'In Review', cls: 'border-brand-edge bg-brand-soft text-brand' },
+  done: { label: 'Done', cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg' },
+  blocked: { label: 'Blocked', cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg' },
 }
 
 const PRIORITY_STYLES: Record<TaskPriority, { label: string; cls: string }> = {
-  low: { label: 'Low', cls: 'text-white/50' },
-  medium: { label: 'Medium', cls: 'text-amber-300' },
-  high: { label: 'High', cls: 'text-red-300' },
+  low: { label: 'Low', cls: 'text-fg-subtle' },
+  medium: { label: 'Medium', cls: 'text-tone-warn-fg' },
+  high: { label: 'High', cls: 'text-tone-danger-fg' },
 }
 
 function StatusPill({ status }: { status: TaskStatus }) {
@@ -102,55 +102,55 @@ function TaskRow({
   const showSubtaskCount = variant === 'parent' && (task.subtaskCount ?? 0) > 0
 
   return (
-    <li className="border-b border-white/5 last:border-b-0">
+    <li className="border-b border-line-subtle last:border-b-0">
       <Link
         to={`/tasks/${task.id}`}
         state={{ backgroundLocation: location }}
-        className={`flex items-center gap-3 text-left transition hover:bg-white/2 ${
+        className={`flex items-center gap-3 text-left transition hover:bg-fill-1 ${
           nested ? 'pl-10 pr-5 py-2.5' : 'px-5 py-3'
         }`}
       >
         {nested && (
-          <span className="text-white/25" aria-hidden>
+          <span className="text-fg-faint" aria-hidden>
             ↳
           </span>
         )}
         <StatusPill status={task.status} />
         <div className="min-w-0 flex-1">
-          <div className={`truncate font-medium text-white ${nested ? 'text-sm' : 'text-sm'}`}>
+          <div className={`truncate font-medium text-fg ${nested ? 'text-sm' : 'text-sm'}`}>
             {task.title}
           </div>
           {variant === 'orphan' && parentTitle && (
-            <div className="mt-0.5 truncate text-xs text-white/40">
+            <div className="mt-0.5 truncate text-xs text-fg-subtle">
               <span className="mr-1">↳ From</span>
               {parentTitle}
             </div>
           )}
           {variant !== 'orphan' && task.description && (
-            <div className="mt-0.5 line-clamp-1 text-xs text-white/50">
+            <div className="mt-0.5 line-clamp-1 text-xs text-fg-subtle">
               {task.description}
             </div>
           )}
         </div>
-        <div className="hidden items-center gap-4 text-xs text-white/50 sm:flex">
+        <div className="hidden items-center gap-4 text-xs text-fg-subtle sm:flex">
           {assignee && (
-            <span className="inline-flex items-center gap-1.5 text-white/70">
+            <span className="inline-flex items-center gap-1.5 text-fg-muted">
               <Avatar user={assignee.user} size={18} />
               <span className="truncate">
                 {assignee.user.displayName}
                 {assignee.implicit && (
-                  <span className="ml-1 text-white/40">· Lead</span>
+                  <span className="ml-1 text-fg-subtle">· Lead</span>
                 )}
               </span>
             </span>
           )}
           <span className={`font-medium ${priority.cls}`}>{priority.label}</span>
-          <span className={overdue ? 'text-red-300' : 'text-white/50'}>
+          <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
             {overdue ? 'Overdue · ' : ''}
             {formatDate(task.dueDate)}
           </span>
           {showSubtaskCount && (
-            <span className="text-white/40">
+            <span className="text-fg-subtle">
               {task.subtaskDoneCount ?? 0}/{task.subtaskCount ?? 0}
             </span>
           )}
@@ -324,7 +324,7 @@ export default function TeamOnProject() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center text-white/40 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center text-fg-subtle sm:px-6 lg:px-8">
         Loading team workspace…
       </div>
     )
@@ -333,13 +333,13 @@ export default function TeamOnProject() {
   if (notFound || !project || !team) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-white">Team workspace not found</h1>
-        <p className="mt-2 text-white/50">
+        <h1 className="text-2xl font-semibold text-fg">Team workspace not found</h1>
+        <p className="mt-2 text-fg-subtle">
           Either the project or the team no longer exists, or the team isn't on this project.
         </p>
         <Link
           to="/projects"
-          className="mt-6 inline-block rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/80 transition hover:bg-white/8"
+          className="mt-6 inline-block rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm text-fg-muted transition hover:bg-fill-4"
         >
           Back to projects
         </Link>
@@ -354,7 +354,7 @@ export default function TeamOnProject() {
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <Link
         to={`/projects/${project.id}`}
-        className="inline-flex items-center gap-1 text-sm text-white/50 transition hover:text-white/80"
+        className="inline-flex items-center gap-1 text-sm text-fg-subtle transition hover:text-fg-muted"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -364,17 +364,17 @@ export default function TeamOnProject() {
 
       <div className="mt-4 mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <div className="text-xs uppercase tracking-wider text-white/40">Team workspace</div>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">
+          <div className="text-xs uppercase tracking-wider text-fg-subtle">Team workspace</div>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-fg">
             {team.name}
           </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/50">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-fg-subtle">
             {lead && (
               <div className="flex items-center gap-2">
                 <Avatar user={lead} size={22} />
                 <span>
-                  <span className="text-white/80">{lead.displayName}</span>
-                  <span className="ml-1 text-white/40">· Lead</span>
+                  <span className="text-fg-muted">{lead.displayName}</span>
+                  <span className="ml-1 text-fg-subtle">· Lead</span>
                 </span>
               </div>
             )}
@@ -383,7 +383,7 @@ export default function TeamOnProject() {
             </span>
             <Link
               to={`/teams/${team.id}`}
-              className="text-purple-300 transition hover:text-purple-200"
+              className="text-brand transition hover:text-brand"
             >
               Team profile →
             </Link>
@@ -394,7 +394,7 @@ export default function TeamOnProject() {
           <button
             type="button"
             onClick={() => setNewTaskOpen(true)}
-            className="shrink-0 rounded-lg bg-linear-to-r from-purple-500 to-fuchsia-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover:from-purple-400 hover:to-fuchsia-400"
+            className="shrink-0 rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient"
           >
             + New Task
           </button>
@@ -402,7 +402,7 @@ export default function TeamOnProject() {
       </div>
 
       {!teamIsOnProject && (
-        <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <div className="mb-6 rounded-xl border border-tone-warn-bd bg-tone-warn-bg px-4 py-3 text-sm text-tone-warn-fg">
           This team isn't currently assigned to this project. Existing tasks below are from prior
           assignments. Re-add the team from the project page to create new tasks.
         </div>
@@ -411,7 +411,7 @@ export default function TeamOnProject() {
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <ViewToggle value={view} onChange={setView} />
         {!tasksLoading && !tasksError && (
-          <span className="text-xs text-white/40">
+          <span className="text-xs text-fg-subtle">
             {filteredTasks.length === tasks.length
               ? `${tasks.length} task${tasks.length === 1 ? '' : 's'}`
               : `${filteredTasks.length} of ${tasks.length}`}
@@ -419,7 +419,7 @@ export default function TeamOnProject() {
         )}
       </div>
 
-      <div className="mb-6 rounded-xl border border-white/10 bg-white/2 px-4 py-3">
+      <div className="mb-6 rounded-xl border border-line bg-card px-4 py-3">
         <TaskFilters
           value={filters}
           onChange={setFilters}
@@ -429,36 +429,36 @@ export default function TeamOnProject() {
       </div>
 
       {tasksError ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
+        <div className="rounded-2xl border border-tone-danger-bd bg-tone-danger-bg p-6 text-sm text-tone-danger-fg">
           Couldn't load tasks: {tasksError}
           {tasksError.includes('index') && (
-            <div className="mt-2 text-red-200/70">
+            <div className="mt-2 text-tone-danger-fg/70">
               Firestore wants a composite index. Open the link in your browser console to create it.
             </div>
           )}
         </div>
       ) : tasksLoading ? (
-        <div className="rounded-2xl border border-white/10 bg-white/2 p-10 text-center text-sm text-white/40">
+        <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-fg-subtle">
           Loading tasks…
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-10 text-center">
-          <h3 className="text-base font-medium text-white">No tasks yet</h3>
-          <p className="mt-2 text-sm text-white/50">
+        <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
+          <h3 className="text-base font-medium text-fg">No tasks yet</h3>
+          <p className="mt-2 text-sm text-fg-subtle">
             {canCreateTask
               ? 'Click + New Task to add the first team-level task.'
               : 'The team lead will add tasks here.'}
           </p>
         </div>
       ) : filteredTasks.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/2 p-10 text-center text-sm text-white/40">
+        <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-fg-subtle">
           No tasks match the current filters.
         </div>
       ) : view === 'list' ? (
-        <ul className="overflow-hidden rounded-2xl border border-white/10 bg-white/2">
+        <ul className="overflow-hidden rounded-2xl border border-line bg-card">
           {listGroups.map((g, i) =>
             g.parent ? (
-              <div key={g.parent.id} className={i > 0 ? 'border-t border-white/5' : ''}>
+              <div key={g.parent.id} className={i > 0 ? 'border-t border-line-subtle' : ''}>
                 <TaskRow
                   task={g.parent}
                   users={userById}

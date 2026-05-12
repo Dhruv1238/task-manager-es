@@ -132,7 +132,7 @@ export default function ProjectBoard() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-12 text-center text-white/40 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 py-12 text-center text-fg-subtle sm:px-6 lg:px-8">
         Loading board…
       </div>
     )
@@ -141,11 +141,11 @@ export default function ProjectBoard() {
   if (notFound || !project) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-white">Project not found</h1>
-        <p className="mt-2 text-white/50">It may have been deleted or the link is invalid.</p>
+        <h1 className="text-2xl font-semibold text-fg">Project not found</h1>
+        <p className="mt-2 text-fg-subtle">It may have been deleted or the link is invalid.</p>
         <Link
           to="/projects"
-          className="mt-6 inline-block rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/80 transition hover:bg-white/8"
+          className="mt-6 inline-block rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm text-fg-muted transition hover:bg-fill-4"
         >
           Back to projects
         </Link>
@@ -156,13 +156,13 @@ export default function ProjectBoard() {
   if (!canView) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-16 text-center sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-semibold text-white">You don't have access to this board</h1>
-        <p className="mt-2 text-white/50">
+        <h1 className="text-2xl font-semibold text-fg">You don't have access to this board</h1>
+        <p className="mt-2 text-fg-subtle">
           You can only view boards for projects where one of your teams is assigned.
         </p>
         <Link
           to="/projects"
-          className="mt-6 inline-block rounded-lg border border-white/10 bg-white/4 px-4 py-2 text-sm text-white/80 transition hover:bg-white/8"
+          className="mt-6 inline-block rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm text-fg-muted transition hover:bg-fill-4"
         >
           Back to projects
         </Link>
@@ -174,7 +174,7 @@ export default function ProjectBoard() {
     <div className="mx-auto w-full max-w-350 px-4 py-8 sm:px-6 lg:px-8">
       <Link
         to={`/projects/${project.id}`}
-        className="inline-flex items-center gap-1 text-sm text-white/50 transition hover:text-white/80"
+        className="inline-flex items-center gap-1 text-sm text-fg-subtle transition hover:text-fg-muted"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -184,16 +184,16 @@ export default function ProjectBoard() {
 
       <div className="mt-4 mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="text-xs uppercase tracking-wider text-white/40">Board view</div>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">
+          <div className="text-xs uppercase tracking-wider text-fg-subtle">Board view</div>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-fg">
             {project.title}
           </h1>
-          <p className="mt-2 text-sm text-white/50">
+          <p className="mt-2 text-sm text-fg-subtle">
             Kanban across every team on this project. Swimlanes are teams, columns are statuses.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-2 sm:min-w-64">
-          <span className="text-[11px] uppercase tracking-wider text-white/40">
+          <span className="text-[11px] uppercase tracking-wider text-fg-subtle">
             Switch project
           </span>
           <ProjectPicker
@@ -203,7 +203,7 @@ export default function ProjectBoard() {
             }}
             selectedLabel={project.title}
           />
-          <div className="text-right text-xs text-white/40">
+          <div className="text-right text-xs text-fg-subtle">
             {tasksLoading
               ? 'Loading…'
               : filteredTasks.length === tasks.length
@@ -213,7 +213,7 @@ export default function ProjectBoard() {
         </div>
       </div>
 
-      <div className="mb-6 rounded-xl border border-white/10 bg-white/2 px-4 py-3">
+      <div className="mb-6 rounded-xl border border-line bg-card px-4 py-3">
         <TaskFilters
           value={filters}
           onChange={setFilters}
@@ -224,17 +224,17 @@ export default function ProjectBoard() {
       </div>
 
       {tasksError ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
+        <div className="rounded-2xl border border-tone-danger-bd bg-tone-danger-bg p-6 text-sm text-tone-danger-fg">
           Couldn't load tasks: {tasksError}
         </div>
       ) : tasksLoading ? (
-        <div className="rounded-2xl border border-white/10 bg-white/2 p-10 text-center text-sm text-white/40">
+        <div className="rounded-2xl border border-line bg-card p-10 text-center text-sm text-fg-subtle">
           Loading tasks…
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-white/1 p-10 text-center">
-          <h3 className="text-base font-medium text-white">No tasks on this project yet</h3>
-          <p className="mt-2 text-sm text-white/50">
+        <div className="rounded-2xl border border-dashed border-line bg-card p-10 text-center">
+          <h3 className="text-base font-medium text-fg">No tasks on this project yet</h3>
+          <p className="mt-2 text-sm text-fg-subtle">
             Once a team on this project creates its first task, the board fills in here.
           </p>
         </div>
