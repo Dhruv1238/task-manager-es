@@ -463,6 +463,9 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
   const projectPatch: Record<string, unknown> = { updatedAt: serverTimestamp() }
   if (needsAttach) {
     projectPatch.teamIds = arrayUnion(input.teamId)
+    // Keep the denormalized visibility array in sync so non-admin members of
+    // the auto-attached team can see this project on the Projects listing.
+    projectPatch.accessKeys = arrayUnion(input.teamId)
   }
   if (advanceFromStage6) {
     projectPatch.stage = 7
