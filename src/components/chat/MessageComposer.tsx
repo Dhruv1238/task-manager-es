@@ -97,7 +97,7 @@ export default function MessageComposer({ onSend, disabled }: Props) {
     setError(null)
     setUploading(true)
     try {
-      const uploaded = await Promise.all(files.map((f) => uploadAsset(f)))
+      const uploaded = await Promise.all(files.map((f) => uploadAsset(f, 'chat')))
       const next: ChatAttachment[] = uploaded.map((r) => ({
         url: r.url,
         name: r.fileName,

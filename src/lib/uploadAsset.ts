@@ -16,11 +16,16 @@ interface ApiEnvelope<T> {
   data: T | null
 }
 
-// Uploads a single file to the external asset service. See TASK_MANAGEMENT_MVP.md §5 / §13.4.
-// Never set Content-Type manually — the browser must add the multipart boundary.
-export async function uploadAsset(file: File): Promise<AssetUploadResult> {
+// Uploads a single file to the asset service. The endpoint expects a multipart
+// form with `file` and `folder` parts plus the tenant header; never set
+// Content-Type manually — the browser must add the multipart boundary.
+//
+// `folder` lets callers organize uploads server-side (e.g., "chat", "tasks",
+// "projects"). Defaults to "any" to keep existing callers working unchanged.
+export async function uploadAsset(file: File, folder: string = 'any'): Promise<AssetUploadResult> {
   const formData = new FormData()
   formData.append('file', file)
+  formData.append('folder', folder)
 
   const res = await fetch(UPLOAD_URL, {
     method: 'POST',
