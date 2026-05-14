@@ -21,6 +21,8 @@ import SearchInput from '../components/ui/SearchInput'
 import Dropdown, { type DropdownOption } from '../components/ui/Dropdown'
 import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
 import ProjectStatusPill from '../components/tender/ProjectStatusPill'
+import UnreadChatBadge from '../components/projects/UnreadChatBadge'
+import { useChatEnabled } from '../contexts/AppConfigContext'
 import { STATUS_DISPLAY, STATUS_OPTIONS, isProjectClosed } from '../lib/projectStatus'
 import type { Project, ProjectStatus, User } from '../types/models'
 
@@ -88,6 +90,7 @@ export default function Projects() {
   const { users } = useAllUsers()
   const { profile } = useAuth()
   const pipelineEnabled = usePipelineEnabled()
+  const chatEnabled = useChatEnabled()
   const createLabel = useCreateProjectLabel()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
@@ -260,8 +263,14 @@ export default function Projects() {
                   className="group flex flex-col rounded-2xl border border-line bg-card p-5 transition hover:border-line-strong hover:bg-fill-2"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <h3 className="min-w-0 text-lg font-semibold text-fg">{p.title}</h3>
-                    <div className="shrink-0">
+                    <h3 className="min-w-0 truncate text-lg font-semibold text-fg">{p.title}</h3>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {chatEnabled && (
+                        <UnreadChatBadge
+                          chatLastMessageAt={p.chatLastMessageAt}
+                          lastReadAt={profile?.chatLastReadAt?.[p.id]}
+                        />
+                      )}
                       <ProjectStatusPill status={p.status} size="sm" />
                     </div>
                   </div>

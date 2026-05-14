@@ -3,7 +3,6 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../contexts/AuthContext'
-import { useChatEnabled } from '../contexts/AppConfigContext'
 import { isDevConfigUser } from './DevConfigRoute'
 
 const APP_NAME = 'Show Runner'
@@ -31,7 +30,6 @@ export default function Navbar() {
   const { user, profile, signOut } = useAuth()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
   const isDevConfig = isDevConfigUser(profile)
-  const chatEnabled = useChatEnabled()
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 
@@ -74,15 +72,6 @@ export default function Navbar() {
               <NavLink to="/teams" className={navLinkCls}>
                 Teams
               </NavLink>
-              {chatEnabled && (
-                <span
-                  aria-disabled
-                  title="Chat is enabled in config — feature not yet built."
-                  className="rounded-md px-3 py-1.5 text-sm font-medium text-fg-subtle"
-                >
-                  Chat
-                </span>
-              )}
               {isAdmin && (
                 <>
                   <NavLink to="/admin/members" className={navLinkCls}>
@@ -211,15 +200,6 @@ export default function Navbar() {
               <NavLink to="/teams" className={mobileLinkCls}>
                 Teams
               </NavLink>
-              {chatEnabled && (
-                <span
-                  aria-disabled
-                  className="block rounded-md px-3 py-2 text-sm font-medium text-fg-subtle"
-                  title="Chat is enabled in config — feature not yet built."
-                >
-                  Chat
-                </span>
-              )}
               {isAdmin && (
                 <>
                   <NavLink to="/admin/members" className={mobileLinkCls}>

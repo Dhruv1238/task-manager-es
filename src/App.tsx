@@ -3,6 +3,7 @@ import AdminRoute from './components/AdminRoute'
 import DevConfigRoute from './components/DevConfigRoute'
 import ProtectedRoute from './components/ProtectedRoute'
 import TaskDetailModal from './components/tasks/TaskDetailModal'
+import ProjectLayout from './layouts/ProjectLayout'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminMembers from './pages/AdminMembers'
 import AppConfigPage from './pages/AppConfigPage'
@@ -32,12 +33,11 @@ function App() {
           <Route path="/me" element={<Me />} />
           <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
           <Route path="/teams/:teamId" element={<TeamDetail />} />
-          <Route path="/projects/:projectId" element={<ProjectDetail />} />
-          <Route path="/projects/:projectId/boards" element={<ProjectBoard />} />
-          <Route
-            path="/projects/:projectId/teams/:teamId"
-            element={<TeamOnProject />}
-          />
+          <Route path="/projects/:projectId" element={<ProjectLayout />}>
+            <Route index element={<ProjectDetail />} />
+            <Route path="boards" element={<ProjectBoard />} />
+            <Route path="teams/:teamId" element={<TeamOnProject />} />
+          </Route>
           <Route path="/teams" element={<Teams />} />
           <Route path="/projects" element={<Projects />} />
           <Route element={<AdminRoute />}>

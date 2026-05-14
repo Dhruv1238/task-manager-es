@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
+import { clearAllSyncStateForUser } from '../lib/chatSyncState'
 import type { User as UserProfile } from '../types/models'
 
 type AuthContextValue = {
@@ -78,7 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn: async (email, password) => {
         await signInWithEmailAndPassword(auth, email, password)
       },
-      signOut: () => signOut(auth),
+      signOut: async () => {
+        // Drop this device's chat high-water marks for the outgoing user so a
+        // different login on the same device gets a fresh sync state.
+        const uid = user?.uid
+        if (uid) clearAllSyncStateForUser(uid)
+        await signOut(auth)
+      },
     }),
     [user, profile, loading],
   )

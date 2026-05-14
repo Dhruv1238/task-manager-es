@@ -35,6 +35,9 @@ export interface Permissions {
   canMarkDelivered: boolean // CS lead, stage 10
   canEditProject: boolean // owner / super admin, OR not yet completed
 
+  // Chat
+  canViewProjectChat: boolean // super admin, project owner, or member of any team on the project
+
   // Raw refs for callers that need the underlying docs
   project: Project | null
   team: Team | null
@@ -142,6 +145,14 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       project && (isSuperAdmin || isProjectOwner) && !closed,
     )
 
+    const userTeamIds = profile?.teamIds ?? []
+    const isProjectTeamMember = Boolean(
+      uid && project && project.teamIds.some((tid) => userTeamIds.includes(tid)),
+    )
+    const canViewProjectChat = Boolean(
+      project && (isSuperAdmin || isProjectOwner || isProjectTeamMember),
+    )
+
     return {
       isSuperAdmin,
       isAdmin,
@@ -163,6 +174,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       canApproveOrReject,
       canMarkDelivered,
       canEditProject,
+      canViewProjectChat,
       project,
       team,
       loading: projectLoading || teamLoading || projectTeamsLoading,

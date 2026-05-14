@@ -40,6 +40,10 @@ export interface User {
   tempPassword?: string
   createdBy?: string
   createdAt: Timestamp
+  // Per-project "last opened the chat" high-water marks. Compared against
+  // project.chatLastMessageAt to render unread dots on the projects list and to
+  // compute the in-project unread count.
+  chatLastReadAt?: { [projectId: string]: Timestamp }
 }
 
 export interface Team {
@@ -122,6 +126,9 @@ export interface Project {
   // VH's eligibility assessment, captured on Accept. Mirrors the latest
   // EligibilityNotePayload so the StageBanner can render it without history scans.
   eligibilityNote?: string
+  // Chat: denormalized "latest activity" timestamp, bumped in the same writeBatch
+  // as every chat mutation so the projects-list unread dot needs zero extra reads.
+  chatLastMessageAt?: Timestamp
 }
 
 export interface Attachment {
@@ -276,6 +283,27 @@ export type AuditAction =
   | 'team.member_added'
   | 'team.member_removed'
   | 'team.lead_changed'
+
+export interface ChatAttachment {
+  url: string
+  name: string
+  contentType: string
+  sizeBytes: number
+  key?: string
+}
+
+// Per-project chat message. Lives at `projects/{projectId}/chat/{messageId}`.
+// `serverUpdatedAt` is bumped on every write (create, edit) and drives the delta
+// listener — one query covers all change types.
+export interface ChatMessage {
+  id: string
+  authorId: string
+  text: string
+  createdAt: Timestamp
+  serverUpdatedAt: Timestamp
+  editedAt?: Timestamp
+  attachments?: ChatAttachment[]
+}
 
 export type AuditTargetType = 'project' | 'task' | 'team' | 'user'
 
