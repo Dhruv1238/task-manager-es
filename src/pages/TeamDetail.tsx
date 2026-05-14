@@ -45,6 +45,7 @@ function StatusDot({ status }: { status: ProjectStatus }) {
     completed: 'bg-mint-dot',
     lost: 'bg-danger-dot',
     on_hold: 'bg-warn-dot',
+    archived: 'bg-neutral-dot',
   }
   return (
     <span

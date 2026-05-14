@@ -7,6 +7,7 @@ import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useProjectTasks } from '../hooks/useProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
+import { usePipelineEnabled } from '../contexts/AppConfigContext'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
@@ -156,6 +157,7 @@ export default function ProjectDetail() {
   const { teams } = useAllTeams()
   const { tasks: projectTasks } = useProjectTasks(projectId)
   const { isAdmin, isProjectOwner, isVerticalHead, canUpdateStatus } = usePermissions(projectId)
+  const pipelineEnabled = usePipelineEnabled()
 
   useEffect(() => {
     if (!projectId) return
@@ -286,7 +288,7 @@ export default function ProjectDetail() {
                 </span>
               </div>
             )}
-            {vh && (
+            {pipelineEnabled && vh && (
               <div className="flex items-center gap-2">
                 <Avatar user={vh} size={22} />
                 <span>
@@ -295,12 +297,14 @@ export default function ProjectDetail() {
                 </span>
               </div>
             )}
-            <span className={overdue ? 'text-tone-danger-fg' : undefined}>
-              {overdue ? 'Overdue · ' : ''}
-              {submissionDeadline
-                ? `Submit by ${formatDate(submissionDeadline)}`
-                : 'No submission date'}
-            </span>
+            {(pipelineEnabled || submissionDeadline) && (
+              <span className={overdue ? 'text-tone-danger-fg' : undefined}>
+                {overdue ? 'Overdue · ' : ''}
+                {submissionDeadline
+                  ? `${pipelineEnabled ? 'Submit by ' : 'Due '}${formatDate(submissionDeadline)}`
+                  : 'No submission date'}
+              </span>
+            )}
             <span>
               {project.teamIds?.length ?? 0} team
               {(project.teamIds?.length ?? 0) === 1 ? '' : 's'}
@@ -474,20 +478,24 @@ export default function ProjectDetail() {
               <span className="text-fg-subtle">Owner</span>
               <span className="text-fg-strong">{owner?.displayName ?? '—'}</span>
             </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-fg-subtle">Vertical Head</span>
-              <span className="text-fg-strong">{vh?.displayName ?? '— not allocated —'}</span>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-fg-subtle">Submission</span>
-              <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-strong'}>
-                {formatDate(project.submissionDate)}
-              </span>
-            </div>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-fg-subtle">Presentation</span>
-              <span className="text-fg-strong">{formatDate(project.presentationDate)}</span>
-            </div>
+            {pipelineEnabled && (
+              <>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-fg-subtle">Vertical Head</span>
+                  <span className="text-fg-strong">{vh?.displayName ?? '— not allocated —'}</span>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-fg-subtle">Submission</span>
+                  <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-strong'}>
+                    {formatDate(project.submissionDate)}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-fg-subtle">Presentation</span>
+                  <span className="text-fg-strong">{formatDate(project.presentationDate)}</span>
+                </div>
+              </>
+            )}
             <div className="mt-3 flex items-center justify-between">
               <span className="text-fg-subtle">Created</span>
               <span className="text-fg-strong">{formatDate(project.createdAt)}</span>

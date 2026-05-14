@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useCreateProjectLabel } from '../../contexts/AppConfigContext'
 import { seedTenderWorkspace, type SeedResult } from '../../lib/seedTender'
 import NewMemberModal from './NewMemberModal'
 import NewProjectModal from './NewProjectModal'
@@ -11,6 +12,7 @@ interface Props {
 
 export default function AdminActionBar({ className = '' }: Props) {
   const { profile, user } = useAuth()
+  const createLabel = useCreateProjectLabel()
   const [newMemberOpen, setNewMemberOpen] = useState(false)
   const [newTeamOpen, setNewTeamOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
@@ -52,7 +54,7 @@ export default function AdminActionBar({ className = '' }: Props) {
         {/* Tender project creation is super-admin only (delta §2.3) */}
         {isSuperAdmin && (
           <button type="button" onClick={() => setNewProjectOpen(true)} className={primaryBtn}>
-            + New Tender
+            + {createLabel}
           </button>
         )}
         <button type="button" onClick={() => setNewTeamOpen(true)} className={secondaryBtn}>

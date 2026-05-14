@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Project, Stage } from '../../types/models'
 import { STAGE_HEADLINE } from '../../types/models'
 import { usePermissions } from '../../hooks/usePermissions'
+import { usePipelineEnabled, useStageEnabled } from '../../contexts/AppConfigContext'
 import { isProjectClosed } from '../../lib/projectStatus'
 import { STAGE_TONE, displayedPhase } from './stageStyle'
 import AllocateVhModal from './AllocateVhModal'
@@ -26,6 +27,8 @@ export default function StageBanner({ project }: Props) {
   const tone = STAGE_TONE[phase.toneStage] ?? STAGE_TONE[1]
 
   const perms = usePermissions(project.id)
+  const pipelineEnabled = usePipelineEnabled()
+  const currentStageEnabled = useStageEnabled(stage)
 
   const [allocateOpen, setAllocateOpen] = useState(false)
   const [escalateOpen, setEscalateOpen] = useState(false)
@@ -36,13 +39,22 @@ export default function StageBanner({ project }: Props) {
   const [eligibilityDecision, setEligibilityDecision] = useState<'approve' | 'reject' | null>(null)
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
 
+  // Pipeline disabled (Client B / simple mode): banner is irrelevant — projects
+  // don't have stages. ProjectDetail renders its own status pill instead.
+  if (!pipelineEnabled) return null
+
   const iterations = project.vhIterationCount ?? 0
+
+  // When the project is at a stage that's been toggled off in config, suppress
+  // action buttons but still surface the pill so users in flight aren't
+  // confused. Surface a small hint so they know to advance manually.
+  const stageDisabledByConfig = !currentStageEnabled
 
   // Compose primary CTAs for the banner. Each button is present only when the
   // permission check passes and the current stage matches.
   const actionButtons: React.ReactNode[] = []
 
-  if (perms.canAllocateVh) {
+  if (!stageDisabledByConfig && perms.canAllocateVh) {
     actionButtons.push(
       <button
         key="allocate"
@@ -59,7 +71,7 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  if (perms.canAcceptOrEscalate) {
+  if (!stageDisabledByConfig && perms.canAcceptOrEscalate) {
     actionButtons.push(
       <button
         key="accept"
@@ -83,7 +95,7 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  if (perms.canReviewEligibility) {
+  if (!stageDisabledByConfig && perms.canReviewEligibility) {
     actionButtons.push(
       <button
         key="eligibility-approve"
@@ -108,7 +120,7 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  if (perms.canAddFanoutTask) {
+  if (!stageDisabledByConfig && perms.canAddFanoutTask) {
     // Stage 6 is transient — execution begins automatically when the first task is
     // added. Show a quiet hint so the VH knows what's expected, no CTA button.
     actionButtons.push(
@@ -121,7 +133,7 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  if (perms.canSignOffValidation) {
+  if (!stageDisabledByConfig && perms.canSignOffValidation) {
     actionButtons.push(
       <button
         key="signoff"
@@ -134,7 +146,7 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  if (perms.canApproveOrReject) {
+  if (!stageDisabledByConfig && perms.canApproveOrReject) {
     actionButtons.push(
       <button
         key="vh-approve"
@@ -159,7 +171,7 @@ export default function StageBanner({ project }: Props) {
     )
   }
 
-  if (perms.canMarkDelivered) {
+  if (!stageDisabledByConfig && perms.canMarkDelivered) {
     actionButtons.push(
       <button
         key="update-status"
@@ -175,9 +187,11 @@ export default function StageBanner({ project }: Props) {
   // Project considered closed once the outcome is conclusive (completed/lost/not_submitted).
   // 'awarded' is intentionally excluded — delivery work continues until 'completed'.
   const closedTone = isProjectClosed(project.status)
-  const headline = closedTone
-    ? `Closed — ${project.status?.replace('_', ' ')}`
-    : STAGE_HEADLINE[stage]
+  const headline = stageDisabledByConfig
+    ? `Stage disabled in config — advance manually`
+    : closedTone
+      ? `Closed — ${project.status?.replace('_', ' ')}`
+      : STAGE_HEADLINE[stage]
 
   return (
     <div

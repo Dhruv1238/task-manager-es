@@ -3,8 +3,10 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import Logo from './Logo'
 import ThemeToggle from './ThemeToggle'
 import { useAuth } from '../contexts/AuthContext'
+import { useChatEnabled } from '../contexts/AppConfigContext'
+import { isDevConfigUser } from './DevConfigRoute'
 
-const APP_NAME = 'Task Manager'
+const APP_NAME = 'Show Runner'
 
 function initialsFor(user: { displayName?: string | null; email?: string | null }): string {
   const source = user.displayName || user.email || '?'
@@ -28,6 +30,8 @@ const mobileLinkCls = ({ isActive }: { isActive: boolean }) =>
 export default function Navbar() {
   const { user, profile, signOut } = useAuth()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
+  const isDevConfig = isDevConfigUser(profile)
+  const chatEnabled = useChatEnabled()
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 
@@ -70,6 +74,15 @@ export default function Navbar() {
               <NavLink to="/teams" className={navLinkCls}>
                 Teams
               </NavLink>
+              {chatEnabled && (
+                <span
+                  aria-disabled
+                  title="Chat is enabled in config — feature not yet built."
+                  className="rounded-md px-3 py-1.5 text-sm font-medium text-fg-subtle"
+                >
+                  Chat
+                </span>
+              )}
               {isAdmin && (
                 <>
                   <NavLink to="/admin/members" className={navLinkCls}>
@@ -79,6 +92,29 @@ export default function Navbar() {
                     Admin Analytics
                   </NavLink>
                 </>
+              )}
+              {isDevConfig && (
+                <NavLink
+                  to="/admin/config"
+                  className={navLinkCls}
+                  aria-label="Configuration"
+                  title="Configuration"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 4.2 16.96l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 7.04 4.2l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </NavLink>
               )}
             </nav>
           )}
@@ -175,6 +211,15 @@ export default function Navbar() {
               <NavLink to="/teams" className={mobileLinkCls}>
                 Teams
               </NavLink>
+              {chatEnabled && (
+                <span
+                  aria-disabled
+                  className="block rounded-md px-3 py-2 text-sm font-medium text-fg-subtle"
+                  title="Chat is enabled in config — feature not yet built."
+                >
+                  Chat
+                </span>
+              )}
               {isAdmin && (
                 <>
                   <NavLink to="/admin/members" className={mobileLinkCls}>
@@ -184,6 +229,31 @@ export default function Navbar() {
                     Admin Analytics
                   </NavLink>
                 </>
+              )}
+              {isDevConfig && (
+                <NavLink
+                  to="/admin/config"
+                  className={mobileLinkCls}
+                  aria-label="Configuration"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 4.2 16.96l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 7.04 4.2l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    Configuration
+                  </span>
+                </NavLink>
               )}
             </div>
 

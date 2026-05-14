@@ -24,6 +24,7 @@ import type {
   TaskStatus,
   WorkType,
 } from '../types/models'
+import { getAppConfigSnapshot } from '../contexts/AppConfigContext'
 import {
   addDoc,
   arrayRemove,
@@ -253,6 +254,8 @@ export async function addProject(input: AddProjectInput): Promise<string> {
   // Firestore rejects serverTimestamp() inside arrays — fall back to Timestamp.now()
   // for events stored in `stageHistory[]`. The top-level `createdAt`/`updatedAt`
   // fields still use the authoritative serverTimestamp().
+  const pipelineEnabled = getAppConfigSnapshot().pipeline.enabled
+
   const initialStageEvent: StageEvent = {
     stage: 1,
     enteredAt: Timestamp.now(),
@@ -273,14 +276,19 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     accessKeys: [input.ownerId],
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),
-    // Tender bootstrap (every new project starts at stage 1):
-    vhId: null,
-    stage: 1,
-    stageHistory: [initialStageEvent],
-    escalationCount: 0,
-    vhIterationCount: 0,
-    ...(input.submissionDate ? { submissionDate: input.submissionDate } : {}),
-    ...(input.presentationDate ? { presentationDate: input.presentationDate } : {}),
+    // Tender bootstrap — only when the pipeline is enabled. Simple mode (Client B)
+    // creates a project with owner + status + no stages, no VH.
+    ...(pipelineEnabled
+      ? {
+          vhId: null,
+          stage: 1,
+          stageHistory: [initialStageEvent],
+          escalationCount: 0,
+          vhIterationCount: 0,
+          ...(input.submissionDate ? { submissionDate: input.submissionDate } : {}),
+          ...(input.presentationDate ? { presentationDate: input.presentationDate } : {}),
+        }
+      : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })

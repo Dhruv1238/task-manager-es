@@ -14,6 +14,7 @@ const COLOR: Record<ProjectStatus, string> = {
   completed: 'var(--color-mint-dot)',
   lost: 'var(--color-danger-dot)',
   on_hold: 'var(--color-warn-dot)',
+  archived: 'var(--color-fg-faint)',
 }
 
 interface Props {

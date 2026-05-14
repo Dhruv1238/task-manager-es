@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { usePipelineEnabled } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
 import type { Project, Team } from '../types/models'
 
@@ -42,6 +43,7 @@ export interface Permissions {
 
 export function usePermissions(projectId?: string, teamId?: string): Permissions {
   const { profile } = useAuth()
+  const pipelineEnabled = usePipelineEnabled()
   const [project, setProject] = useState<Project | null>(null)
   const [team, setTeam] = useState<Team | null>(null)
   const [projectLoading, setProjectLoading] = useState<boolean>(Boolean(projectId))
@@ -114,17 +116,27 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const isCtMember = Boolean(uid && ctTeam && ctTeam.memberIds.includes(uid))
 
     const stage = project?.stage
-    const canAllocateVh = Boolean(isSuperAdmin && project && stage === 1)
-    const canAcceptOrEscalate = Boolean(isVerticalHead && stage === 2)
-    const canAddFanoutTask = Boolean(isVerticalHead && stage === 6)
+    // When the tender pipeline is disabled, every stage-aware action collapses
+    // to false — there is no pipeline to advance through. Status update and
+    // edit-project remain active so simple-mode users can still mark projects
+    // completed / on hold and edit project fields.
+    const canAllocateVh = Boolean(pipelineEnabled && isSuperAdmin && project && stage === 1)
+    const canAcceptOrEscalate = Boolean(pipelineEnabled && isVerticalHead && stage === 2)
+    const canAddFanoutTask = Boolean(pipelineEnabled && isVerticalHead && stage === 6)
     // CS validates and signs off (was CT in v0 of the spec; product moved validation to CS).
-    const canSignOffValidation = Boolean(isCsLead && stage === 7)
-    const canApproveOrReject = Boolean(isVerticalHead && stage === 8)
+    const canSignOffValidation = Boolean(pipelineEnabled && isCsLead && stage === 7)
+    const canApproveOrReject = Boolean(pipelineEnabled && isVerticalHead && stage === 8)
     const closed = isProjectClosed(project?.status)
-    const canMarkDelivered = Boolean(isCsLead && stage === 10 && !closed)
-    const canReviewEligibility = Boolean(isSuperAdmin && stage === 5 && !closed)
+    const canMarkDelivered = Boolean(pipelineEnabled && isCsLead && stage === 10 && !closed)
+    const canReviewEligibility = Boolean(pipelineEnabled && isSuperAdmin && stage === 5 && !closed)
+    // In simple mode, the project owner (alongside admins/super_admins) can
+    // update status — there is no VH/CS to delegate to.
     const canUpdateStatus = Boolean(
-      project && !closed && (isVerticalHead || isCsLead || isSuperAdmin),
+      project &&
+        !closed &&
+        (pipelineEnabled
+          ? isVerticalHead || isCsLead || isSuperAdmin
+          : isProjectOwner || isAdmin),
     )
     const canEditProject = Boolean(
       project && (isSuperAdmin || isProjectOwner) && !closed,
@@ -155,5 +167,5 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       team,
       loading: projectLoading || teamLoading || projectTeamsLoading,
     }
-  }, [profile, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
+  }, [profile, pipelineEnabled, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
 }

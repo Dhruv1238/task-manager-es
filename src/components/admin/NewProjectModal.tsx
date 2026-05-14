@@ -6,6 +6,7 @@ import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import FileBadge, { formatFileSize } from '../ui/FileBadge'
 import { useAuth } from '../../contexts/AuthContext'
+import { usePipelineEnabled } from '../../contexts/AppConfigContext'
 import { addProject } from '../../lib/firestore'
 import { uploadAsset } from '../../lib/uploadAsset'
 import type { Attachment } from '../../types/models'
@@ -24,6 +25,7 @@ function friendlyError(err: unknown): string {
 
 export default function NewProjectModal({ open, onClose }: Props) {
   const { user, profile } = useAuth()
+  const pipelineEnabled = usePipelineEnabled()
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
@@ -136,8 +138,12 @@ export default function NewProjectModal({ open, onClose }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="New tender project"
-      description="Lands at stage 1. You'll allocate a Vertical Head once it's created."
+      title={pipelineEnabled ? 'New tender' : 'New project'}
+      description={
+        pipelineEnabled
+          ? "Lands at stage 1. You'll allocate a Vertical Head once it's created."
+          : 'Tracked by status. Assign teams and tasks after it’s created.'
+      }
       size="lg"
       closeOnBackdrop={!submitting}
     >
@@ -237,31 +243,35 @@ export default function NewProjectModal({ open, onClose }: Props) {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label htmlFor="project-submission" className="text-sm font-medium text-fg-muted">
-              Submission date <span className="font-normal text-fg-subtle">(to client)</span>
-            </label>
-            <input
-              id="project-submission"
-              type="date"
-              value={submissionDate}
-              onChange={(e) => setSubmissionDate(e.target.value)}
-              className={`${inputCls} scheme-dark`}
-            />
-          </div>
+          {pipelineEnabled && (
+            <>
+              <div className="space-y-1.5">
+                <label htmlFor="project-submission" className="text-sm font-medium text-fg-muted">
+                  Submission date <span className="font-normal text-fg-subtle">(to client)</span>
+                </label>
+                <input
+                  id="project-submission"
+                  type="date"
+                  value={submissionDate}
+                  onChange={(e) => setSubmissionDate(e.target.value)}
+                  className={`${inputCls} scheme-dark`}
+                />
+              </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="project-presentation" className="text-sm font-medium text-fg-muted">
-              Presentation date <span className="font-normal text-fg-subtle">(optional)</span>
-            </label>
-            <input
-              id="project-presentation"
-              type="date"
-              value={presentationDate}
-              onChange={(e) => setPresentationDate(e.target.value)}
-              className={`${inputCls} scheme-dark`}
-            />
-          </div>
+              <div className="space-y-1.5">
+                <label htmlFor="project-presentation" className="text-sm font-medium text-fg-muted">
+                  Presentation date <span className="font-normal text-fg-subtle">(optional)</span>
+                </label>
+                <input
+                  id="project-presentation"
+                  type="date"
+                  value={presentationDate}
+                  onChange={(e) => setPresentationDate(e.target.value)}
+                  className={`${inputCls} scheme-dark`}
+                />
+              </div>
+            </>
+          )}
 
           <div className="space-y-1.5 sm:col-span-2">
             <label htmlFor="project-owner" className="text-sm font-medium text-fg-muted">

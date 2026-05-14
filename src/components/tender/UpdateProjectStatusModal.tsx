@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { usePipelineEnabled } from '../../contexts/AppConfigContext'
 import { updateProjectStatus } from '../../lib/firestore'
-import { STATUS_DISPLAY, STATUS_OPTIONS } from '../../lib/projectStatus'
+import { SIMPLE_STATUS_OPTIONS, STATUS_DISPLAY, STATUS_OPTIONS } from '../../lib/projectStatus'
 import type { Project, ProjectStatus, Stage } from '../../types/models'
 
 interface Props {
@@ -16,6 +17,8 @@ interface Props {
 // Records every change in stageHistory with a required note.
 export default function UpdateProjectStatusModal({ open, onClose, project }: Props) {
   const { user, profile } = useAuth()
+  const pipelineEnabled = usePipelineEnabled()
+  const options = pipelineEnabled ? STATUS_OPTIONS : SIMPLE_STATUS_OPTIONS
   const currentStatus = (project.status ?? 'in_progress') as ProjectStatus
   const [next, setNext] = useState<ProjectStatus>(currentStatus)
   const [note, setNote] = useState('')
@@ -91,7 +94,7 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
         <div className="space-y-2">
           <p className="text-sm font-medium text-fg-muted">Status</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {STATUS_OPTIONS.map((opt) => {
+            {options.map((opt) => {
               const meta = STATUS_DISPLAY[opt]
               const active = next === opt
               const isCurrent = currentStatus === opt

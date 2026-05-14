@@ -14,6 +14,7 @@ import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
+import { useCreateProjectLabel, usePipelineEnabled } from '../contexts/AppConfigContext'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import SearchInput from '../components/ui/SearchInput'
@@ -86,6 +87,8 @@ export default function Projects() {
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const { users } = useAllUsers()
   const { profile } = useAuth()
+  const pipelineEnabled = usePipelineEnabled()
+  const createLabel = useCreateProjectLabel()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
   useEffect(() => {
@@ -235,7 +238,7 @@ export default function Projects() {
             <p className="mt-2 text-sm text-fg-subtle">
               {isAdmin ? (
                 <>
-                  Click <span className="font-medium text-fg-muted">+ New Project</span> to start one.
+                  Click <span className="font-medium text-fg-muted">+ {createLabel}</span> to start one.
                 </>
               ) : (
                 'Projects you own, or projects where one of your teams is assigned, will show up here.'
@@ -263,14 +266,16 @@ export default function Projects() {
                     </div>
                   </div>
 
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {p.stage && <StagePill project={p} />}
-                    {(p.vhIterationCount ?? 0) > 0 && (
-                      <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
-                        Iter {(p.vhIterationCount ?? 0) + 1}
-                      </span>
-                    )}
-                  </div>
+                  {pipelineEnabled && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {p.stage && <StagePill project={p} />}
+                      {(p.vhIterationCount ?? 0) > 0 && (
+                        <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
+                          Iter {(p.vhIterationCount ?? 0) + 1}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {p.description && (
                     <p className="mt-1 line-clamp-2 text-sm text-fg-subtle">{p.description}</p>

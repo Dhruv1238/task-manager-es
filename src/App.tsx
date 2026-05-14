@@ -1,9 +1,11 @@
 import { Route, Routes, useLocation, type Location } from 'react-router-dom'
 import AdminRoute from './components/AdminRoute'
+import DevConfigRoute from './components/DevConfigRoute'
 import ProtectedRoute from './components/ProtectedRoute'
 import TaskDetailModal from './components/tasks/TaskDetailModal'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminMembers from './pages/AdminMembers'
+import AppConfigPage from './pages/AppConfigPage'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Me from './pages/Me'
@@ -41,6 +43,9 @@ function App() {
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/members" element={<AdminMembers />} />
+          </Route>
+          <Route element={<DevConfigRoute />}>
+            <Route path="/admin/config" element={<AppConfigPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>

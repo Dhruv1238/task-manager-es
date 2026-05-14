@@ -14,6 +14,9 @@ export type ProjectStatus =
   | 'completed'
   | 'lost'
   | 'on_hold'
+  // Simple-mode terminal state (Client B): work parked or filed away without a
+  // tender-style outcome. Counts as closed.
+  | 'archived'
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'blocked'
 
@@ -228,6 +231,24 @@ export interface TaskTemplate {
 
 export interface TaskTemplateConfig {
   templates: TaskTemplate[]
+}
+
+// App-wide configuration doc shape (Firestore at /config/appConfig).
+// Written by super_admins via /admin/config; read by every authenticated client
+// once at boot (with a 24h localStorage TTL) to render pipeline UI, CTAs, etc.
+export interface AppConfig {
+  // Monotonic counter bumped on every save. Drives cache invalidation when the
+  // admin screen pushes an update — clients compare to localStorage and refresh.
+  version: number
+  updatedAt: Timestamp
+  updatedBy: string
+  pipeline: {
+    enabled: boolean
+    enabledStages: Stage[]
+  }
+  features: {
+    chat: boolean
+  }
 }
 
 // --- Audit trail (forensic-only; not surfaced in UI) -------------------------

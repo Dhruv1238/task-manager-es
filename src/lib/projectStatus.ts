@@ -12,8 +12,8 @@ export const STATUS_DISPLAY: Record<
 > = {
   in_progress: {
     label: 'In progress',
-    pill: 'pill-neutral border',
-    dot: 'bg-neutral-dot',
+    pill: 'pill-brandtone border',
+    dot: 'bg-brandtone-dot',
     description: 'No outcome recorded yet — work is ongoing.',
   },
   submitted: {
@@ -52,6 +52,12 @@ export const STATUS_DISPLAY: Record<
     dot: 'bg-warn-dot',
     description: 'Paused — waiting on the client or an internal blocker.',
   },
+  archived: {
+    label: 'Archived',
+    pill: 'pill-neutral border',
+    dot: 'bg-neutral-dot',
+    description: 'Filed away — no further action expected.',
+  },
 }
 
 export const STATUS_OPTIONS: ProjectStatus[] = [
@@ -62,12 +68,22 @@ export const STATUS_OPTIONS: ProjectStatus[] = [
   'completed',
   'lost',
   'not_submitted',
+  'archived',
 ]
+
+// Reduced option set used when the tender pipeline is disabled (Client B / simple
+// Jira mode). The status pill on a project should only flip between these three.
+export const SIMPLE_STATUS_OPTIONS: ProjectStatus[] = ['in_progress', 'completed', 'archived']
 
 // Conclusive outcomes that lock the project for editing. 'awarded' is excluded
 // because delivery work continues after the award until status flips to 'completed'.
 export function isProjectClosed(status: ProjectStatus | undefined): boolean {
-  return status === 'completed' || status === 'lost' || status === 'not_submitted'
+  return (
+    status === 'completed' ||
+    status === 'lost' ||
+    status === 'not_submitted' ||
+    status === 'archived'
+  )
 }
 
 // "Live" projects are anything that isn't a final outcome — used to filter
