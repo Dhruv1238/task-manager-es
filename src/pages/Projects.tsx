@@ -10,7 +10,6 @@ import {
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore'
-import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
@@ -19,11 +18,17 @@ import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import SearchInput from '../components/ui/SearchInput'
 import Dropdown, { type DropdownOption } from '../components/ui/Dropdown'
-import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
 import ProjectStatusPill from '../components/tender/ProjectStatusPill'
 import UnreadChatBadge from '../components/projects/UnreadChatBadge'
+import ProjectsTable from '../components/projects/ProjectsTable'
+import StagePill from '../components/projects/StagePill'
+import {
+  formatDeadline,
+  isOverdue,
+  submissionDeadline,
+} from '../components/projects/projectListUtils'
 import { useChatEnabled } from '../contexts/AppConfigContext'
-import { STATUS_DISPLAY, STATUS_OPTIONS, isProjectClosed } from '../lib/projectStatus'
+import { STATUS_DISPLAY, STATUS_OPTIONS } from '../lib/projectStatus'
 import type { Project, ProjectStatus, User } from '../types/models'
 
 const PAGE_SIZE = 24
@@ -46,39 +51,70 @@ function Avatar({ user, size = 22 }: { user: User; size?: number }) {
   )
 }
 
-function formatDeadline(ts: Timestamp | undefined): string {
-  if (!ts) return 'No deadline'
-  return ts.toDate().toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+type ViewMode = 'grid' | 'table'
+const VIEW_MODE_KEY = 'projects:viewMode'
+
+function readStoredViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'grid'
+  const v = window.localStorage.getItem(VIEW_MODE_KEY)
+  return v === 'table' ? 'table' : 'grid'
 }
 
-function submissionDeadline(project: Project) {
-  return project.submissionDate ?? project.deadline
-}
-
-function isOverdue(project: Project): boolean {
-  const ts = submissionDeadline(project)
-  if (!ts) return false
-  // Skip the submission-deadline overdue flag once the tender has a final outcome,
-  // and also once awarded — at that point the deadline is no longer a submission gate.
-  if (isProjectClosed(project.status) || project.status === 'awarded') return false
-  return ts.toDate().getTime() < Date.now()
-}
-
-function StagePill({ project }: { project: Project }) {
-  const phase = displayedPhase(project)
-  const tone = STAGE_TONE[phase.toneStage] ?? STAGE_TONE[1]
+function GridIcon() {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone.pill}`}
-      title={phase.label}
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+    </svg>
+  )
+}
+
+function TableIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  )
+}
+
+function ViewModeToggle({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
+  return (
+    <div
+      role="group"
+      aria-label="View mode"
+      className="inline-flex items-center rounded-lg border border-line bg-fill-2 p-0.5"
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
-      {phase.shortLabel}
-    </span>
+      {(
+        [
+          { v: 'grid', label: 'Grid view', icon: <GridIcon /> },
+          { v: 'table', label: 'Table view', icon: <TableIcon /> },
+        ] as const
+      ).map((opt) => {
+        const active = value === opt.v
+        return (
+          <button
+            key={opt.v}
+            type="button"
+            aria-pressed={active}
+            aria-label={opt.label}
+            title={opt.label}
+            onClick={() => onChange(opt.v)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+              active
+                ? 'bg-fill-4 text-fg shadow-sm'
+                : 'text-fg-subtle hover:text-fg-muted'
+            }`}
+          >
+            {opt.icon}
+            <span className="hidden sm:inline">{opt.v === 'grid' ? 'Grid' : 'Table'}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -87,6 +123,12 @@ export default function Projects() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(VIEW_MODE_KEY, viewMode)
+  }, [viewMode])
   const { users } = useAllUsers()
   const { profile } = useAuth()
   const pipelineEnabled = usePipelineEnabled()
@@ -218,6 +260,9 @@ export default function Projects() {
           disabledTooltip="Alphabetical order while searching"
           className="sm:w-44"
         />
+        <div className="sm:ml-auto">
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       {loading && items.length === 0 ? (
@@ -251,6 +296,15 @@ export default function Projects() {
         )
       ) : (
         <>
+          {viewMode === 'table' ? (
+            <ProjectsTable
+              projects={items}
+              userById={userById}
+              pipelineEnabled={pipelineEnabled}
+              chatEnabled={chatEnabled}
+              chatLastReadAt={profile?.chatLastReadAt}
+            />
+          ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((p) => {
               const owner = userById.get(p.ownerId)
@@ -331,6 +385,7 @@ export default function Projects() {
               )
             })}
           </div>
+          )}
 
           {hasMore && (
             <div className="mt-8 flex justify-center">
