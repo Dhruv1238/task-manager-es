@@ -55,9 +55,10 @@ type ViewMode = 'grid' | 'table'
 const VIEW_MODE_KEY = 'projects:viewMode'
 
 function readStoredViewMode(): ViewMode {
-  if (typeof window === 'undefined') return 'grid'
+  if (typeof window === 'undefined') return 'table'
   const v = window.localStorage.getItem(VIEW_MODE_KEY)
-  return v === 'table' ? 'table' : 'grid'
+  if (v === 'table' || v === 'grid') return v
+  return 'table'
 }
 
 function GridIcon() {

@@ -16,7 +16,7 @@ interface Props {
   onClose: () => void
 }
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB per file
+const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB per file
 
 function friendlyError(err: unknown): string {
   if (err instanceof FirebaseError) return err.message
@@ -61,7 +61,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
     const accepted: File[] = []
     for (const f of picked) {
       if (f.size > MAX_FILE_SIZE_BYTES) {
-        setError(`${f.name} exceeds 10 MB and was skipped.`)
+        setError(`${f.name} exceeds 2 GB and was skipped.`)
         continue
       }
       accepted.push(f)
@@ -191,7 +191,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
             <label className="text-sm font-medium text-fg-muted">
               Attachments <span className="font-normal text-fg-subtle">(optional)</span>
             </label>
-            <span className="text-xs text-fg-subtle">10 MB max per file</span>
+            <span className="text-xs text-fg-subtle">2 GB max per file</span>
           </div>
 
           <button
