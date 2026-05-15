@@ -1,3 +1,4 @@
+import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getDocs,
@@ -10,6 +11,7 @@ type BuildQuery = (cursor: QueryDocumentSnapshot<DocumentData> | null) => Query<
 
 interface Result<T> {
   items: T[]
+  setItems: React.Dispatch<React.SetStateAction<T[]>>
   loading: boolean
   loadingMore: boolean
   hasMore: boolean
@@ -101,5 +103,5 @@ export function usePaginatedQuery<T>(
     fetchPage('append')
   }, [fetchPage, hasMore, loading, loadingMore])
 
-  return { items, loading, loadingMore, hasMore, loadMore, error }
+  return { items, setItems, loading, loadingMore, hasMore, loadMore, error }
 }
