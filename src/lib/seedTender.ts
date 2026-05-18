@@ -31,29 +31,29 @@ interface SeedTeamSpec {
 const SEED_TEAMS: SeedTeamSpec[] = [
   {
     name: 'Client Servicing — Marcom',
-    description: 'CS team. Owns client-facing comms and handles project delivery.',
+    description: 'Handles client communication, briefs, and end-to-end project delivery.',
     kind: 'department',
   },
   {
     name: 'Copy & Strategy',
-    description: 'CT team. Strategy and copywriting deliverables.',
+    description: 'Develops copy, messaging, and creative strategy for every project.',
     kind: 'department',
   },
   {
     name: '2D Graphic Design',
-    description: 'Horizontal team — 2D graphic design deliverables.',
+    description: 'Designs static 2D visuals — social posts, decks, posters, and print collateral.',
     kind: 'horizontal',
     workType: '2D',
   },
   {
     name: '2D & 3D Events',
-    description: 'Horizontal team — events 2D & 3D deliverables.',
+    description: 'Designs event stages, booth layouts, and 3D visuals for live activations.',
     kind: 'horizontal',
     workType: '3D',
   },
   {
     name: 'Video Editing',
-    description: 'Horizontal team — video editing deliverables.',
+    description: 'Produces video edits, motion graphics, and AV content for campaigns.',
     kind: 'horizontal',
     workType: 'VE',
   },
@@ -73,7 +73,17 @@ export interface SeedResult {
   templatesWritten: number
 }
 
-export async function seedTenderWorkspace(adminUid: string): Promise<SeedResult> {
+export interface SeedTenderOptions {
+  // When true, new teams are created with no lead and no members. Lets the
+  // super admin re-seed an empty roster for client hand-off without forcing
+  // their own UID onto every team.
+  noMembers?: boolean
+}
+
+export async function seedTenderWorkspace(
+  adminUid: string,
+  options: SeedTenderOptions = {},
+): Promise<SeedResult> {
   let teamsCreated = 0
   let teamsReused = 0
 
@@ -93,8 +103,8 @@ export async function seedTenderWorkspace(adminUid: string): Promise<SeedResult>
     const ref = await addDoc(collection(db, 'teams'), {
       name: spec.name,
       description: spec.description,
-      leadId: adminUid, // bootstraps to whoever ran the seed; super admins reassign manually
-      memberIds: [adminUid],
+      leadId: options.noMembers ? '' : adminUid,
+      memberIds: options.noMembers ? [] : [adminUid],
       projectIds: [],
       kind: spec.kind,
       ...(spec.workType ? { workType: spec.workType } : {}),

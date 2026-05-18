@@ -1,33 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   collection,
-  getDocs,
   limit,
   orderBy,
   query,
   startAfter,
   where,
-  writeBatch,
+  type Timestamp,
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore'
-import type { Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { setUserRole } from '../lib/firestore'
-import { createMember, generateTempPassword } from '../lib/createMember'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import type { GlobalRole, User } from '../types/models'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import SearchInput from '../components/ui/SearchInput'
-// DEV-ONLY: one-shot onboarding reset. Delete this import + the block below
-// (search for "DEV-ONLY") after running once.
-import usersToImport from '../scripts/users_to_import.json'
-
-const SUPER_ADMIN_EMAIL = 'dhruv.sharma1@eventstrat.ai'
-const PRESERVE_EMAILS = new Set(
-  [SUPER_ADMIN_EMAIL, 'test1@yahoo.com', 'csa@es.com'].map((e) => e.toLowerCase()),
-)
 
 const PAGE_SIZE = 25
 
@@ -123,194 +112,6 @@ export default function AdminMembers() {
     setTimeout(() => setCopiedId((id) => (id === u.uid ? null : id)), 2000)
   }
 
-  // ─── DEV-ONLY: onboarding reset (remove after running once) ───────────────
-  const [resetBusy, setResetBusy] = useState<null | 'users' | 'teams'>(null)
-
-  async function handleResetAndImportUsers() {
-    if (!firebaseUser || !profile) return
-    if (profile.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-      alert(`Sign in as ${SUPER_ADMIN_EMAIL} before running this.`)
-      return
-    }
-    if (
-      !window.confirm(
-        `This will DELETE all users except ${SUPER_ADMIN_EMAIL} and import ${usersToImport.length} new users. Continue?`,
-      )
-    )
-      return
-    if (!window.confirm('Last chance. This cannot be undone. Proceed?')) return
-
-    setResetBusy('users')
-    console.log('=== Reset & import users: starting ===')
-    try {
-      const snap = await getDocs(collection(db, 'users'))
-      const toDelete = snap.docs.filter(
-        (d) => !PRESERVE_EMAILS.has(String(d.data().email ?? '').toLowerCase()),
-      )
-      console.log(
-        `Found ${snap.size} users; deleting ${toDelete.length}; preserving ${snap.size - toDelete.length}`,
-      )
-
-      let batchNum = 0
-      const queue = [...toDelete]
-      while (queue.length > 0) {
-        const chunk = queue.splice(0, 400)
-        const batch = writeBatch(db)
-        chunk.forEach((d) => batch.delete(d.ref))
-        await batch.commit()
-        batchNum++
-        console.log(`Delete batch ${batchNum}: ${chunk.length} docs committed`)
-      }
-
-      const adminName = profile.displayName ?? firebaseUser.email ?? 'Admin'
-      const results: { email: string; ok: boolean; error?: string }[] = []
-      for (let i = 0; i < usersToImport.length; i++) {
-        const u = usersToImport[i] as { email: string; displayName: string }
-        try {
-          await createMember(
-            u.email,
-            u.displayName,
-            generateTempPassword(),
-            firebaseUser.uid,
-            adminName,
-            'user',
-          )
-          results.push({ email: u.email, ok: true })
-          console.log(`OK  [${i + 1}/${usersToImport.length}] ${u.email}`)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          results.push({ email: u.email, ok: false, error: msg })
-          console.error(`ERR [${i + 1}/${usersToImport.length}] ${u.email}: ${msg}`)
-        }
-      }
-
-      const okCount = results.filter((r) => r.ok).length
-      const failed = results.filter((r) => !r.ok)
-      console.log(`=== Done. ${okCount} created, ${failed.length} failed. ===`)
-      if (failed.length > 0) console.table(failed)
-      alert(
-        `Done. ${okCount} created, ${failed.length} failed.\nCheck console for per-row detail.`,
-      )
-    } catch (err) {
-      console.error('Reset failed:', err)
-      alert('Reset failed. Check console.')
-    } finally {
-      setResetBusy(null)
-    }
-  }
-
-  async function handleResumeImport() {
-    if (!firebaseUser || !profile) return
-    if (profile.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-      alert(`Sign in as ${SUPER_ADMIN_EMAIL} before running this.`)
-      return
-    }
-
-    setResetBusy('users')
-    console.log('=== Resume import: starting ===')
-    try {
-      // Skip emails that already exist in Firestore (idempotent resume).
-      const snap = await getDocs(collection(db, 'users'))
-      const existing = new Set<string>()
-      snap.docs.forEach((d) => {
-        const e = String(d.data().email ?? '').toLowerCase()
-        if (e) existing.add(e)
-      })
-      const remaining = (usersToImport as { email: string; displayName: string }[]).filter(
-        (u) => !existing.has(u.email.toLowerCase()),
-      )
-      console.log(
-        `${existing.size} users already in Firestore; ${remaining.length} to import.`,
-      )
-      if (remaining.length === 0) {
-        alert('Nothing to import — all roster users already exist.')
-        return
-      }
-      if (!window.confirm(`Import ${remaining.length} missing users? Continue?`)) return
-
-      const adminName = profile.displayName ?? firebaseUser.email ?? 'Admin'
-      const results: { email: string; ok: boolean; error?: string }[] = []
-      let rateLimited = false
-
-      for (let i = 0; i < remaining.length; i++) {
-        const u = remaining[i]
-        try {
-          await createMember(
-            u.email,
-            u.displayName,
-            generateTempPassword(),
-            firebaseUser.uid,
-            adminName,
-            'user',
-          )
-          results.push({ email: u.email, ok: true })
-          console.log(`OK  [${i + 1}/${remaining.length}] ${u.email}`)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          results.push({ email: u.email, ok: false, error: msg })
-          console.error(`ERR [${i + 1}/${remaining.length}] ${u.email}: ${msg}`)
-          // Firebase Auth rate-limits createUser at ~100/hour per IP.
-          // Once we hit it, every subsequent call fails — abort instead of burning the list.
-          if (msg.includes('too-many-requests')) {
-            rateLimited = true
-            console.warn('Hit auth/too-many-requests — aborting. Wait ~1 hour and click Resume Import again.')
-            break
-          }
-        }
-        // Light throttle to spread calls and avoid bursty patterns
-        await new Promise((r) => setTimeout(r, 500))
-      }
-
-      const okCount = results.filter((r) => r.ok).length
-      const failed = results.filter((r) => !r.ok)
-      console.log(`=== Done. ${okCount} created, ${failed.length} failed. ===`)
-      if (failed.length > 0) console.table(failed)
-      alert(
-        rateLimited
-          ? `Rate-limited by Firebase. ${okCount} created this run. Wait ~1 hour, then click Resume Import again.`
-          : `Done. ${okCount} created, ${failed.length} failed.\nCheck console for per-row detail.`,
-      )
-    } catch (err) {
-      console.error('Resume import failed:', err)
-      alert('Resume import failed. Check console.')
-    } finally {
-      setResetBusy(null)
-    }
-  }
-
-  async function handleDeleteAllTeams() {
-    if (!window.confirm('This will DELETE all teams. Continue?')) return
-    if (!window.confirm('Last chance. This cannot be undone. Proceed?')) return
-
-    setResetBusy('teams')
-    console.log('=== Delete all teams: starting ===')
-    try {
-      const snap = await getDocs(collection(db, 'teams'))
-      console.log(`Found ${snap.size} teams to delete`)
-
-      const docs = [...snap.docs]
-      const total = docs.length
-      let batchNum = 0
-      while (docs.length > 0) {
-        const chunk = docs.splice(0, 400)
-        const batch = writeBatch(db)
-        chunk.forEach((d) => batch.delete(d.ref))
-        await batch.commit()
-        batchNum++
-        console.log(`Delete batch ${batchNum}: ${chunk.length} teams committed`)
-      }
-
-      console.log(`=== Done. ${total} teams deleted. ===`)
-      alert(`Deleted ${total} teams.`)
-    } catch (err) {
-      console.error('Delete failed:', err)
-      alert('Delete failed. Check console.')
-    } finally {
-      setResetBusy(null)
-    }
-  }
-  // ─── /DEV-ONLY ─────────────────────────────────────────────────────────────
-
   async function changeRole(u: User, nextRole: GlobalRole) {
     if (firebaseUser?.uid === u.uid) return // can't change your own role
     if (u.globalRole === nextRole) return
@@ -367,49 +168,6 @@ export default function AdminMembers() {
           className="flex-1 max-w-sm"
         />
       </div>
-
-      {/* ─── DEV-ONLY: onboarding reset (remove this block after running once) ─── */}
-      {/* {profile?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-tone-danger-fg">
-            Temp admin tools
-          </span>
-          <button
-            type="button"
-            onClick={handleDeleteAllTeams}
-            disabled={resetBusy !== null}
-            style={{ background: '#dc2626', color: '#fff', padding: '8px 16px', borderRadius: 6, fontWeight: 600 }}
-            className="text-sm disabled:opacity-60"
-          >
-            {resetBusy === 'teams' ? 'Deleting teams…' : 'TEMP: Delete All Teams'}
-          </button>
-          <button
-            type="button"
-            onClick={handleResetAndImportUsers}
-            disabled={resetBusy !== null}
-            style={{ background: '#dc2626', color: '#fff', padding: '8px 16px', borderRadius: 6, fontWeight: 600 }}
-            className="text-sm disabled:opacity-60"
-          >
-            {resetBusy === 'users'
-              ? 'Resetting users…'
-              : `TEMP: Reset & Import Users (${usersToImport.length})`}
-          </button>
-          <button
-            type="button"
-            onClick={handleResumeImport}
-            disabled={resetBusy !== null}
-            style={{ background: '#7c3aed', color: '#fff', padding: '8px 16px', borderRadius: 6, fontWeight: 600 }}
-            className="text-sm disabled:opacity-60"
-            title="Idempotent — skips emails already in Firestore. Use after auth/too-many-requests cooldown."
-          >
-            {resetBusy === 'users' ? 'Importing…' : 'TEMP: Resume Import (skip existing)'}
-          </button>
-          <span className="ml-auto text-xs text-tone-danger-fg/80">
-            Destructive. Open DevTools console first.
-          </span>
-        </div>
-      )} */}
-      {/* ─── /DEV-ONLY ─────────────────────────────────────────────────────────── */}
 
       <div className="overflow-hidden rounded-2xl border border-line bg-card">
         <div className="overflow-x-auto">
