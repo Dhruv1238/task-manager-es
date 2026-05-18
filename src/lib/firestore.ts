@@ -644,6 +644,39 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
   await batch.commit()
 }
 
+export interface AddProjectAttachmentInput {
+  projectId: string
+  projectTitle: string
+  attachment: Attachment
+  actorId: string
+  actorName: string
+}
+
+export async function addProjectAttachment(input: AddProjectAttachmentInput): Promise<void> {
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'projects', input.projectId), {
+    attachments: arrayUnion(input.attachment),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'project.attachment_added',
+    targetType: 'project',
+    targetId: input.projectId,
+    targetTitle: input.projectTitle,
+    projectId: input.projectId,
+    payload: {
+      attachmentId: input.attachment.id,
+      name: input.attachment.name,
+      mimeType: input.attachment.mimeType,
+      sizeBytes: input.attachment.sizeBytes,
+    },
+    batch,
+  })
+  await batch.commit()
+}
+
 export interface AddTaskAttachmentInput {
   taskId: string
   attachment: Attachment

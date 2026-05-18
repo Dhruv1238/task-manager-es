@@ -266,6 +266,7 @@ export type AuditAction =
   | 'project.stage_transitioned'
   | 'project.status_updated'
   | 'project.teams_updated'
+  | 'project.attachment_added'
   // Task lifecycle
   | 'task.created'
   | 'subtask.created'
