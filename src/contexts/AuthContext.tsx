@@ -53,10 +53,13 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-// Bootstrap email — when this account is the first to sign in to a fresh Firebase
-// project, it auto-provisions as super_admin so the workspace is operable. After
-// that, super_admins manage roles via /admin/members.
-const BOOTSTRAP_SUPER_ADMIN_EMAIL = 'taskmanager@ai.com'
+// Bootstrap emails — any account in this list that's the first to sign in to a
+// fresh Firebase project auto-provisions as super_admin so the workspace is
+// operable. After that, super_admins manage roles via /admin/members.
+const BOOTSTRAP_SUPER_ADMIN_EMAILS = new Set([
+  'taskmanager@ai.com',
+  'dhruv.sharma1@eventstrat.ai',
+])
 
 async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
   const ref = doc(db, 'users', u.uid)
@@ -66,7 +69,7 @@ async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
   }
 
   const email = u.email ?? ''
-  const isBootstrap = email.toLowerCase() === BOOTSTRAP_SUPER_ADMIN_EMAIL
+  const isBootstrap = BOOTSTRAP_SUPER_ADMIN_EMAILS.has(email.toLowerCase())
 
   // Bridge for Google sign-in: an admin-provisioned user has a Firestore doc
   // keyed by their email/password uid. Their Google identity gets a different

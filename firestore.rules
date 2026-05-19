@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ─────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRole == 'super_admin';
+    }
+
+    function chatEnabled() {
+      // NOTE: confirm this path matches your actual config doc.
+      // If your config lives at platformConfig/main, change the path and field accordingly.
+      return get(/databases/$(database)/documents/config/appConfig).data.features.chat == true;
+    }
+
+    function hasProjectAccess(projectId) {
+      let p = get(/databases/$(database)/documents/projects/$(projectId)).data;
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return isSuperAdmin()
+          || request.auth.uid in p.accessKeys
+          || p.accessKeys.hasAny(u.teamIds);
+    }
+
+    function validNewMessage() {
+      return request.resource.data.authorId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.serverUpdatedAt == request.time
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 5000;
+    }
+
+    function validEdit() {
+      return request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.serverUpdatedAt == request.time
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 5000;
+    }
+
+    // ─── Chat subcollection ──────────────────────────────────────────────
+
+    match /projects/{projectId}/chat/{messageId} {
+      allow read: if isSignedIn()
+                  && chatEnabled()
+                  && hasProjectAccess(projectId);
+
+      allow create: if isSignedIn()
+                    && chatEnabled()
+                    && hasProjectAccess(projectId)
+                    && validNewMessage();
+
+      allow update: if isSignedIn()
+                    && chatEnabled()
+                    && hasProjectAccess(projectId)
+                    && request.auth.uid == resource.data.authorId
+                    && validEdit();
+
+      allow delete: if false;
+    }
+
+    // ─── Everything else — unchanged blanket rule ───────────────────────
+    // This preserves your current behavior for users/, projects/, tasks/, etc.
+    // Tighten these later as part of your productization work.
+
+    match /{document=**} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
