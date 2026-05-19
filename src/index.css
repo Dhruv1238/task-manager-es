@@ -91,6 +91,27 @@
   --color-tone-pink-bd: rgb(244 114 182 / 0.45);
 }
 
+/* Slow drifting mesh-gradient orbs for the sign-in screen. */
+@keyframes mesh-drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(8%, 6%, 0) scale(1.08); }
+  66%      { transform: translate3d(-6%, 12%, 0) scale(0.96); }
+}
+@keyframes mesh-drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(-12%, -8%, 0) scale(1.12); }
+}
+@keyframes mesh-drift-c {
+  0%, 100% { transform: translate3d(-50%, 0, 0) scale(1); }
+  50%      { transform: translate3d(-42%, 14%, 0) scale(1.18); }
+}
+.animate-mesh-a { animation: mesh-drift-a 22s ease-in-out infinite; }
+.animate-mesh-b { animation: mesh-drift-b 28s ease-in-out infinite; }
+.animate-mesh-c { animation: mesh-drift-c 18s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-mesh-a, .animate-mesh-b, .animate-mesh-c { animation: none; }
+}
+
 .light {
   /* Canvas tinted with the brand violet so white surfaces have something to lift off. */
   --color-canvas: #f3effa;
