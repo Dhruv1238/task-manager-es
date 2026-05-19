@@ -7,7 +7,7 @@ import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useProjectTasks } from '../hooks/useProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
-import { usePipelineEnabled } from '../contexts/AppConfigContext'
+import { useLeadRoleName, usePipelineEnabled } from '../contexts/AppConfigContext'
 import { uploadAsset } from '../lib/uploadAsset'
 import { addProjectAttachment } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
@@ -161,6 +161,7 @@ export default function ProjectDetail() {
   const { isAdmin, isSuperAdmin, isProjectOwner, isVerticalHead, canUpdateStatus } =
     usePermissions(projectId)
   const pipelineEnabled = usePipelineEnabled()
+  const leadRoleName = useLeadRoleName()
   const { user, profile } = useAuth()
   const attachmentInputRef = useRef<HTMLInputElement>(null)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
@@ -578,7 +579,7 @@ export default function ProjectDetail() {
             {pipelineEnabled && (
               <>
                 <div className="mt-3 flex items-center justify-between">
-                  <span className="text-fg-subtle">Vertical Head</span>
+                  <span className="text-fg-subtle">{leadRoleName}</span>
                   <span className="text-fg-strong">{vh?.displayName ?? '— not allocated —'}</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between">

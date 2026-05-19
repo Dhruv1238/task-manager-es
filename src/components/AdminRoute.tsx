@@ -13,7 +13,7 @@ export default function AdminRoute() {
   }
 
   // Admin surfaces (members, dashboards, team management) are open to both
-  // admins (the VH pool) and super_admins (the tender team).
+  // admins (the lead-role pool) and super_admins (the tender team).
   if (profile?.globalRole !== 'admin' && profile?.globalRole !== 'super_admin') {
     return <Navigate to="/" replace />
   }

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FirebaseError } from 'firebase/app'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLeadRoleName } from '../../contexts/AppConfigContext'
 import {
   createMember,
   generateTempPassword,
@@ -9,12 +10,24 @@ import {
 } from '../../lib/createMember'
 import type { GlobalRole } from '../../types/models'
 
-const ROLE_OPTIONS: { value: GlobalRole; label: string; hint: string }[] = [
-  { value: 'user', label: 'User', hint: 'Default — team members and individual contributors' },
-  { value: 'horizontal_lead', label: 'Horizontal Lead', hint: 'Leads a horizontal team (2D, 3D, VE)' },
-  { value: 'admin', label: 'Admin (VH pool)', hint: 'Eligible to be assigned as a Vertical Head' },
-  { value: 'super_admin', label: 'Super Admin', hint: 'Tender team — creates projects, allocates VHs' },
-]
+function buildRoleOptions(
+  leadRoleName: string,
+): { value: GlobalRole; label: string; hint: string }[] {
+  return [
+    { value: 'user', label: 'User', hint: 'Default — team members and individual contributors' },
+    { value: 'horizontal_lead', label: 'Horizontal Lead', hint: 'Leads a horizontal team' },
+    {
+      value: 'admin',
+      label: `Admin (${leadRoleName} pool)`,
+      hint: `Eligible to be assigned as a ${leadRoleName}`,
+    },
+    {
+      value: 'super_admin',
+      label: 'Super Admin',
+      hint: `Tender team — creates projects, allocates ${leadRoleName}s`,
+    },
+  ]
+}
 
 interface Props {
   open: boolean
@@ -42,6 +55,8 @@ function friendlyError(err: unknown): string {
 
 export default function NewMemberModal({ open, onClose, onCreated }: Props) {
   const { user, profile } = useAuth()
+  const leadRoleName = useLeadRoleName()
+  const roleOptions = useMemo(() => buildRoleOptions(leadRoleName), [leadRoleName])
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [globalRole, setGlobalRole] = useState<GlobalRole>('user')
@@ -196,14 +211,14 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
                 onChange={(e) => setGlobalRole(e.target.value as GlobalRole)}
                 className={inputCls}
               >
-                {ROLE_OPTIONS.map((opt) => (
+                {roleOptions.map((opt) => (
                   <option key={opt.value} value={opt.value} className="bg-overlay">
                     {opt.label}
                   </option>
                 ))}
               </select>
               <p className="text-xs text-fg-subtle">
-                {ROLE_OPTIONS.find((r) => r.value === globalRole)?.hint}
+                {roleOptions.find((r) => r.value === globalRole)?.hint}
               </p>
             </div>
           )}

@@ -1,9 +1,18 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Project, Stage } from '../../types/models'
-import { STAGE_HEADLINE } from '../../types/models'
+import { getStageHeadline } from '../../types/models'
 import { usePermissions } from '../../hooks/usePermissions'
-import { usePipelineEnabled, useStageEnabled } from '../../contexts/AppConfigContext'
+import {
+  useOrgStructure,
+  usePipelineEnabled,
+  useStageEnabled,
+} from '../../contexts/AppConfigContext'
+import { useAllTeams } from '../../hooks/useAllTeams'
 import { isProjectClosed } from '../../lib/projectStatus'
+import {
+  resolveCoordinatorTeam,
+  resolveValidatorTeam,
+} from '../../lib/orgResolver'
 import { STAGE_TONE, displayedPhase } from './stageStyle'
 import AllocateVhModal from './AllocateVhModal'
 import EscalateBackModal from './EscalateBackModal'
@@ -23,7 +32,16 @@ interface Props {
 // Buttons render-only-when-allowed; no greyed-out states.
 export default function StageBanner({ project }: Props) {
   const stage = (project.stage ?? 1) as Stage
-  const phase = displayedPhase(project)
+  const org = useOrgStructure()
+  const { teams } = useAllTeams()
+  const { validatorTeamName, coordinatorTeamName } = useMemo(() => {
+    const projectTeams = teams.filter((t) => t.projectIds?.includes(project.id))
+    return {
+      validatorTeamName: resolveValidatorTeam(projectTeams, org)?.name ?? null,
+      coordinatorTeamName: resolveCoordinatorTeam(projectTeams, org)?.name ?? null,
+    }
+  }, [teams, project.id, org])
+  const phase = displayedPhase(project, org, { validatorTeamName, coordinatorTeamName })
   const tone = STAGE_TONE[phase.toneStage] ?? STAGE_TONE[1]
 
   const perms = usePermissions(project.id)
@@ -191,7 +209,7 @@ export default function StageBanner({ project }: Props) {
     ? `Stage disabled in config — advance manually`
     : closedTone
       ? `Closed — ${project.status?.replace('_', ' ')}`
-      : STAGE_HEADLINE[stage]
+      : getStageHeadline(stage, org, validatorTeamName)
 
   return (
     <div

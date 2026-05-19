@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { useOrgStructure } from '../contexts/AppConfigContext'
 import { useAccessibleProjects } from './useAccessibleProjects'
 import { useAllTeams } from './useAllTeams'
 import { isProjectClosed } from '../lib/projectStatus'
+import { resolveCoordinatorTeam, resolveValidatorTeam } from '../lib/orgResolver'
 import type { Project, Team } from '../types/models'
 
 export interface ActionableProject {
@@ -25,6 +27,7 @@ export function useProjectsAwaitingMyAction(): {
   loading: boolean
 } {
   const { profile } = useAuth()
+  const org = useOrgStructure()
   const { projects, loading: pLoading } = useAccessibleProjects()
   const { teams, loading: tLoading } = useAllTeams()
 
@@ -32,10 +35,14 @@ export function useProjectsAwaitingMyAction(): {
     if (!profile) return []
     const isSuperAdmin = profile.globalRole === 'super_admin'
 
-    function csLeadOf(p: Project): string | null {
+    function validatorLeadOf(p: Project): string | null {
       const projectTeams: Team[] = teams.filter((t) => p.teamIds?.includes(t.id))
-      const cs = projectTeams.find((t) => /client servicing|^cs\b/i.test(t.name))
-      return cs?.leadId ?? null
+      return resolveValidatorTeam(projectTeams, org)?.leadId ?? null
+    }
+
+    function coordinatorLeadOf(p: Project): string | null {
+      const projectTeams: Team[] = teams.filter((t) => p.teamIds?.includes(t.id))
+      return resolveCoordinatorTeam(projectTeams, org)?.leadId ?? null
     }
 
     const out: ActionableProject[] = []
@@ -49,7 +56,7 @@ export function useProjectsAwaitingMyAction(): {
         out.push({
           project: p,
           reason: 'allocate-vh',
-          cta: wasEscalated ? 'Re-allocate after escalation' : 'Allocate to VH',
+          cta: wasEscalated ? 'Re-allocate after escalation' : `Allocate to ${org.leadRoleName}`,
         })
         continue
       }
@@ -66,22 +73,27 @@ export function useProjectsAwaitingMyAction(): {
         out.push({ project: p, reason: 'add-tasks', cta: 'Add tasks for teams' })
         continue
       }
-      // CS lead validates and signs off at stage 7 (was CT in early spec).
-      if (stage === 7 && csLeadOf(p) === profile.uid) {
-        out.push({ project: p, reason: 'sign-off-validation', cta: 'Sign off — ready for VH review' })
+      // Validator team's lead signs off at stage 7. Skipped when the tenant
+      // has no validator role configured (resolver returns null).
+      if (stage === 7 && validatorLeadOf(p) === profile.uid) {
+        out.push({
+          project: p,
+          reason: 'sign-off-validation',
+          cta: `Sign off — ready for ${org.leadRoleName} review`,
+        })
         continue
       }
       if (stage === 8 && p.vhId === profile.uid) {
         out.push({ project: p, reason: 'vh-review', cta: 'Approve or Reject' })
         continue
       }
-      if (stage === 10 && csLeadOf(p) === profile.uid) {
+      if (stage === 10 && coordinatorLeadOf(p) === profile.uid) {
         out.push({ project: p, reason: 'update-status', cta: 'Update status' })
         continue
       }
     }
     return out
-  }, [profile, projects, teams])
+  }, [profile, org, projects, teams])
 
   return { projects: result, loading: pLoading || tLoading }
 }

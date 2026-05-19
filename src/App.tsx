@@ -9,6 +9,7 @@ import AdminMembers from './pages/AdminMembers'
 import AppConfigPage from './pages/AppConfigPage'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import OrgSetupWizard from './pages/OrgSetupWizard'
 import Me from './pages/Me'
 import NotFound from './pages/NotFound'
 import ProjectBoard from './pages/ProjectBoard'
@@ -46,6 +47,7 @@ function App() {
           </Route>
           <Route element={<DevConfigRoute />}>
             <Route path="/admin/config" element={<AppConfigPage />} />
+            <Route path="/admin/setup" element={<OrgSetupWizard />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>

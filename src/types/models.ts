@@ -1,4 +1,4 @@
-import type { Timestamp } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 
 export type GlobalRole = 'super_admin' | 'admin' | 'horizontal_lead' | 'user'
 
@@ -22,11 +22,21 @@ export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'blocke
 
 export type TaskPriority = 'low' | 'medium' | 'high'
 
+/**
+ * @deprecated Phase 1 generalizes work types to a tenant-configured string[]
+ * on Team.workTypes. The enum is retained for legacy Task.workType reads and
+ * the seedTender.ts bootstrap; remove in phase 2.
+ */
 export type WorkType = 'CS' | 'CT' | '2D' | '3D' | 'VE'
 
 // Tender workflow stage.
 // Stage 5 = eligibility review (super admin gates the VH's acceptance).
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+
+// Org-structure role a team can play. Resolved per-tenant via /config/orgStructure
+// and read from team.teamRoleId. Null means uncategorized — the team participates
+// in v1 surfaces but not in role-specific workflow gates.
+export type TeamRoleId = 'coordinator' | 'validator' | 'specialist'
 
 export type StagePriority = 'low' | 'medium' | 'high'
 
@@ -55,9 +65,23 @@ export interface Team {
   projectIds: string[]
   createdAt: Timestamp
   createdBy: string
-  // Tender additions:
+  /**
+   * @deprecated Phase 1 replaces `kind` with `teamRoleId` resolved through
+   * /config/orgStructure. Retained on existing docs for the migration window;
+   * application code stops reading it after phase 1 ships.
+   */
   kind?: 'department' | 'horizontal'
+  /**
+   * @deprecated Phase 1 generalizes the single workType into workTypes: string[].
+   * Backfilled by the migration; new writes should use workTypes.
+   */
   workType?: WorkType
+  // Phase 1: org-structure role this team plays. Null = uncategorized.
+  // Resolved by src/lib/orgResolver.ts together with /config/orgStructure.
+  teamRoleId?: TeamRoleId | null
+  // Phase 1: work types this team specializes in. Empty unless teamRoleId === 'specialist'.
+  // Free-form tenant-defined strings (e.g. '2D', '3D', 'Video', 'Copy').
+  workTypes?: string[]
 }
 
 export interface EscalationPayload {
@@ -187,15 +211,17 @@ export interface Comment {
 }
 
 // Stage reference card (delta §4) — user-facing labels (no internal jargon).
+// Kept generic so they stay tenant-correct without interpolation. The longer
+// banner headline/hint (with the configured lead-role name) lives below.
 export const STAGE_NAMES: Record<Stage, string> = {
   1: 'Project creation',
-  2: 'Awaiting VH',
+  2: 'Awaiting lead',
   3: 'Escalation',
   4: 'Accepted',
   5: 'Eligibility review',
   6: 'Task setup',
   7: 'In execution',
-  8: 'VH review',
+  8: 'Lead review',
   9: 'Rework',
   10: 'Sent to client',
 }
@@ -203,7 +229,7 @@ export const STAGE_NAMES: Record<Stage, string> = {
 // Compact one-word labels for tight spaces (chart axes, etc.)
 export const STAGE_SHORT_NAMES: Record<Stage, string> = {
   1: 'Created',
-  2: 'Awaiting VH',
+  2: 'Awaiting',
   3: 'Escalation',
   4: 'Accepted',
   5: 'Eligibility',
@@ -214,18 +240,38 @@ export const STAGE_SHORT_NAMES: Record<Stage, string> = {
   10: 'Sent',
 }
 
-// Friendly status helper for the stage banner.
-export const STAGE_HEADLINE: Record<Stage, string> = {
-  1: 'Awaiting allocation to a Vertical Head',
-  2: 'Awaiting VH decision',
-  3: 'Escalated — back to allocation queue',
-  4: 'Accepted',
-  5: 'Awaiting super admin eligibility review',
-  6: 'Add tasks for each team to start execution',
-  7: 'Teams executing',
-  8: 'VH reviewing with CS',
-  9: 'Reworking after VH feedback',
-  10: 'Pitch sent to client',
+// Stage banner headline. Interpolates the tenant's leadRoleName for stages
+// that reference the project lead, and the validator team name for stage 8
+// when it's resolvable on the project.
+export function getStageHeadline(
+  stage: Stage,
+  org: OrgStructure,
+  validatorTeamName?: string | null,
+): string {
+  switch (stage) {
+    case 1:
+      return `Awaiting allocation to a ${org.leadRoleName}`
+    case 2:
+      return `Awaiting ${org.leadRoleName} decision`
+    case 3:
+      return 'Escalated — back to allocation queue'
+    case 4:
+      return 'Accepted'
+    case 5:
+      return 'Awaiting super admin eligibility review'
+    case 6:
+      return 'Add tasks for each team to start execution'
+    case 7:
+      return 'Teams executing'
+    case 8:
+      return validatorTeamName
+        ? `${org.leadRoleName} reviewing with ${validatorTeamName}`
+        : `${org.leadRoleName} reviewing the deliverable`
+    case 9:
+      return `Reworking after ${org.leadRoleName} feedback`
+    case 10:
+      return 'Pitch sent to client'
+  }
 }
 
 // Task template config doc shape (Firestore at /config/taskTemplates).
@@ -258,6 +304,66 @@ export interface AppConfig {
   }
 }
 
+// Org-structure singleton doc shape (Firestore at /config/orgStructure).
+// Decouples tenant org shape from code. Written by the setup wizard and the
+// /admin/config Organization-structure section. Read at boot via the same
+// 24h localStorage TTL pattern as AppConfig — see AppConfigContext.tsx.
+export interface OrgStructure {
+  version: number
+  updatedAt: Timestamp
+  updatedBy: string
+
+  // Display string for the person who runs projects (e.g. 'Vertical Head',
+  // 'Account Manager'). Used in UI labels only, never in conditional logic.
+  leadRoleName: string
+
+  // Which team roles exist in this org. All three optional.
+  teamRoles: {
+    hasCoordinator: boolean
+    hasValidator: boolean
+    hasSpecialist: boolean
+  }
+
+  // Tenant-defined work types specialist teams handle.
+  // Empty when teamRoles.hasSpecialist is false.
+  workTypes: string[]
+
+  // Phase 1 only supports 'manual'. Pool/Auto land in phase 3.
+  allotment: {
+    mode: 'manual'
+  }
+
+  // First-time setup completion. Drives the /admin/setup auto-launch.
+  setupCompleted: boolean
+}
+
+// Default used when /config/orgStructure is missing AND no localStorage
+// snapshot exists. Intentionally minimal (not tender-shaped) so a fresh tenant
+// gets owner-only behavior until they walk through the wizard.
+export const DEFAULT_ORG_STRUCTURE: OrgStructure = {
+  version: 0,
+  updatedAt: Timestamp.fromMillis(0),
+  updatedBy: '',
+  leadRoleName: 'Project Lead',
+  teamRoles: { hasCoordinator: false, hasValidator: false, hasSpecialist: false },
+  workTypes: [],
+  allotment: { mode: 'manual' },
+  setupCompleted: false,
+}
+
+// Suggestion chips for the wizard work-types step and the /admin/config
+// Work-types editor. Tenants can add custom values; these are just primers.
+export const WORK_TYPE_SUGGESTIONS: readonly string[] = [
+  '2D Design',
+  '3D Design',
+  'Video Editing',
+  'Motion Graphics',
+  'Copywriting',
+  'Set Design',
+  'AV',
+  'Photography',
+]
+
 // --- Audit trail (forensic-only; not surfaced in UI) -------------------------
 
 export type AuditAction =
@@ -284,6 +390,9 @@ export type AuditAction =
   | 'team.member_added'
   | 'team.member_removed'
   | 'team.lead_changed'
+  // Org-structure (phase 1)
+  | 'org_structure.setup_completed'
+  | 'org_structure.updated'
 
 export interface ChatAttachment {
   url: string

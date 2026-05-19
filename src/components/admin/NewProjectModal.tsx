@@ -6,7 +6,7 @@ import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import FileBadge, { formatFileSize } from '../ui/FileBadge'
 import { useAuth } from '../../contexts/AuthContext'
-import { usePipelineEnabled } from '../../contexts/AppConfigContext'
+import { useLeadRoleName, usePipelineEnabled } from '../../contexts/AppConfigContext'
 import { addProject } from '../../lib/firestore'
 import { uploadAsset } from '../../lib/uploadAsset'
 import type { Attachment } from '../../types/models'
@@ -26,6 +26,7 @@ function friendlyError(err: unknown): string {
 export default function NewProjectModal({ open, onClose }: Props) {
   const { user, profile } = useAuth()
   const pipelineEnabled = usePipelineEnabled()
+  const leadRoleName = useLeadRoleName()
   const navigate = useNavigate()
 
   const [title, setTitle] = useState('')
@@ -141,7 +142,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
       title={pipelineEnabled ? 'New tender' : 'New project'}
       description={
         pipelineEnabled
-          ? "Lands at stage 1. You'll allocate a Vertical Head once it's created."
+          ? `Lands at stage 1. You'll allocate a ${leadRoleName} once it's created.`
           : 'Tracked by status. Assign teams and tasks after it’s created.'
       }
       size="lg"

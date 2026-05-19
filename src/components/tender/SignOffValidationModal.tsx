@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useOrgStructure } from '../../contexts/AppConfigContext'
+import { useAllTeams } from '../../hooks/useAllTeams'
 import { useProjectTasks } from '../../hooks/useProjectTasks'
+import { resolveValidatorTeam } from '../../lib/orgResolver'
 import { transitionStage } from '../../lib/firestore'
 import type { Project, TaskStatus } from '../../types/models'
 
@@ -19,14 +22,21 @@ const STATUS_TONE: Record<TaskStatus, string> = {
   blocked: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg',
 }
 
-// CS lead signs off project-level: stage 7 → 8.
+// Validator team's lead signs off project-level: stage 7 → 8.
 // Soft-gate: not hard-blocked on all tasks done — judgment call.
 export default function SignOffValidationModal({ open, onClose, project }: Props) {
   const { user, profile } = useAuth()
+  const org = useOrgStructure()
+  const { teams } = useAllTeams()
   const { tasks } = useProjectTasks(project.id)
   const [confirmed, setConfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const validatorTeamName = useMemo(() => {
+    const projectTeams = teams.filter((t) => t.projectIds?.includes(project.id))
+    return resolveValidatorTeam(projectTeams, org)?.name ?? null
+  }, [teams, project.id, org])
 
   async function handleSubmit() {
     if (!user || !confirmed) return
@@ -54,8 +64,12 @@ export default function SignOffValidationModal({ open, onClose, project }: Props
     <Modal
       open={open}
       onClose={onClose}
-      title="Sign off — ready for VH review"
-      description="Confirms CS has validated everything. Advances the project to VH review."
+      title={`Sign off — ready for ${org.leadRoleName} review`}
+      description={
+        validatorTeamName
+          ? `Confirms ${validatorTeamName} has validated everything. Advances the project to ${org.leadRoleName} review.`
+          : `Confirms validation is complete. Advances the project to ${org.leadRoleName} review.`
+      }
       size="lg"
       closeOnBackdrop={!submitting}
     >
@@ -94,7 +108,8 @@ export default function SignOffValidationModal({ open, onClose, project }: Props
             className="mt-0.5 h-4 w-4 rounded border-line-strong bg-fill-4 accent-purple-500"
           />
           <span>
-            I confirm CS has validated all deliverables and the project is ready for VH review.
+            I confirm {validatorTeamName ?? 'the validation team'} has validated all deliverables
+            and the project is ready for {org.leadRoleName} review.
           </span>
         </label>
 

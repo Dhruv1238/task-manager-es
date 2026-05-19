@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useSetupCompleted } from '../contexts/AppConfigContext'
+import { isDevConfigUser } from '../components/DevConfigRoute'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import ProjectPicker from '../components/ui/ProjectPicker'
 
@@ -93,6 +95,13 @@ function BoardViewCard() {
 
 export default function Home() {
   const { profile } = useAuth()
+  const setupCompleted = useSetupCompleted()
+  // First-time auto-launch: gated dev-config users land on the setup wizard
+  // until /config/orgStructure has setupCompleted: true. Other users see the
+  // app in default-minimal state regardless of setup state.
+  if (!setupCompleted && isDevConfigUser(profile)) {
+    return <Navigate to="/admin/setup" replace />
+  }
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
   const firstName = profile?.displayName?.split(/\s+/)[0] ?? ''
 

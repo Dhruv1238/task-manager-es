@@ -9,9 +9,11 @@ import {
 } from 'react'
 import { doc, getDoc, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import type { AppConfig, Stage } from '../types/models'
+import type { AppConfig, OrgStructure, Stage } from '../types/models'
+import { DEFAULT_ORG_STRUCTURE } from '../types/models'
 
 const STORAGE_KEY = 'appConfig:v1'
+const ORG_STORAGE_KEY = 'orgStructure:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 const ALL_STAGES: Stage[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -91,22 +93,85 @@ export function getAppConfigSnapshot(): AppConfig {
   return cached?.config ?? DEFAULT_APP_CONFIG
 }
 
+// ─── Org structure: parallel cache, independent storage key ───────────────
+// Mirrors the AppConfig cache pattern above. Lives at /config/orgStructure
+// and is read by every authenticated client. Tenants configure their org
+// shape (lead role name, team roles, work types, allotment) here; the rest
+// of the code reads it via the hooks below and the lib/orgResolver helpers.
+
+interface CachedOrgEntry {
+  org: OrgStructure
+  fetchedAt: number
+}
+
+interface SerializedOrgStructure extends Omit<OrgStructure, 'updatedAt'> {
+  updatedAt: SerializedTimestamp
+}
+
+function serializeOrg(o: OrgStructure): SerializedOrgStructure {
+  return {
+    ...o,
+    updatedAt: { seconds: o.updatedAt.seconds, nanoseconds: o.updatedAt.nanoseconds },
+  }
+}
+
+function hydrateOrg(s: SerializedOrgStructure): OrgStructure {
+  return {
+    ...s,
+    updatedAt: new Timestamp(s.updatedAt.seconds, s.updatedAt.nanoseconds),
+  }
+}
+
+function readOrgCache(): CachedOrgEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(ORG_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { org: SerializedOrgStructure; fetchedAt: number }
+    if (!parsed?.org || typeof parsed.fetchedAt !== 'number') return null
+    return { org: hydrateOrg(parsed.org), fetchedAt: parsed.fetchedAt }
+  } catch {
+    return null
+  }
+}
+
+function writeOrgCache(org: OrgStructure) {
+  if (typeof window === 'undefined') return
+  try {
+    const payload = { org: serializeOrg(org), fetchedAt: Date.now() }
+    window.localStorage.setItem(ORG_STORAGE_KEY, JSON.stringify(payload))
+  } catch {
+    // ignore quota / private-mode errors
+  }
+}
+
+export function getOrgStructureSnapshot(): OrgStructure {
+  const cached = readOrgCache()
+  return cached?.org ?? DEFAULT_ORG_STRUCTURE
+}
+
 interface AppConfigContextValue {
   config: AppConfig
+  orgStructure: OrgStructure
   // True while the initial Firestore refresh is in flight. UI generally doesn't
   // need to wait for this — the cached/default value is rendered synchronously.
   refreshing: boolean
   // Forces a Firestore fetch regardless of TTL. Used by the admin screen.
   refresh: () => Promise<void>
+  refreshOrg: () => Promise<void>
   // Used by the admin screen after a successful save to update other open tabs
   // and the current tab's render without waiting on a server round-trip.
   setConfigOptimistic: (next: AppConfig) => void
+  setOrgStructureOptimistic: (next: OrgStructure) => void
 }
 
 const AppConfigContext = createContext<AppConfigContextValue | undefined>(undefined)
 
 export function AppConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AppConfig>(() => readCache()?.config ?? DEFAULT_APP_CONFIG)
+  const [orgStructure, setOrgStructure] = useState<OrgStructure>(
+    () => readOrgCache()?.org ?? DEFAULT_ORG_STRUCTURE,
+  )
   const [refreshing, setRefreshing] = useState<boolean>(false)
 
   const refresh = useCallback(async () => {
@@ -128,23 +193,43 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Boot: refresh from Firestore if cache is missing or older than TTL.
+  const refreshOrg = useCallback(async () => {
+    const snap = await getDoc(doc(db, 'config', 'orgStructure'))
+    if (snap.exists()) {
+      const next = snap.data() as OrgStructure
+      setOrgStructure(next)
+      writeOrgCache(next)
+    } else {
+      writeOrgCache(DEFAULT_ORG_STRUCTURE)
+    }
+  }, [])
+
+  // Boot: refresh both docs if their respective caches are missing or stale.
   useEffect(() => {
     const cached = readCache()
-    const stale = !cached || Date.now() - cached.fetchedAt > TTL_MS
-    if (stale) {
+    if (!cached || Date.now() - cached.fetchedAt > TTL_MS) {
       void refresh()
     }
-  }, [refresh])
+    const cachedOrg = readOrgCache()
+    if (!cachedOrg || Date.now() - cachedOrg.fetchedAt > TTL_MS) {
+      void refreshOrg()
+    }
+  }, [refresh, refreshOrg])
 
-  // Cross-tab sync: when another tab writes the cache (typically the admin tab
-  // after a save), update our copy without making any Firestore reads.
+  // Cross-tab sync: handle both keys in one listener. The admin tab writes
+  // the cache after a save; every other open tab catches the storage event
+  // and updates its own state without making a Firestore read.
   useEffect(() => {
     if (typeof window === 'undefined') return
     function handler(e: StorageEvent) {
-      if (e.key !== STORAGE_KEY || !e.newValue) return
-      const cached = readCache()
-      if (cached) setConfig(cached.config)
+      if (!e.newValue) return
+      if (e.key === STORAGE_KEY) {
+        const cached = readCache()
+        if (cached) setConfig(cached.config)
+      } else if (e.key === ORG_STORAGE_KEY) {
+        const cachedOrg = readOrgCache()
+        if (cachedOrg) setOrgStructure(cachedOrg.org)
+      }
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)
@@ -155,9 +240,22 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     writeCache(next)
   }, [])
 
+  const setOrgStructureOptimistic = useCallback((next: OrgStructure) => {
+    setOrgStructure(next)
+    writeOrgCache(next)
+  }, [])
+
   const value = useMemo<AppConfigContextValue>(
-    () => ({ config, refreshing, refresh, setConfigOptimistic }),
-    [config, refreshing, refresh, setConfigOptimistic],
+    () => ({
+      config,
+      orgStructure,
+      refreshing,
+      refresh,
+      refreshOrg,
+      setConfigOptimistic,
+      setOrgStructureOptimistic,
+    }),
+    [config, orgStructure, refreshing, refresh, refreshOrg, setConfigOptimistic, setOrgStructureOptimistic],
   )
 
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>
@@ -215,4 +313,54 @@ export function useAppConfigLive(): { config: AppConfig | null; loading: boolean
   }, [])
 
   return { config, loading }
+}
+
+// ─── Org structure hooks ──────────────────────────────────────────────────
+
+export function useOrgStructure(): OrgStructure {
+  return useAppConfigContext().orgStructure
+}
+
+export function useLeadRoleName(): string {
+  return useAppConfigContext().orgStructure.leadRoleName
+}
+
+export function useHasCoordinator(): boolean {
+  return useAppConfigContext().orgStructure.teamRoles.hasCoordinator
+}
+
+export function useHasValidator(): boolean {
+  return useAppConfigContext().orgStructure.teamRoles.hasValidator
+}
+
+export function useHasSpecialist(): boolean {
+  return useAppConfigContext().orgStructure.teamRoles.hasSpecialist
+}
+
+export function useWorkTypes(): string[] {
+  return useAppConfigContext().orgStructure.workTypes
+}
+
+export function useSetupCompleted(): boolean {
+  return useAppConfigContext().orgStructure.setupCompleted
+}
+
+// Live-onSnapshot variant of useOrgStructure for the admin screen only.
+// Mounts a listener so multi-editor edits propagate in realtime.
+export function useOrgStructureLive(): { org: OrgStructure | null; loading: boolean } {
+  const [org, setOrg] = useState<OrgStructure | null>(null)
+  const [loading, setLoading] = useState<boolean>(true)
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'config', 'orgStructure'), (snap) => {
+      if (snap.exists()) {
+        setOrg(snap.data() as OrgStructure)
+      } else {
+        setOrg(null)
+      }
+      setLoading(false)
+    })
+  }, [])
+
+  return { org, loading }
 }

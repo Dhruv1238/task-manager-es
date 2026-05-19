@@ -8,6 +8,7 @@ import {
   useAppConfigLive,
 } from '../contexts/AppConfigContext'
 import { STAGE_NAMES, type AppConfig, type Stage } from '../types/models'
+import OrgStructureSection from '../components/admin/OrgStructureSection'
 
 const ALL_STAGES: Stage[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 // Stage 1 (Project creation) and Stage 10 (Sent to client) are the pipeline's
@@ -186,6 +187,8 @@ export default function AppConfigPage() {
           the config here when you ship a behavior change to either client.
         </p>
       </div>
+
+      <OrgStructureSection />
 
       <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Project pipeline</h2>

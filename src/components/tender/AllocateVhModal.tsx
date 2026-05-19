@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLeadRoleName } from '../../contexts/AppConfigContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { transitionStage } from '../../lib/firestore'
 import type { Project } from '../../types/models'
@@ -12,15 +13,17 @@ interface Props {
   project: Project
 }
 
-// Flow 14 — Super admin allocates project to a VH (stage 1 → 2).
+// Flow 14 — Super admin allocates project to the lead-role user (stage 1 → 2).
+// Phase 1: the lead-role pool stays hardcoded to globalRole === 'admin' (made
+// configurable in phase 2). Only the user-facing label changes here.
 export default function AllocateVhModal({ open, onClose, project }: Props) {
   const { user, profile } = useAuth()
+  const leadRoleName = useLeadRoleName()
   const { users } = useAllUsers()
   const [vhId, setVhId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // The VH pool is users with the 'admin' global role (per delta §2.1).
   const candidateUids = useMemo(
     () => users.filter((u) => u.globalRole === 'admin').map((u) => u.uid),
     [users],
@@ -60,8 +63,8 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Allocate to Vertical Head"
-      description="Pick the Admin who will run this tender's workflow."
+      title={`Allocate to ${leadRoleName}`}
+      description={`Pick the Admin who will run this tender's workflow.`}
       closeOnBackdrop={!submitting}
     >
       <form
@@ -73,7 +76,7 @@ export default function AllocateVhModal({ open, onClose, project }: Props) {
       >
         <div className="space-y-1.5">
           <label htmlFor="vh-pick" className="text-sm font-medium text-fg-muted">
-            Vertical Head
+            {leadRoleName}
           </label>
           <UserPicker
             id="vh-pick"

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import { useAuth } from '../../contexts/AuthContext'
+import { useOrgStructure } from '../../contexts/AppConfigContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { useAllTeams } from '../../hooks/useAllTeams'
+import { resolveCoordinatorTeam } from '../../lib/orgResolver'
 import { transitionTaskToReview } from '../../lib/firestore'
 import type { Task } from '../../types/models'
 
@@ -13,11 +15,13 @@ interface Props {
   task: Task
 }
 
-// Submit a task to review. Reviewer suggestion is the project's CS lead by default
-// (CS validates execution); a searchable picker (same UserPicker used elsewhere)
-// lets the user pick anyone on the project including other CS members.
+// Submit a task to review. Reviewer suggestion is the coordinator team's lead
+// by default (the team that owns client-facing validation); a searchable picker
+// lets the user pick anyone on the project. Falls back to "pick a reviewer"
+// when the tenant hasn't configured a coordinator role.
 export default function SubmitForReviewModal({ open, onClose, task }: Props) {
   const { user, profile } = useAuth()
+  const org = useOrgStructure()
   const { users } = useAllUsers()
   const { teams } = useAllTeams()
   const [reviewerId, setReviewerId] = useState<string | null>(null)
@@ -25,12 +29,13 @@ export default function SubmitForReviewModal({ open, onClose, task }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // CS lead of this project — used as the default-suggested reviewer.
-  const csLeadId = useMemo(() => {
+  // Coordinator team's lead — default-suggested reviewer. Null when the
+  // tenant hasn't configured a coordinator role.
+  const coordinatorLead = useMemo(() => {
     const projectTeams = teams.filter((t) => t.projectIds?.includes(task.projectId))
-    const cs = projectTeams.find((t) => /client servicing|^cs\b/i.test(t.name))
-    return cs?.leadId ?? null
-  }, [teams, task.projectId])
+    return resolveCoordinatorTeam(projectTeams, org)
+  }, [teams, task.projectId, org])
+  const coordinatorLeadId = coordinatorLead?.leadId ?? null
 
   // All members of teams attached to this project — the eligible reviewer pool.
   // Excludes the current user (you can't review your own task).
@@ -46,13 +51,13 @@ export default function SubmitForReviewModal({ open, onClose, task }: Props) {
 
   useEffect(() => {
     if (open) {
-      // Pre-select the CS lead, but never pre-select yourself.
-      setReviewerId(csLeadId && csLeadId !== user?.uid ? csLeadId : null)
+      // Pre-select the coordinator lead, but never pre-select yourself.
+      setReviewerId(coordinatorLeadId && coordinatorLeadId !== user?.uid ? coordinatorLeadId : null)
       setNotes('')
       setError(null)
       setSubmitting(false)
     }
-  }, [open, csLeadId, user?.uid])
+  }, [open, coordinatorLeadId, user?.uid])
 
   async function handleSubmit() {
     if (!user || !profile) return
@@ -95,8 +100,8 @@ export default function SubmitForReviewModal({ open, onClose, task }: Props) {
       onClose={onClose}
       title="Submit for review"
       description={
-        csLeadId
-          ? "We've suggested the project's CS lead — change them if someone else should validate."
+        coordinatorLead
+          ? `We've suggested the lead of ${coordinatorLead.name} — change them if someone else should validate.`
           : 'Pick the reviewer who should validate this work.'
       }
       closeOnBackdrop={!submitting}

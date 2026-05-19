@@ -1,4 +1,4 @@
-import type { Project, Stage } from '../../types/models'
+import type { OrgStructure, Project, Stage } from '../../types/models'
 import { STAGE_NAMES, STAGE_SHORT_NAMES } from '../../types/models'
 
 // Visual treatment for each stage. Each entry references the semantic pill
@@ -61,18 +61,43 @@ export const STAGE_TONE: Record<Stage, { pill: string; ring: string; dot: string
   },
 }
 
-// Friendly per-user-role hint text shown in the banner when no action button is rendered.
-export const STAGE_HINT: Record<Stage, string> = {
-  1: 'Waiting on the super admin to allocate a Vertical Head.',
-  2: 'Waiting on the assigned Vertical Head to accept or escalate.',
-  3: 'Escalated — bouncing back to allocation.',
-  4: 'Accepted. Moving to task setup.',
-  5: "Super admin is reviewing eligibility based on the VH's assessment.",
-  6: 'The VH is setting up tasks for each team.',
-  7: 'Teams are executing.',
-  8: 'The VH is reviewing the deliverable with CS.',
-  9: 'Reworking after VH feedback.',
-  10: 'Sent to client. CS will record the outcome.',
+// Friendly per-user-role hint text shown in the banner when no action button
+// is rendered. Interpolates the tenant's lead-role name and (where resolvable)
+// the validator/coordinator team names.
+export function getStageHint(
+  stage: Stage,
+  org: OrgStructure,
+  opts: { validatorTeamName?: string | null; coordinatorTeamName?: string | null } = {},
+): string {
+  const lead = org.leadRoleName
+  const validator = opts.validatorTeamName
+  const coordinator = opts.coordinatorTeamName
+  switch (stage) {
+    case 1:
+      return `Waiting on the super admin to allocate a ${lead}.`
+    case 2:
+      return `Waiting on the assigned ${lead} to accept or escalate.`
+    case 3:
+      return 'Escalated — bouncing back to allocation.'
+    case 4:
+      return 'Accepted. Moving to task setup.'
+    case 5:
+      return `Super admin is reviewing eligibility based on the ${lead}'s assessment.`
+    case 6:
+      return `The ${lead} is setting up tasks for each team.`
+    case 7:
+      return 'Teams are executing.'
+    case 8:
+      return validator
+        ? `The ${lead} is reviewing the deliverable with ${validator}.`
+        : `The ${lead} is reviewing the deliverable.`
+    case 9:
+      return `Reworking after ${lead} feedback.`
+    case 10:
+      return coordinator
+        ? `Sent to client. ${coordinator} will record the outcome.`
+        : 'Sent to client. The coordinator will record the outcome.'
+  }
 }
 
 // Single source of truth for "what phase chip should we render for this project".
@@ -89,7 +114,11 @@ export interface DisplayedPhase {
   isEscalated: boolean
 }
 
-export function displayedPhase(project: Project): DisplayedPhase {
+export function displayedPhase(
+  project: Project,
+  org: OrgStructure,
+  opts: { validatorTeamName?: string | null; coordinatorTeamName?: string | null } = {},
+): DisplayedPhase {
   const stage = (project.stage ?? 1) as Stage
   const escalated = stage === 1 && (project.escalationCount ?? 0) > 0
   if (escalated) {
@@ -97,7 +126,7 @@ export function displayedPhase(project: Project): DisplayedPhase {
       toneStage: 3,
       label: 'Escalated — needs re-allocation',
       shortLabel: 'Escalated',
-      hint: 'Sent back by the previous VH. Allocate to a VH to continue.',
+      hint: `Sent back by the previous ${org.leadRoleName}. Allocate to a ${org.leadRoleName} to continue.`,
       isEscalated: true,
     }
   }
@@ -105,7 +134,7 @@ export function displayedPhase(project: Project): DisplayedPhase {
     toneStage: stage,
     label: STAGE_NAMES[stage],
     shortLabel: STAGE_SHORT_NAMES[stage],
-    hint: STAGE_HINT[stage],
+    hint: getStageHint(stage, org, opts),
     isEscalated: false,
   }
 }

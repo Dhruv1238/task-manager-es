@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   collection,
   limit,
@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
+import { useLeadRoleName } from '../contexts/AppConfigContext'
 import { setUserRole } from '../lib/firestore'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import type { GlobalRole, User } from '../types/models'
@@ -20,12 +21,14 @@ import SearchInput from '../components/ui/SearchInput'
 
 const PAGE_SIZE = 25
 
-const ROLE_OPTIONS: { value: GlobalRole; label: string }[] = [
-  { value: 'super_admin', label: 'Super Admin' },
-  { value: 'admin', label: 'Admin (VH pool)' },
-  { value: 'horizontal_lead', label: 'Horizontal Lead' },
-  { value: 'user', label: 'User' },
-]
+function buildRoleOptions(leadRoleName: string): { value: GlobalRole; label: string }[] {
+  return [
+    { value: 'super_admin', label: 'Super Admin' },
+    { value: 'admin', label: `Admin (${leadRoleName} pool)` },
+    { value: 'horizontal_lead', label: 'Horizontal Lead' },
+    { value: 'user', label: 'User' },
+  ]
+}
 
 function rolePillClass(role: GlobalRole): string {
   switch (role) {
@@ -38,10 +41,6 @@ function rolePillClass(role: GlobalRole): string {
     default:
       return 'border-line bg-fill-2 text-fg-muted'
   }
-}
-
-function roleLabel(role: GlobalRole): string {
-  return ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role
 }
 
 function initials(u: User): string {
@@ -59,6 +58,12 @@ function formatDate(ts: Timestamp | undefined): string {
 
 export default function AdminMembers() {
   const { user: firebaseUser, profile } = useAuth()
+  const leadRoleName = useLeadRoleName()
+  const roleOptions = useMemo(() => buildRoleOptions(leadRoleName), [leadRoleName])
+  const roleLabel = useCallback(
+    (role: GlobalRole): string => roleOptions.find((r) => r.value === role)?.label ?? role,
+    [roleOptions],
+  )
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
@@ -286,7 +291,7 @@ export default function AdminMembers() {
                                 title="Change role"
                                 className="appearance-none rounded-md border border-line bg-fill-2 px-2.5 py-1.5 pr-7 text-xs font-medium text-fg-muted outline-none transition hover:bg-fill-4 focus:border-brand-edge focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                {ROLE_OPTIONS.map((opt) => (
+                                {roleOptions.map((opt) => (
                                   <option key={opt.value} value={opt.value} className="bg-overlay">
                                     {opt.label}
                                   </option>

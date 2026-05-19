@@ -64,6 +64,17 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ─── /config/orgStructure ────────────────────────────────────────────
+    // Tenant-configured org shape (lead-role name, team-role toggles, work
+    // types, allotment, setupCompleted). Phase 1: any signed-in user can
+    // read (every client needs the labels and resolver inputs at boot);
+    // only super_admins can write — via the setup wizard or /admin/config.
+
+    match /config/orgStructure {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // ─── Everything else — unchanged blanket rule ───────────────────────
     // This preserves your current behavior for users/, projects/, tasks/, etc.
     // Tighten these later as part of your productization work.

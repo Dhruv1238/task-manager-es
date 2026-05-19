@@ -163,6 +163,43 @@ export default function TeamDetail() {
         </div>
       </div>
 
+      {!team.leadId && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-tone-warn-bd bg-tone-warn-bg p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-tone-warn-bd/40 text-tone-warn-fg">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              </svg>
+            </span>
+            <div>
+              <div className="text-sm font-medium text-tone-warn-fg">No team lead assigned</div>
+              <div className="mt-0.5 text-xs text-tone-warn-fg/80">
+                {canManageRoster
+                  ? team.memberIds.length === 0
+                    ? 'Add at least one member, then promote them to team lead.'
+                    : 'Promote a member to team lead from the list below.'
+                  : 'An admin needs to assign someone before this team can own work.'}
+              </div>
+            </div>
+          </div>
+          {canManageRoster && team.memberIds.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setAddOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-tone-warn-bd bg-canvas px-3 py-1.5 text-xs font-medium text-tone-warn-fg transition hover:bg-fill-2"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add member
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="mb-6 inline-flex items-center gap-1 rounded-lg border border-line bg-card p-0.5">
         {(['overview', 'analytics'] as const).map((t) => (
           <button

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import ChartCard from './ChartCard'
 import { STAGE_TONE, displayedPhase } from '../tender/stageStyle'
 import { isProjectLive } from '../../lib/projectStatus'
+import { useOrgStructure } from '../../contexts/AppConfigContext'
 import type { Project } from '../../types/models'
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 
 // Tenders within 7 days of submission and not yet delivered (delta §6.5).
 export default function AtRiskBySubmission({ projects }: Props) {
+  const org = useOrgStructure()
   const items = useMemo(() => {
     const now = Date.now()
     const horizon = 7 * 24 * 3600 * 1000
@@ -35,7 +37,7 @@ export default function AtRiskBySubmission({ projects }: Props) {
     >
       <ul className="divide-y divide-line-subtle overflow-y-auto pr-1">
         {items.map(({ p, days }) => {
-          const phase = displayedPhase(p)
+          const phase = displayedPhase(p, org)
           const tone = STAGE_TONE[phase.toneStage]
           const overdue = days < 0
           return (

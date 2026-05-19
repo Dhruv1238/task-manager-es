@@ -1,8 +1,12 @@
 import type { Project } from '../../types/models'
+import { useOrgStructure } from '../../contexts/AppConfigContext'
 import { STAGE_TONE, displayedPhase } from '../tender/stageStyle'
 
 export default function StagePill({ project }: { project: Project }) {
-  const phase = displayedPhase(project)
+  const org = useOrgStructure()
+  // Pill labels are generic per STAGE_NAMES/SHORT_NAMES; we don't resolve team
+  // names here — too many small chips on the projects list to justify the cost.
+  const phase = displayedPhase(project, org)
   const tone = STAGE_TONE[phase.toneStage] ?? STAGE_TONE[1]
   return (
     <span

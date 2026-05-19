@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
+import { useOrgStructure } from '../contexts/AppConfigContext'
 import { useMyTasks } from '../hooks/useMyTasks'
 import { useMyLedTeamTasks } from '../hooks/useMyLedTeamTasks'
 import { useMyReviewQueue } from '../hooks/useMyReviewQueue'
@@ -249,6 +250,7 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
 
 function ProjectsAwaitingActionSection() {
   const { projects } = useProjectsAwaitingMyAction()
+  const org = useOrgStructure()
   if (projects.length === 0) return null
   return (
     <section className="mb-10">
@@ -262,7 +264,7 @@ function ProjectsAwaitingActionSection() {
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">
         {projects.map(({ project, cta }) => {
-          const phase = displayedPhase(project)
+          const phase = displayedPhase(project, org)
           const tone = STAGE_TONE[phase.toneStage]
           // When a project comes back via escalation, the whole card should
           // visually communicate urgency — red border + red CTA, not the default amber.

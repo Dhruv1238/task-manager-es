@@ -2,15 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { usePipelineEnabled } from '../contexts/AppConfigContext'
+import { usePipelineEnabled, useOrgStructure } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
+import { resolveCoordinatorTeam, resolveValidatorTeam } from '../lib/orgResolver'
 import type { Project, Team } from '../types/models'
 
 export interface Permissions {
   // Global role flags
   isSuperAdmin: boolean
   isAdmin: boolean // admin OR super_admin (back-compat: gates v1 admin surfaces)
-  isAdminOnly: boolean // strictly admin (the VH pool)
+  isAdminOnly: boolean // strictly admin (the lead-role pool)
   isHorizontalLead: boolean
 
   // Project contextual flags
@@ -19,20 +20,22 @@ export interface Permissions {
   isTeamLead: boolean
   isTeamMember: boolean
 
-  // Team-of-record on the project (for sign-off / delivery permissions)
-  isCtLead: boolean
-  isCsLead: boolean
-  isCtMember: boolean
+  // Team-of-record on the project, resolved via the tenant's org structure.
+  // Phase 1: replaces the old name-regex CT/CS lookups. Returns false when
+  // the tenant hasn't configured the relevant role.
+  isValidatorLead: boolean
+  isCoordinatorLead: boolean
+  isValidatorMember: boolean
 
   // Stage-aware action flags (project banner buttons render off these)
   canAllocateVh: boolean // super admin, stage 1
   canAcceptOrEscalate: boolean // VH, stage 2
   canAddFanoutTask: boolean // VH, stage 6 — kept name for back-compat callers
   canReviewEligibility: boolean // super admin, stage 5, project not closed
-  canUpdateStatus: boolean // VH or CS lead, anytime, on a non-closed project
-  canSignOffValidation: boolean // CT lead, stage 7
+  canUpdateStatus: boolean // VH or coordinator lead, anytime, on a non-closed project
+  canSignOffValidation: boolean // validator lead, stage 7
   canApproveOrReject: boolean // VH, stage 8
-  canMarkDelivered: boolean // CS lead, stage 10
+  canMarkDelivered: boolean // coordinator lead, stage 10
   canEditProject: boolean // owner / super admin, OR not yet completed
 
   // Chat
@@ -47,6 +50,7 @@ export interface Permissions {
 export function usePermissions(projectId?: string, teamId?: string): Permissions {
   const { profile } = useAuth()
   const pipelineEnabled = usePipelineEnabled()
+  const org = useOrgStructure()
   const [project, setProject] = useState<Project | null>(null)
   const [team, setTeam] = useState<Team | null>(null)
   const [projectLoading, setProjectLoading] = useState<boolean>(Boolean(projectId))
@@ -109,14 +113,16 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const isTeamLead = Boolean(uid && team && team.leadId === uid)
     const isTeamMember = Boolean(uid && team && team.memberIds.includes(uid))
 
-    // Identify CT / CS team-of-record on the project. CT/CS live as department teams;
-    // we identify them by name match (Copy & Strategy / Client Servicing) since `kind === 'department'`
-    // alone isn't unique. Falls back gracefully when teams aren't seeded yet.
-    const ctTeam = projectTeams.find((t) => /copy|strategy|^ct\b/i.test(t.name))
-    const csTeam = projectTeams.find((t) => /client servicing|^cs\b/i.test(t.name))
-    const isCtLead = Boolean(uid && ctTeam && ctTeam.leadId === uid)
-    const isCsLead = Boolean(uid && csTeam && csTeam.leadId === uid)
-    const isCtMember = Boolean(uid && ctTeam && ctTeam.memberIds.includes(uid))
+    // Identify the validator and coordinator teams on this project via the
+    // tenant's org structure. The resolver returns null when the tenant hasn't
+    // configured the relevant role — every flag below is null-safe.
+    const validatorTeam = resolveValidatorTeam(projectTeams, org)
+    const coordinatorTeam = resolveCoordinatorTeam(projectTeams, org)
+    const isValidatorLead = Boolean(uid && validatorTeam && validatorTeam.leadId === uid)
+    const isCoordinatorLead = Boolean(uid && coordinatorTeam && coordinatorTeam.leadId === uid)
+    const isValidatorMember = Boolean(
+      uid && validatorTeam && validatorTeam.memberIds.includes(uid),
+    )
 
     const stage = project?.stage
     // When the tender pipeline is disabled, every stage-aware action collapses
@@ -126,19 +132,22 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const canAllocateVh = Boolean(pipelineEnabled && isSuperAdmin && project && stage === 1)
     const canAcceptOrEscalate = Boolean(pipelineEnabled && isVerticalHead && stage === 2)
     const canAddFanoutTask = Boolean(pipelineEnabled && isVerticalHead && stage === 6)
-    // CS validates and signs off (was CT in v0 of the spec; product moved validation to CS).
-    const canSignOffValidation = Boolean(pipelineEnabled && isCsLead && stage === 7)
+    // Validator team's lead signs off at stage 7. Returns false if the tenant
+    // hasn't configured a validator role.
+    const canSignOffValidation = Boolean(pipelineEnabled && isValidatorLead && stage === 7)
     const canApproveOrReject = Boolean(pipelineEnabled && isVerticalHead && stage === 8)
     const closed = isProjectClosed(project?.status)
-    const canMarkDelivered = Boolean(pipelineEnabled && isCsLead && stage === 10 && !closed)
+    const canMarkDelivered = Boolean(
+      pipelineEnabled && isCoordinatorLead && stage === 10 && !closed,
+    )
     const canReviewEligibility = Boolean(pipelineEnabled && isSuperAdmin && stage === 5 && !closed)
     // In simple mode, the project owner (alongside admins/super_admins) can
-    // update status — there is no VH/CS to delegate to.
+    // update status — there is no VH/coordinator to delegate to.
     const canUpdateStatus = Boolean(
       project &&
         !closed &&
         (pipelineEnabled
-          ? isVerticalHead || isCsLead || isSuperAdmin
+          ? isVerticalHead || isCoordinatorLead || isSuperAdmin
           : isProjectOwner || isAdmin),
     )
     const canEditProject = Boolean(
@@ -162,9 +171,9 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       isVerticalHead,
       isTeamLead,
       isTeamMember,
-      isCtLead,
-      isCsLead,
-      isCtMember,
+      isValidatorLead,
+      isCoordinatorLead,
+      isValidatorMember,
       canAllocateVh,
       canAcceptOrEscalate,
       canAddFanoutTask,
@@ -179,5 +188,5 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       team,
       loading: projectLoading || teamLoading || projectTeamsLoading,
     }
-  }, [profile, pipelineEnabled, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
+  }, [profile, pipelineEnabled, org, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
 }
