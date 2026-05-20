@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { usePipelineEnabled, useOrgStructure } from '../contexts/AppConfigContext'
+import { usePipelineEnabled, useActiveWorkflow, useOrgStructure } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
 import { resolveCoordinatorTeam, resolveValidatorTeam } from '../lib/orgResolver'
+import { canPerform as evaluatorCanPerform } from '../lib/workflowEvaluator'
 import type { Project, Team } from '../types/models'
 
 export interface Permissions {
@@ -16,7 +17,10 @@ export interface Permissions {
 
   // Project contextual flags
   isProjectOwner: boolean
-  isVerticalHead: boolean
+  // Phase 2a: the user pinned as project lead (project.leadUid). Renamed from
+  // isVerticalHead to match the per-workflow `leadRoleName`. Falls back to the
+  // legacy vhId during the dual-write transition.
+  isProjectLead: boolean
   isTeamLead: boolean
   isTeamMember: boolean
 
@@ -27,19 +31,16 @@ export interface Permissions {
   isCoordinatorLead: boolean
   isValidatorMember: boolean
 
-  // Stage-aware action flags (project banner buttons render off these)
-  canAllocateVh: boolean // super admin, stage 1
-  canAcceptOrEscalate: boolean // VH, stage 2
-  canAddFanoutTask: boolean // VH, stage 6 — kept name for back-compat callers
-  canReviewEligibility: boolean // super admin, stage 5, project not closed
-  canUpdateStatus: boolean // VH or coordinator lead, anytime, on a non-closed project
-  canSignOffValidation: boolean // validator lead, stage 7
-  canApproveOrReject: boolean // VH, stage 8
-  canMarkDelivered: boolean // coordinator lead, stage 10
-  canEditProject: boolean // owner / super admin, OR not yet completed
+  // Phase 2a: single generic gate. Returns true when the workflow doc allows
+  // this user to perform the named action at the project's current stage.
+  // Replaces the named action flags (canAllocateVh, canAcceptOrEscalate, ...).
+  canPerform: (actionId: string) => boolean
+
+  canUpdateStatus: boolean
+  canEditProject: boolean
 
   // Chat
-  canViewProjectChat: boolean // super admin, project owner, or member of any team on the project
+  canViewProjectChat: boolean
 
   // Raw refs for callers that need the underlying docs
   project: Project | null
@@ -50,6 +51,7 @@ export interface Permissions {
 export function usePermissions(projectId?: string, teamId?: string): Permissions {
   const { profile } = useAuth()
   const pipelineEnabled = usePipelineEnabled()
+  const { workflow } = useActiveWorkflow()
   const org = useOrgStructure()
   const [project, setProject] = useState<Project | null>(null)
   const [team, setTeam] = useState<Team | null>(null)
@@ -109,13 +111,13 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const isHorizontalLead = role === 'horizontal_lead'
 
     const isProjectOwner = Boolean(uid && project && project.ownerId === uid)
-    const isVerticalHead = Boolean(uid && project && project.vhId === uid)
+    // Prefer the new field, fall back to legacy vhId so old projects (pre-2a
+    // migration) still resolve correctly during the transition window.
+    const projectLeadUid = project?.leadUid ?? project?.vhId ?? null
+    const isProjectLead = Boolean(uid && projectLeadUid && projectLeadUid === uid)
     const isTeamLead = Boolean(uid && team && team.leadId === uid)
     const isTeamMember = Boolean(uid && team && team.memberIds.includes(uid))
 
-    // Identify the validator and coordinator teams on this project via the
-    // tenant's org structure. The resolver returns null when the tenant hasn't
-    // configured the relevant role — every flag below is null-safe.
     const validatorTeam = resolveValidatorTeam(projectTeams, org)
     const coordinatorTeam = resolveCoordinatorTeam(projectTeams, org)
     const isValidatorLead = Boolean(uid && validatorTeam && validatorTeam.leadId === uid)
@@ -124,30 +126,15 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       uid && validatorTeam && validatorTeam.memberIds.includes(uid),
     )
 
-    const stage = project?.stage
-    // When the tender pipeline is disabled, every stage-aware action collapses
-    // to false — there is no pipeline to advance through. Status update and
-    // edit-project remain active so simple-mode users can still mark projects
-    // completed / on hold and edit project fields.
-    const canAllocateVh = Boolean(pipelineEnabled && isSuperAdmin && project && stage === 1)
-    const canAcceptOrEscalate = Boolean(pipelineEnabled && isVerticalHead && stage === 2)
-    const canAddFanoutTask = Boolean(pipelineEnabled && isVerticalHead && stage === 6)
-    // Validator team's lead signs off at stage 7. Returns false if the tenant
-    // hasn't configured a validator role.
-    const canSignOffValidation = Boolean(pipelineEnabled && isValidatorLead && stage === 7)
-    const canApproveOrReject = Boolean(pipelineEnabled && isVerticalHead && stage === 8)
     const closed = isProjectClosed(project?.status)
-    const canMarkDelivered = Boolean(
-      pipelineEnabled && isCoordinatorLead && stage === 10 && !closed,
-    )
-    const canReviewEligibility = Boolean(pipelineEnabled && isSuperAdmin && stage === 5 && !closed)
-    // In simple mode, the project owner (alongside admins/super_admins) can
-    // update status — there is no VH/coordinator to delegate to.
+
+    // Status-update is orthogonal to the workflow engine. Dual-mode kept from
+    // Phase 1: pipeline-on → lead/coordinator/super; pipeline-off → owner/admin.
     const canUpdateStatus = Boolean(
       project &&
         !closed &&
         (pipelineEnabled
-          ? isVerticalHead || isCoordinatorLead || isSuperAdmin
+          ? isProjectLead || isCoordinatorLead || isSuperAdmin
           : isProjectOwner || isAdmin),
     )
     const canEditProject = Boolean(
@@ -162,31 +149,40 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       project && (isSuperAdmin || isProjectOwner || isProjectTeamMember),
     )
 
+    // Generic action gate. Reads the active workflow + evaluator. False when:
+    //   - no project loaded yet
+    //   - no profile (signed out)
+    //   - workflow not loaded yet (e.g. fresh tab before cache populates)
+    //   - project is closed
+    //   - the workflow's permission check rejects this user for this action
+    function canPerform(actionId: string): boolean {
+      if (!project || !profile || !workflow || closed) return false
+      try {
+        return evaluatorCanPerform(project, workflow, profile, projectTeams, org, actionId)
+      } catch {
+        return false
+      }
+    }
+
     return {
       isSuperAdmin,
       isAdmin,
       isAdminOnly,
       isHorizontalLead,
       isProjectOwner,
-      isVerticalHead,
+      isProjectLead,
       isTeamLead,
       isTeamMember,
       isValidatorLead,
       isCoordinatorLead,
       isValidatorMember,
-      canAllocateVh,
-      canAcceptOrEscalate,
-      canAddFanoutTask,
-      canReviewEligibility,
+      canPerform,
       canUpdateStatus,
-      canSignOffValidation,
-      canApproveOrReject,
-      canMarkDelivered,
       canEditProject,
       canViewProjectChat,
       project,
       team,
       loading: projectLoading || teamLoading || projectTeamsLoading,
     }
-  }, [profile, pipelineEnabled, org, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
+  }, [profile, pipelineEnabled, org, workflow, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
 }

@@ -123,6 +123,9 @@ export interface StageEvent {
   enteredAt: Timestamp
   enteredBy: string
   payload?: StageEventPayload
+  // Phase 2a: string id mirror of `stage`. New writes (via workflowEvaluator.performAction)
+  // populate `stageId`; the numeric `stage` is preserved for legacy reads until Sprint 5.
+  stageId?: string
 }
 
 export interface Project {
@@ -153,6 +156,13 @@ export interface Project {
   // Chat: denormalized "latest activity" timestamp, bumped in the same writeBatch
   // as every chat mutation so the projects-list unread dot needs zero extra reads.
   chatLastMessageAt?: Timestamp
+  // Phase 2a additions. New projects (post-Sprint 2) write these; legacy
+  // projects keep the old numeric `stage` / `vhId` / `vhIterationCount` fields
+  // until the Client A migration runs in Sprint 5.
+  workflowId?: string
+  currentStageId?: string
+  leadUid?: string | null
+  iterationCount?: number
 }
 
 export interface Attachment {
@@ -297,7 +307,6 @@ export interface AppConfig {
   updatedBy: string
   pipeline: {
     enabled: boolean
-    enabledStages: Stage[]
   }
   features: {
     chat: boolean
@@ -370,6 +379,9 @@ export type AuditAction =
   // Project lifecycle (mirrored from stageHistory for cross-entity queryability)
   | 'project.created'
   | 'project.stage_transitioned'
+  // Phase 2a: generic workflow action performed via workflowEvaluator.performAction.
+  // Coexists with project.stage_transitioned until Sprint 5 retires it.
+  | 'project.action_performed'
   | 'project.status_updated'
   | 'project.teams_updated'
   | 'project.attachment_added'

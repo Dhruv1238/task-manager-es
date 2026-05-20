@@ -20,6 +20,7 @@ export function useAccessibleProjects(): { projects: Project[]; loading: boolean
     return projects.filter(
       (p) =>
         p.ownerId === profile.uid ||
+        p.leadUid === profile.uid ||
         p.vhId === profile.uid ||
         (p.teamIds ?? []).some((tid) => myTeams.has(tid)),
     )

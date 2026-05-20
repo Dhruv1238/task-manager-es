@@ -1,4 +1,4 @@
-import type { OrgStructure, Team, TeamRoleId, User } from '../types/models'
+import type { OrgStructure, Project, Team, TeamRoleId, User } from '../types/models'
 
 // Pure functions that resolve "which team plays this role" and "who leads it"
 // against the tenant-configured org structure. Replaces every hardcoded
@@ -20,13 +20,13 @@ function teamsWithRole(teams: Team[], roleId: TeamRoleId): Team[] {
 }
 
 export function resolveCoordinatorTeam(teams: Team[], org: OrgStructure): Team | null {
-  if (!org.teamRoles.hasCoordinator) return null
+  if (!org?.teamRoles?.hasCoordinator) return null
   const matches = teamsWithRole(teams, 'coordinator')
   return matches[0] ?? null
 }
 
 export function resolveValidatorTeam(teams: Team[], org: OrgStructure): Team | null {
-  if (!org.teamRoles.hasValidator) return null
+  if (!org?.teamRoles?.hasValidator) return null
   const matches = teamsWithRole(teams, 'validator')
   return matches[0] ?? null
 }
@@ -36,7 +36,7 @@ export function resolveSpecialistTeams(
   org: OrgStructure,
   workType?: string,
 ): Team[] {
-  if (!org.teamRoles.hasSpecialist) return []
+  if (!org?.teamRoles?.hasSpecialist) return []
   const all = teamsWithRole(teams, 'specialist')
   if (!workType) return all
   return all.filter((t) => (t.workTypes ?? []).includes(workType))
@@ -70,4 +70,37 @@ export function resolveCoordinatorLead(
 export function findDuplicateRoleTeams(teams: Team[], roleId: TeamRoleId): Team[] {
   const matches = teamsWithRole(teams, roleId)
   return matches.slice(1)
+}
+
+// Project-scoped role lookup. Phase 2a's workflow engine resolves
+// `team_role` actors against the teams attached to *this* project, not the
+// tenant-wide pool — same logic StageBanner does today via
+// `teams.filter(t => t.projectIds?.includes(project.id))`. Generic over the
+// configured TeamRoleId so the evaluator can dispatch on actor.role.
+export function resolveTeamOfRoleOn(
+  role: TeamRoleId,
+  project: Project,
+  teams: Team[],
+  org: OrgStructure,
+): Team | null {
+  const projectTeams = teams.filter((t) => t.projectIds?.includes(project.id))
+  switch (role) {
+    case 'coordinator':
+      return resolveCoordinatorTeam(projectTeams, org)
+    case 'validator':
+      return resolveValidatorTeam(projectTeams, org)
+    case 'specialist': {
+      const matches = resolveSpecialistTeams(projectTeams, org)
+      return matches[0] ?? null
+    }
+  }
+}
+
+export function resolveLeadOfRoleOn(
+  role: TeamRoleId,
+  project: Project,
+  teams: Team[],
+  org: OrgStructure,
+): string | null {
+  return resolveTeamOfRoleOn(role, project, teams, org)?.leadId ?? null
 }

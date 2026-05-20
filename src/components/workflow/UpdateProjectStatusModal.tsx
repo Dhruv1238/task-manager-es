@@ -10,15 +10,39 @@ interface Props {
   open: boolean
   onClose: () => void
   project: Project
+  // Optional: constrain the status cards to a workflow-declared subset (used
+  // when the modal is opened from a `set_status` action on the banner). When
+  // omitted (status-pill click on ProjectDetail), all options for the active
+  // mode are shown.
+  allowedStatuses?: ProjectStatus[]
+  // Override the modal title — the `record_outcome` action wants "Record outcome".
+  titleOverride?: string
+  submitLabelOverride?: string
 }
 
 // Single source of truth for changing project.status. VH and CS can open this
-// from the project header pill or from the stage-10 banner action button.
+// from the project header pill or from a `set_status` workflow action.
 // Records every change in stageHistory with a required note.
-export default function UpdateProjectStatusModal({ open, onClose, project }: Props) {
+export default function UpdateProjectStatusModal({
+  open,
+  onClose,
+  project,
+  allowedStatuses,
+  titleOverride,
+  submitLabelOverride,
+}: Props) {
   const { user, profile } = useAuth()
   const pipelineEnabled = usePipelineEnabled()
-  const options = pipelineEnabled ? STATUS_OPTIONS : SIMPLE_STATUS_OPTIONS
+  const baseOptions = pipelineEnabled ? STATUS_OPTIONS : SIMPLE_STATUS_OPTIONS
+  // Filter to the workflow-declared outcomes when provided. We keep the
+  // current status visible even if it isn't in the allowed list — without
+  // it the "CURRENT" indicator disappears and the user can't see what
+  // they're changing from.
+  const options = allowedStatuses
+    ? baseOptions.filter(
+        (s) => allowedStatuses.includes(s) || s === (project.status ?? 'in_progress'),
+      )
+    : baseOptions
   const currentStatus = (project.status ?? 'in_progress') as ProjectStatus
   const [next, setNext] = useState<ProjectStatus>(currentStatus)
   const [note, setNote] = useState('')
@@ -79,7 +103,7 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
     <Modal
       open={open}
       onClose={onClose}
-      title="Update project status"
+      title={titleOverride ?? 'Update project status'}
       description="Pick the new status and add a note. The change appears in the project history."
       size="lg"
       closeOnBackdrop={!submitting}
@@ -162,7 +186,7 @@ export default function UpdateProjectStatusModal({ open, onClose, project }: Pro
             disabled={submitting || !note.trim() || next === currentStatus}
             className="flex-1 rounded-lg bg-brand-gradient px-4 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? 'Updating…' : 'Update status'}
+            {submitting ? 'Updating…' : (submitLabelOverride ?? 'Update status')}
           </button>
         </div>
       </form>

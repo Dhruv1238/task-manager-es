@@ -6,7 +6,7 @@ import ProjectsByStatus from '../components/charts/ProjectsByStatus'
 import TeamUtilization from '../components/charts/TeamUtilization'
 import AtRiskProjects from '../components/charts/AtRiskProjects'
 import NewVsCompleted from '../components/charts/NewVsCompleted'
-import TenderPipelineFunnel from '../components/charts/TenderPipelineFunnel'
+import PipelineFunnel from '../components/charts/PipelineFunnel'
 import AtRiskBySubmission from '../components/charts/AtRiskBySubmission'
 
 export default function AdminDashboard() {
@@ -30,7 +30,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {pipelineEnabled && <TenderPipelineFunnel projects={projects} />}
+        {pipelineEnabled && <PipelineFunnel projects={projects} />}
         {pipelineEnabled && <AtRiskBySubmission projects={projects} />}
         <ProjectsByStatus projects={projects} />
         <TeamUtilization teams={teams} tasks={tasks} />

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import type { Project, User } from '../../types/models'
-import ProjectStatusPill from '../tender/ProjectStatusPill'
+import ProjectStatusPill from '../workflow/ProjectStatusPill'
 import UnreadChatBadge from './UnreadChatBadge'
 import Avatar from '../ui/Avatar'
 import StagePill from './StagePill'
@@ -115,12 +115,12 @@ export default function ProjectsTable({
                           </p>
                         )}
                       </div>
-                      {pipelineEnabled && (p.vhIterationCount ?? 0) > 0 && (
+                      {pipelineEnabled && ((p.iterationCount ?? p.vhIterationCount) ?? 0) > 0 && (
                         <span
                           className="ml-1 inline-flex shrink-0 items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[10px] font-medium text-tone-accent-fg"
-                          title={`Iteration ${(p.vhIterationCount ?? 0) + 1}`}
+                          title={`Iteration ${((p.iterationCount ?? p.vhIterationCount) ?? 0) + 1}`}
                         >
-                          Iter {(p.vhIterationCount ?? 0) + 1}
+                          Iter {((p.iterationCount ?? p.vhIterationCount) ?? 0) + 1}
                         </span>
                       )}
                     </div>

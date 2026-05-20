@@ -7,14 +7,11 @@ import {
   useAppConfigContext,
   useAppConfigLive,
 } from '../contexts/AppConfigContext'
-import { STAGE_NAMES, type AppConfig, type Stage } from '../types/models'
+import { type AppConfig } from '../types/models'
 import OrgStructureSection from '../components/admin/OrgStructureSection'
-
-const ALL_STAGES: Stage[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-// Stage 1 (Project creation) and Stage 10 (Sent to client) are the pipeline's
-// required start and end points. Toggling them off would leave projects with no
-// entry/exit — disallowed in UI rather than enforced server-side.
-const LOCKED_STAGES: Stage[] = [1, 10]
+import { seedCollabWorkflow } from '../lib/seedCollabWorkflow'
+import { seedBasicWorkflow } from '../lib/seedBasicWorkflow'
+import { migrateClientAProjects } from '../lib/migrateClientAProjects'
 
 function formatDate(ts: Timestamp | undefined): string {
   if (!ts || ts.seconds === 0) return '—'
@@ -30,9 +27,7 @@ function formatDate(ts: Timestamp | undefined): string {
 function configsEqual(a: AppConfig, b: AppConfig): boolean {
   if (a.pipeline.enabled !== b.pipeline.enabled) return false
   if (a.features.chat !== b.features.chat) return false
-  const aStages = [...a.pipeline.enabledStages].sort((x, y) => x - y).join(',')
-  const bStages = [...b.pipeline.enabledStages].sort((x, y) => x - y).join(',')
-  return aStages === bStages
+  return true
 }
 
 interface ToggleProps {
@@ -99,20 +94,9 @@ export default function AppConfigPage() {
     }
     setLastSeenBaseline(baseline)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseline.version, baseline.pipeline.enabled, baseline.features.chat, baseline.pipeline.enabledStages.join(',')])
+  }, [baseline.version, baseline.pipeline.enabled, baseline.features.chat])
 
   const dirty = useMemo(() => !configsEqual(draft, baseline), [draft, baseline])
-
-  function toggleStage(stage: Stage) {
-    if (LOCKED_STAGES.includes(stage)) return
-    setDraft((d) => {
-      const has = d.pipeline.enabledStages.includes(stage)
-      const next = has
-        ? d.pipeline.enabledStages.filter((s) => s !== stage)
-        : [...d.pipeline.enabledStages, stage].sort((a, b) => a - b)
-      return { ...d, pipeline: { ...d.pipeline, enabledStages: next } }
-    })
-  }
 
   async function handleSave() {
     if (!user) return
@@ -140,43 +124,6 @@ export default function AppConfigPage() {
     }
   }
 
-  const stageRows = ALL_STAGES.map((stage) => {
-    const checked = draft.pipeline.enabledStages.includes(stage)
-    const locked = LOCKED_STAGES.includes(stage)
-    return (
-      <li
-        key={stage}
-        className={`flex items-center justify-between rounded-lg border border-line bg-card px-3 py-2 ${
-          !draft.pipeline.enabled ? 'opacity-50' : ''
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={checked}
-            disabled={locked || !draft.pipeline.enabled}
-            onChange={() => toggleStage(stage)}
-            className="h-4 w-4 cursor-pointer accent-brand-edge disabled:cursor-not-allowed"
-            aria-label={`Stage ${stage} ${STAGE_NAMES[stage]}`}
-          />
-          <span className="text-sm text-fg">
-            <span className="text-fg-subtle">Stage {stage}</span>
-            <span className="mx-2 text-fg-faint">·</span>
-            <span>{STAGE_NAMES[stage]}</span>
-          </span>
-        </div>
-        {locked && (
-          <span
-            className="text-[10px] uppercase tracking-wider text-fg-subtle"
-            title="Required pipeline start/end — cannot be disabled."
-          >
-            Required
-          </span>
-        )}
-      </li>
-    )
-  })
-
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8">
@@ -193,9 +140,10 @@ export default function AppConfigPage() {
       <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Project pipeline</h2>
         <p className="mt-1 text-sm text-fg-subtle">
-          When enabled, projects flow through 10 tender stages (allocation, eligibility, review,
-          delivery). When disabled, projects use a simple status flow (in progress → completed)
-          with an owner only — no VH, no stages.
+          When enabled, new projects pin the <code>collab-default</code> workflow (the 10-stage
+          tender flow). When disabled, new projects pin the <code>basic</code> workflow (simple
+          status flow). The per-stage toggles were retired in Phase 2a — a stage is now
+          &ldquo;disabled&rdquo; by having no actions for any actor in the workflow doc.
         </p>
 
         <div className="mt-4 space-y-3">
@@ -207,26 +155,14 @@ export default function AppConfigPage() {
             label="Enable tender pipeline"
             hint={
               draft.pipeline.enabled
-                ? 'Stages, VH allocation, and "+ New Tender" CTA are active.'
-                : 'Projects use simple status flow — no VH, no stages, "+ New Project" CTA.'
+                ? 'New projects pin collab-default; banner + lead allocation active.'
+                : 'New projects pin basic; simple status flow only.'
             }
           />
-
-          <div>
-            <div className="mb-2 mt-4 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-fg-strong">Enabled stages</h3>
-              <span className="text-xs text-fg-subtle">
-                {draft.pipeline.enabledStages.length} of {ALL_STAGES.length} enabled
-              </span>
-            </div>
-            <p className="mb-3 text-xs text-fg-subtle">
-              Disabling a stage hides its banner and action buttons. Projects already in that
-              stage retain the value — advance them manually.
-            </p>
-            <ul className="space-y-1.5">{stageRows}</ul>
-          </div>
         </div>
       </section>
+
+      <WorkflowSeedSection adminUid={user?.uid ?? null} />
 
       <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Features</h2>
@@ -284,5 +220,149 @@ export default function AppConfigPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+// ─── Workflow seeds (Phase 2a, Sprint 1) ──────────────────────────────────
+// Super-admin buttons to (re)seed the workflow docs. Idempotent — each run
+// bumps the doc's `version` and overwrites the rest. The third button is a
+// placeholder until Sprint 5 ships the migrateClientAProjects helper.
+
+interface SeedRow {
+  status: 'idle' | 'running' | 'done' | 'error'
+  message?: string
+}
+
+function WorkflowSeedSection({ adminUid }: { adminUid: string | null }) {
+  const [collab, setCollab] = useState<SeedRow>({ status: 'idle' })
+  const [basic, setBasic] = useState<SeedRow>({ status: 'idle' })
+  const [migrate, setMigrate] = useState<SeedRow>({ status: 'idle' })
+
+  async function runCollab() {
+    if (!adminUid) return
+    setCollab({ status: 'running' })
+    try {
+      const res = await seedCollabWorkflow(adminUid)
+      setCollab({
+        status: 'done',
+        message: `Seeded v${res.newVersion} with ${res.stages} stages (was v${res.previousVersion}).`,
+      })
+    } catch (e) {
+      setCollab({
+        status: 'error',
+        message: e instanceof Error ? e.message : 'Seed failed',
+      })
+    }
+  }
+
+  async function runBasic() {
+    if (!adminUid) return
+    setBasic({ status: 'running' })
+    try {
+      const res = await seedBasicWorkflow(adminUid)
+      setBasic({
+        status: 'done',
+        message: `Seeded v${res.newVersion} with ${res.stages} stages (was v${res.previousVersion}).`,
+      })
+    } catch (e) {
+      setBasic({
+        status: 'error',
+        message: e instanceof Error ? e.message : 'Seed failed',
+      })
+    }
+  }
+
+  async function runMigrate() {
+    if (!adminUid) return
+    if (!confirm('Migrate all existing projects to the new workflow schema?')) return
+    setMigrate({ status: 'running' })
+    try {
+      const res = await migrateClientAProjects(adminUid)
+      const errSuffix = res.errors.length ? ` · ${res.errors.length} errors` : ''
+      setMigrate({
+        status: res.errors.length ? 'error' : 'done',
+        message: `Scanned ${res.scanned} · migrated ${res.migrated} · skipped ${res.skipped}${errSuffix}.`,
+      })
+    } catch (e) {
+      setMigrate({
+        status: 'error',
+        message: e instanceof Error ? e.message : 'Migration failed',
+      })
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
+      <h2 className="text-lg font-semibold text-fg">Workflows</h2>
+      <p className="mt-1 text-sm text-fg-subtle">
+        Seed the workflow definitions at <code>/workflows/&lt;id&gt;</code>. Idempotent —
+        each run bumps the doc&apos;s version. Run once per environment after deploy.
+      </p>
+
+      <div className="mt-4 space-y-3">
+        <SeedButton
+          label="Seed collab-default workflow"
+          hint="8-stage tender flow with eligibility review. Used when pipeline is enabled."
+          row={collab}
+          onRun={runCollab}
+          disabled={!adminUid}
+        />
+        <SeedButton
+          label="Seed basic workflow"
+          hint="2-stage simple flow. Used when pipeline is disabled."
+          row={basic}
+          onRun={runBasic}
+          disabled={!adminUid}
+        />
+        <SeedButton
+          label="Migrate existing projects"
+          hint="Translates legacy numeric stage / vhId / vhIterationCount onto the new schema. Idempotent — safe to re-run."
+          row={migrate}
+          onRun={runMigrate}
+          disabled={!adminUid}
+        />
+      </div>
+    </section>
+  )
+}
+
+function SeedButton({
+  label,
+  hint,
+  row,
+  onRun,
+  disabled,
+}: {
+  label: string
+  hint: string
+  row: SeedRow
+  onRun: () => Promise<void>
+  disabled?: boolean
+}) {
+  const busy = row.status === 'running'
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card p-4">
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-fg">{label}</div>
+        <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>
+        {row.message && (
+          <div
+            className={`mt-2 text-xs ${
+              row.status === 'error' ? 'text-tone-danger-fg' : 'text-tone-success-fg'
+            }`}
+          >
+            {row.message}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => void onRun()}
+        disabled={disabled || busy}
+        className="shrink-0 rounded-lg border border-line bg-fill-2 px-3 py-2 text-xs font-medium text-fg-muted transition hover:bg-fill-4 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {busy ? 'Running…' : 'Run'}
+      </button>
+    </div>
   )
 }

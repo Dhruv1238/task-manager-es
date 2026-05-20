@@ -75,6 +75,19 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // ─── /workflows/{workflowId} ─────────────────────────────────────────
+    // Phase 2a: workflow shape (stages, actions, transitions) lives in
+    // Firestore so it's editable without a code release. Every signed-in
+    // user reads (the engine needs the doc to render the banner and gate
+    // actions); only super_admins write — via seed scripts today, via the
+    // authoring wizard in 2c. Top-level collection so document paths stay
+    // valid (config/<id> already occupies the singleton slot).
+
+    match /workflows/{workflowId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
     // ─── Everything else — unchanged blanket rule ───────────────────────
     // This preserves your current behavior for users/, projects/, tasks/, etc.
     // Tighten these later as part of your productization work.

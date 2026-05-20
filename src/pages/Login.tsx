@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
@@ -35,11 +35,10 @@ function friendlyError(err: unknown): string | null {
 }
 
 // Flip to `true` to re-enable email/password sign-in alongside Google.
-const SHOW_EMAIL_PASSWORD_LOGIN = false
+const SHOW_EMAIL_PASSWORD_LOGIN = true
 
 export default function Login() {
   const { user, signIn, signInWithGoogle, signInError, clearSignInError } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const redirectTo = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/'
 
@@ -49,6 +48,16 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
   const [googleSubmitting, setGoogleSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // If sign-in succeeds with Firebase auth but AuthContext rejects the profile
+  // (e.g. UnregisteredEmailError), the user gets signed back out and signInError
+  // is set. Without this, the form would stay locked behind the spinner forever.
+  useEffect(() => {
+    if (signInError) {
+      setSubmitting(false)
+      setGoogleSubmitting(false)
+    }
+  }, [signInError])
 
   if (user) return <Navigate to={redirectTo} replace />
 
@@ -60,10 +69,13 @@ export default function Login() {
     setSubmitting(true)
     try {
       await signIn(email.trim(), password)
-      navigate(redirectTo, { replace: true })
+      // Don't navigate or reset submitting. The <Navigate /> guard above
+      // handles the redirect once AuthContext's user state propagates.
+      // Resetting submitting here would race with the auth-state update and
+      // briefly re-enable the form — including the Google button — leaving
+      // it interactive while the profile fetch is still in flight.
     } catch (err) {
       setError(friendlyError(err))
-    } finally {
       setSubmitting(false)
     }
   }
@@ -74,10 +86,9 @@ export default function Login() {
     setGoogleSubmitting(true)
     try {
       await signInWithGoogle()
-      // Navigation happens via the <Navigate /> guard above once auth state updates.
+      // Same as above — let the <Navigate /> guard redirect on auth-state update.
     } catch (err) {
       setError(friendlyError(err))
-    } finally {
       setGoogleSubmitting(false)
     }
   }
@@ -159,10 +170,11 @@ export default function Login() {
                           type="email"
                           autoComplete="email"
                           required
+                          disabled={submitting || googleSubmitting}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           placeholder="you@company.com"
-                          className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
+                          className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </div>
 
@@ -184,10 +196,11 @@ export default function Login() {
                           type={showPassword ? 'text' : 'password'}
                           autoComplete="current-password"
                           required
+                          disabled={submitting || googleSubmitting}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
+                          className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </div>
 

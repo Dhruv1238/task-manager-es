@@ -9,13 +9,13 @@ import {
 } from 'react'
 import { doc, getDoc, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import type { AppConfig, OrgStructure, Stage } from '../types/models'
+import type { AppConfig, OrgStructure } from '../types/models'
 import { DEFAULT_ORG_STRUCTURE } from '../types/models'
+import type { Workflow } from '../types/workflow'
 
 const STORAGE_KEY = 'appConfig:v1'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
-const ALL_STAGES: Stage[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 // Default config — used when no Firestore doc exists yet AND no localStorage
 // snapshot has been captured. Preserves Client A (tender pipeline on) behavior.
@@ -25,7 +25,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   updatedBy: '',
   pipeline: {
     enabled: true,
-    enabledStages: ALL_STAGES,
   },
   features: {
     chat: false,
@@ -275,13 +274,6 @@ export function usePipelineEnabled(): boolean {
   return useAppConfigContext().config.pipeline.enabled
 }
 
-export function useStageEnabled(stage: Stage | undefined): boolean {
-  const { config } = useAppConfigContext()
-  if (!stage) return false
-  if (!config.pipeline.enabled) return false
-  return config.pipeline.enabledStages.includes(stage)
-}
-
 export function useChatEnabled(): boolean {
   return useAppConfigContext().config.features.chat
 }
@@ -363,4 +355,141 @@ export function useOrgStructureLive(): { org: OrgStructure | null; loading: bool
   }, [])
 
   return { org, loading }
+}
+
+// ─── Workflow cache (Phase 2a) ────────────────────────────────────────────
+// Per-workflow cache keyed by id. localStorage key: workflow:{id}:v1.
+// Same 24h TTL as appConfig/orgStructure. The "active" workflow id is derived
+// from appConfig.pipeline.enabled: enabled → 'collab-default', else → 'basic'.
+
+export const COLLAB_DEFAULT_WORKFLOW_ID = 'collab-default'
+export const BASIC_WORKFLOW_ID = 'basic'
+
+function workflowStorageKey(id: string): string {
+  return `workflow:${id}:v1`
+}
+
+interface SerializedWorkflow extends Omit<Workflow, 'updatedAt'> {
+  updatedAt: SerializedTimestamp
+}
+
+function serializeWorkflow(w: Workflow): SerializedWorkflow {
+  return {
+    ...w,
+    updatedAt: { seconds: w.updatedAt.seconds, nanoseconds: w.updatedAt.nanoseconds },
+  }
+}
+
+function hydrateWorkflow(s: SerializedWorkflow): Workflow {
+  return {
+    ...s,
+    updatedAt: new Timestamp(s.updatedAt.seconds, s.updatedAt.nanoseconds),
+  }
+}
+
+interface CachedWorkflowEntry {
+  workflow: Workflow
+  fetchedAt: number
+}
+
+function readWorkflowCache(id: string): CachedWorkflowEntry | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(workflowStorageKey(id))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { workflow: SerializedWorkflow; fetchedAt: number }
+    if (!parsed?.workflow || typeof parsed.fetchedAt !== 'number') return null
+    return { workflow: hydrateWorkflow(parsed.workflow), fetchedAt: parsed.fetchedAt }
+  } catch {
+    return null
+  }
+}
+
+function writeWorkflowCache(w: Workflow) {
+  if (typeof window === 'undefined') return
+  try {
+    const payload = { workflow: serializeWorkflow(w), fetchedAt: Date.now() }
+    window.localStorage.setItem(workflowStorageKey(w.id), JSON.stringify(payload))
+  } catch {
+    // ignore quota / private-mode errors
+  }
+}
+
+// The "active" workflow id, derived from pipelineEnabled. Centralised so the
+// snapshot reader and the React hook agree.
+export function getActiveWorkflowId(): string {
+  return getAppConfigSnapshot().pipeline.enabled
+    ? COLLAB_DEFAULT_WORKFLOW_ID
+    : BASIC_WORKFLOW_ID
+}
+
+// Non-React snapshot. Returns null when the workflow doc hasn't been seeded
+// yet (or the cache hasn't been populated). Callers in lib/ should handle null
+// by falling back to legacy behaviour during the Sprint 2 transition.
+export function getActiveWorkflowSnapshot(): Workflow | null {
+  return readWorkflowCache(getActiveWorkflowId())?.workflow ?? null
+}
+
+export function getWorkflowSnapshot(workflowId: string): Workflow | null {
+  return readWorkflowCache(workflowId)?.workflow ?? null
+}
+
+// Hook: returns the active workflow, fetching it on mount if the cache is
+// missing or stale. Re-fetches when `pipelineEnabled` flips (which swaps the
+// active id between collab-default and basic).
+export function useActiveWorkflow(): {
+  workflow: Workflow | null
+  loading: boolean
+  refresh: () => Promise<void>
+} {
+  const pipelineEnabled = usePipelineEnabled()
+  const activeId = pipelineEnabled ? COLLAB_DEFAULT_WORKFLOW_ID : BASIC_WORKFLOW_ID
+  const [workflow, setWorkflow] = useState<Workflow | null>(
+    () => readWorkflowCache(activeId)?.workflow ?? null,
+  )
+  const [loading, setLoading] = useState<boolean>(false)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const snap = await getDoc(doc(db, 'workflows', activeId))
+      if (snap.exists()) {
+        const next = snap.data() as Workflow
+        // Ensure id matches doc id even if the doc has it wrong.
+        const normalised: Workflow = { ...next, id: activeId }
+        setWorkflow(normalised)
+        writeWorkflowCache(normalised)
+      } else {
+        setWorkflow(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [activeId])
+
+  // Boot / id-change: refresh if cache for this id is missing or stale.
+  useEffect(() => {
+    const cached = readWorkflowCache(activeId)
+    if (!cached || Date.now() - cached.fetchedAt > TTL_MS) {
+      void refresh()
+    } else {
+      setWorkflow(cached.workflow)
+    }
+  }, [activeId, refresh])
+
+  // Cross-tab sync: when another tab writes the workflow cache (e.g. after a
+  // seed run), pick up the new value without a round-trip to Firestore.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const key = workflowStorageKey(activeId)
+    function handler(e: StorageEvent) {
+      if (e.key !== key || !e.newValue) return
+      const cached = readWorkflowCache(activeId)
+      if (cached) setWorkflow(cached.workflow)
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [activeId])
+
+  return { workflow, loading, refresh }
 }

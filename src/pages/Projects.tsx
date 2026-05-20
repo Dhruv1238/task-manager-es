@@ -18,7 +18,7 @@ import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import SearchInput from '../components/ui/SearchInput'
 import Dropdown, { type DropdownOption } from '../components/ui/Dropdown'
-import ProjectStatusPill from '../components/tender/ProjectStatusPill'
+import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
 import UnreadChatBadge from '../components/projects/UnreadChatBadge'
 import ProjectsTable from '../components/projects/ProjectsTable'
 import StagePill from '../components/projects/StagePill'
@@ -333,9 +333,9 @@ export default function Projects() {
                   {pipelineEnabled && (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       {p.stage && <StagePill project={p} />}
-                      {(p.vhIterationCount ?? 0) > 0 && (
+                      {((p.iterationCount ?? p.vhIterationCount) ?? 0) > 0 && (
                         <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
-                          Iter {(p.vhIterationCount ?? 0) + 1}
+                          Iter {((p.iterationCount ?? p.vhIterationCount) ?? 0) + 1}
                         </span>
                       )}
                     </div>

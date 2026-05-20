@@ -13,8 +13,8 @@ import AddSubtaskForm from './AddSubtaskForm'
 import StatusMenu from './StatusMenu'
 import TaskAttachmentsSection from './TaskAttachmentsSection'
 import CommentsSection from './CommentsSection'
-import SubmitForReviewModal from '../tender/SubmitForReviewModal'
-import SendBackModal from '../tender/SendBackModal'
+import SubmitForReviewModal from '../workflow/SubmitForReviewModal'
+import SendBackModal from '../workflow/SendBackModal'
 import type { Task, TaskPriority, TaskStatus, Team, User } from '../../types/models'
 
 interface Props {

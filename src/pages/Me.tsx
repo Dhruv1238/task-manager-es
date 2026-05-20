@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { useOrgStructure } from '../contexts/AppConfigContext'
+import { useActiveWorkflow } from '../contexts/AppConfigContext'
 import { useMyTasks } from '../hooks/useMyTasks'
 import { useMyLedTeamTasks } from '../hooks/useMyLedTeamTasks'
 import { useMyReviewQueue } from '../hooks/useMyReviewQueue'
@@ -11,7 +11,7 @@ import StatusDonut from '../components/charts/StatusDonut'
 import PriorityBar from '../components/charts/PriorityBar'
 import UpcomingDeadlines from '../components/charts/UpcomingDeadlines'
 import WeeklyCompletionLine from '../components/charts/WeeklyCompletionLine'
-import { STAGE_TONE, displayedPhase } from '../components/tender/stageStyle'
+import { stageTone } from '../components/workflow/stageStyle'
 import type { Task, TaskPriority, TaskStatus } from '../types/models'
 
 const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
@@ -250,7 +250,7 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
 
 function ProjectsAwaitingActionSection() {
   const { projects } = useProjectsAwaitingMyAction()
-  const org = useOrgStructure()
+  const { workflow } = useActiveWorkflow()
   if (projects.length === 0) return null
   return (
     <section className="mb-10">
@@ -263,15 +263,20 @@ function ProjectsAwaitingActionSection() {
         </p>
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">
-        {projects.map(({ project, cta }) => {
-          const phase = displayedPhase(project, org)
-          const tone = STAGE_TONE[phase.toneStage]
-          // When a project comes back via escalation, the whole card should
-          // visually communicate urgency — red border + red CTA, not the default amber.
-          const cardCls = phase.isEscalated
+        {projects.map(({ project, cta, reason }) => {
+          const stage =
+            workflow?.stages.find((s) => s.id === project.currentStageId) ??
+            workflow?.stages[0]
+          const tone = stageTone(stage?.order ?? 1, stage?.isTerminal ?? false)
+          // Escalation-flavoured visual: surface danger styling when the project
+          // sits back at the starting stage with at least one escalation logged.
+          const isEscalated =
+            (project.escalationCount ?? 0) > 0 &&
+            (stage?.id === workflow?.stages[0]?.id || reason === 'allocate')
+          const cardCls = isEscalated
             ? 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-tone-danger-bd bg-tone-danger-bg p-4 transition hover:opacity-90'
             : 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-tone-warn-bd bg-tone-warn-bg p-4 transition hover:opacity-90'
-          const ctaCls = phase.isEscalated
+          const ctaCls = isEscalated
             ? 'inline-flex items-center justify-between gap-2 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-1.5 text-xs font-medium text-tone-danger-fg transition group-hover:bg-tone-danger-bg'
             : 'inline-flex items-center justify-between gap-2 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3 py-1.5 text-xs font-medium text-tone-warn-fg transition group-hover:bg-tone-warn-bg'
           return (
@@ -281,7 +286,7 @@ function ProjectsAwaitingActionSection() {
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.pill}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
-                      {phase.label}
+                      {stage?.displayName ?? '—'}
                     </span>
                   </div>
                   <h3 className="mt-2 text-sm font-medium text-fg">{project.title}</h3>

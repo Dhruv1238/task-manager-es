@@ -13,10 +13,10 @@ import { addProjectAttachment } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
-import StageBanner from '../components/tender/StageBanner'
+import StageBanner from '../components/workflow/StageBanner'
 import NewTaskModal from '../components/admin/NewTaskModal'
-import ProjectStatusPill from '../components/tender/ProjectStatusPill'
-import UpdateProjectStatusModal from '../components/tender/UpdateProjectStatusModal'
+import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
+import UpdateProjectStatusModal from '../components/workflow/UpdateProjectStatusModal'
 import ProgressRing from '../components/charts/ProgressRing'
 import PerTeamProgress from '../components/charts/PerTeamProgress'
 import OverdueTasksList from '../components/charts/OverdueTasksList'
@@ -158,7 +158,7 @@ export default function ProjectDetail() {
   const { users } = useAllUsers()
   const { teams } = useAllTeams()
   const { tasks: projectTasks } = useProjectTasks(projectId)
-  const { isAdmin, isSuperAdmin, isProjectOwner, isVerticalHead, canUpdateStatus } =
+  const { isAdmin, isSuperAdmin, isProjectOwner, isProjectLead, canUpdateStatus } =
     usePermissions(projectId)
   const pipelineEnabled = usePipelineEnabled()
   const leadRoleName = useLeadRoleName()
@@ -239,7 +239,8 @@ export default function ProjectDetail() {
   }
 
   const owner = userById.get(project.ownerId)
-  const vh = project.vhId ? userById.get(project.vhId) : undefined
+  const projectLeadId = project.leadUid ?? project.vhId ?? null
+  const vh = projectLeadId ? userById.get(projectLeadId) : undefined
   const submissionDeadline = project.submissionDate ?? project.deadline
   const isClosed = isProjectClosed(project.status)
   const overdue =
@@ -248,8 +249,8 @@ export default function ProjectDetail() {
     submissionDeadline.toDate().getTime() < Date.now()
   // Project owner, admins/super_admins, or the assigned VH can manage teams.
   // Once the outcome is conclusive, lock down to super_admin / owner only.
-  const canManageTeams = !isClosed && (isAdmin || isProjectOwner || isVerticalHead)
-  const canAddAttachments = isSuperAdmin || isVerticalHead
+  const canManageTeams = !isClosed && (isAdmin || isProjectOwner || isProjectLead)
+  const canAddAttachments = isSuperAdmin || isProjectLead
   const projectAttachments = project.attachments ?? []
   const assignedTeams = (project.teamIds ?? [])
     .map((id) => teamById.get(id))
