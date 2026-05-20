@@ -4,22 +4,27 @@ import ProjectStatusPill from '../workflow/ProjectStatusPill'
 import UnreadChatBadge from './UnreadChatBadge'
 import Avatar from '../ui/Avatar'
 import StagePill from './StagePill'
+import WorkflowBadge from './WorkflowBadge'
+import { useWorkflow } from '../../contexts/AppConfigContext'
 import { formatDeadline, submissionDeadline, isOverdue } from './projectListUtils'
 
 interface Props {
   projects: Project[]
   userById: Map<string, User>
-  pipelineEnabled: boolean
   chatEnabled: boolean
   chatLastReadAt: User['chatLastReadAt']
+  // Phase 2b: parent computes whether the workflow column adds signal. When a
+  // single workflow is active (e.g. basic-only tenant), the column is
+  // redundant and the table omits it.
+  showWorkflowColumn: boolean
 }
 
 export default function ProjectsTable({
   projects,
   userById,
-  pipelineEnabled,
   chatEnabled,
   chatLastReadAt,
+  showWorkflowColumn,
 }: Props) {
   const navigate = useNavigate()
 
@@ -35,11 +40,14 @@ export default function ProjectsTable({
               <th scope="col" className="px-4 py-3">
                 Status
               </th>
-              {pipelineEnabled && (
+              {showWorkflowColumn && (
                 <th scope="col" className="px-4 py-3">
-                  Stage
+                  Workflow
                 </th>
               )}
+              <th scope="col" className="px-4 py-3">
+                Stage
+              </th>
               <th scope="col" className="px-4 py-3">
                 Owner
               </th>
@@ -115,12 +123,12 @@ export default function ProjectsTable({
                           </p>
                         )}
                       </div>
-                      {pipelineEnabled && ((p.iterationCount ?? p.vhIterationCount) ?? 0) > 0 && (
+                      {(p.iterationCount ?? 0) > 0 && (
                         <span
                           className="ml-1 inline-flex shrink-0 items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[10px] font-medium text-tone-accent-fg"
-                          title={`Iteration ${((p.iterationCount ?? p.vhIterationCount) ?? 0) + 1}`}
+                          title={`Iteration ${(p.iterationCount ?? 0) + 1}`}
                         >
-                          Iter {((p.iterationCount ?? p.vhIterationCount) ?? 0) + 1}
+                          Iter {(p.iterationCount ?? 0) + 1}
                         </span>
                       )}
                     </div>
@@ -130,15 +138,14 @@ export default function ProjectsTable({
                     <ProjectStatusPill status={p.status} size="sm" />
                   </td>
 
-                  {pipelineEnabled && (
+                  {showWorkflowColumn && (
                     <td className="px-4 py-3 align-middle">
-                      {p.stage ? (
-                        <StagePill project={p} />
-                      ) : (
-                        <span className="text-xs text-fg-faint">—</span>
-                      )}
+                      <ProjectWorkflowCell projectId={p.id} workflowId={p.workflowId} />
                     </td>
                   )}
+                  <td className="px-4 py-3 align-middle">
+                    <StagePill project={p} />
+                  </td>
 
                   <td className="px-4 py-3 align-middle">
                     {owner ? (
@@ -224,4 +231,20 @@ export default function ProjectsTable({
       </div>
     </div>
   )
+}
+
+// Cell-scoped workflow lookup. Each row asks the context for its project's
+// workflow — workflows in the active set return synchronously, ones for old
+// projects on deactivated workflows lazy-fetch and resolve on the next
+// render.
+function ProjectWorkflowCell({
+  projectId,
+  workflowId,
+}: {
+  projectId: string
+  workflowId: string | undefined
+}) {
+  void projectId
+  const workflow = useWorkflow(workflowId)
+  return <WorkflowBadge workflow={workflow} compact />
 }

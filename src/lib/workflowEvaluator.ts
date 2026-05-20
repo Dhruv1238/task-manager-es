@@ -1,15 +1,19 @@
 /**
  * Pure evaluator over a workflow doc + project state + viewer + org context.
  *
- * Phase 2a, Sprint 1: read-only API only — `performAction` lands in Sprint 2
- * once the write paths in firestore.ts are refactored. The functions here are
- * the single source of truth for "what stage is this at, what can be done, who
- * is involved." No React, no Firestore, no globals.
+ * Phase 2b: dual-write retired. Every transition writes `projectHistory` with
+ * the new `kind: 'stage'` event shape; no more numeric `stage` / vhId /
+ * vhIterationCount mirrors. The migration script (migrateProjectHistory.ts)
+ * back-fills legacy projects before this code path runs at scale.
+ *
+ * No React, no Firestore globals — this module is the single source of truth
+ * for "what stage is this at, what can be done, who is involved, what
+ * happens on commit."
  */
 
-import type { ActorRef, Stage, StageAction, Workflow } from '../types/workflow'
+import type { ActorRef, Stage, StageAction, StageEvent, Workflow } from '../types/workflow'
 import { WorkflowValidationError } from '../types/workflow'
-import type { AuditAction, OrgStructure, Project, ProjectStatus, StageEvent, Team, User } from '../types/models'
+import type { AuditAction, OrgStructure, Project, ProjectStatus, Team, User } from '../types/models'
 import { resolveTeamOfRoleOn, resolveValidatorTeam } from './orgResolver'
 import {
   arrayUnion,
@@ -22,10 +26,6 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { recordAuditEvent } from './firestore'
-import {
-  COLLAB_DEFAULT_WORKFLOW_ID,
-  ID_TO_LEGACY_STAGE,
-} from './seedCollabWorkflow'
 
 // Re-export so callers can import the error class directly from this module.
 export { WorkflowValidationError }
@@ -136,7 +136,18 @@ function actorMatches(
 }
 
 // All actions on this stage that this user is allowed to perform. Empty for
-// terminal stages and for users who don't match any action's actor.
+// terminal stages and for users who don't match any action's actor or
+// override (alsoAllow) actor.
+//
+// Permission vs inbox semantics for action-level alsoAllow:
+//   - 'permission' mode: canonical actor OR any alsoAllow match grants the
+//     action — the banner renders ONE button regardless of how many actors
+//     overlap (so a super_admin who is also the creator doesn't see duplicate
+//     buttons).
+//   - 'inbox' mode: only the canonical actor counts. Override actors granted
+//     via alsoAllow can still PERFORM the action (banner shows it on their
+//     project detail page), but the project doesn't get routed to their /me
+//     inbox — that belongs to the canonical actor.
 export function getAllowedActions(
   project: Project,
   workflow: Workflow,
@@ -147,7 +158,28 @@ export function getAllowedActions(
 ): StageAction[] {
   const stage = getCurrentStage(project, workflow)
   if (stage.isTerminal) return []
-  return stage.actions.filter((a) => actorMatches(a.actor, user, project, teams, org, mode))
+  return stage.actions.filter((a) =>
+    actionAllowedForUser(a, user, project, teams, org, mode),
+  )
+}
+
+function actionAllowedForUser(
+  action: StageAction,
+  user: User,
+  project: Project,
+  teams: Team[],
+  org: OrgStructure,
+  mode: ActorMatchMode,
+): boolean {
+  if (actorMatches(action.actor, user, project, teams, org, mode)) return true
+  // alsoAllow only contributes in permission mode — inbox routing belongs to
+  // the canonical actor.
+  if (mode === 'permission' && action.alsoAllow?.length) {
+    return action.alsoAllow.some((a) =>
+      actorMatches(a, user, project, teams, org, mode),
+    )
+  }
+  return false
 }
 
 export function canPerform(
@@ -164,9 +196,7 @@ export function canPerform(
 // ─── Inbox helper ────────────────────────────────────────────────────────────
 
 // Resolve every actor on this stage's actions into a set of concrete uids.
-// Used by `/me` to compute "is this project awaiting *me*?" — if profile.uid is
-// in the set, the project shows up in the inbox with the first allowed action
-// as the CTA. Returns a deduped string[] sorted for stable diffing.
+// Used by `/me` to compute "is this project awaiting *me*?".
 export function getInvolvedUids(
   stage: Stage,
   project: Project,
@@ -187,10 +217,6 @@ export function getInvolvedUids(
       case 'team_role': {
         const team = resolveTeamOfRoleOn(actor.role, project, teams, org)
         if (!team) {
-          // No team — surface to the `alsoAllow` actors so someone can
-          // unblock the project. (When the team IS present, alsoAllow
-          // intentionally doesn't contribute to the inbox — the action
-          // belongs to the team lead, not the override path.)
           if (actor.alsoAllow?.length) {
             for (const fb of actor.alsoAllow) collect(fb)
           }
@@ -212,9 +238,6 @@ export function getInvolvedUids(
   return [...out].sort()
 }
 
-// Does this stage have any global-role actor? Inbox uses this to know it should
-// also surface the project to viewers matching the role even though they don't
-// appear in `getInvolvedUids` (which is uid-based).
 export function getInvolvedGlobalRoles(stage: Stage): Array<'super_admin' | 'admin'> {
   if (stage.isTerminal) return []
   const out = new Set<'super_admin' | 'admin'>()
@@ -224,8 +247,8 @@ export function getInvolvedGlobalRoles(stage: Stage): Array<'super_admin' | 'adm
   return [...out]
 }
 
-// Internal — exported only for the Sprint 2 `performAction` to reuse the same
-// validation helper. Kept here so the read-only API stays self-contained.
+// Input validation against an action's declared inputs. Exported so the
+// modal-side validation and the engine-side check share one implementation.
 export function validateActionInputs(
   action: StageAction,
   inputs: Record<string, unknown>,
@@ -258,13 +281,12 @@ function makeError(
 // ─── performAction — the authoritative write path ────────────────────────────
 // Validates inputs, composes the patch based on effect.kind, writes both the
 // project update and an audit event in a single writeBatch. Optionally joins
-// the caller's batch (used by addTeamTask's auto-advance, which already owns
-// a batch).
+// the caller's batch.
 //
-// During Sprint 2-3 the function dual-writes legacy fields so the old banner
-// can still read project.stage / vhId / vhIterationCount until the new banner
-// ships in Sprint 4. Dual-write is gated by workflow.id === 'collab-default'
-// and looks up legacy numerics via ID_TO_LEGACY_STAGE / COUNTER_LEGACY_EVENT_STAGE.
+// Phase 2b: writes the new generic `projectHistory: ProjectHistoryEvent[]`
+// (kind: 'stage') and drops every legacy mirror (stage, vhId, vhIterationCount,
+// stageHistory). The migration script back-fills legacy projects before this
+// path runs in production.
 
 export interface PerformActionArgs {
   project: Project
@@ -275,10 +297,8 @@ export interface PerformActionArgs {
   // Optional: join the caller's existing batch. The caller is responsible
   // for committing it. When omitted, performAction commits its own batch.
   batch?: WriteBatch
-  // Optional: extra fields to merge into the project patch. Transitional
-  // Sprint 2-3 use only — lets modals denormalise inputs onto top-level
-  // project fields (e.g. eligibilityNote) so the old banner still renders.
-  // Sprint 4's generic banner reads from inputs/history and removes the need.
+  // Optional: extra fields to merge into the project patch (e.g.
+  // denormalised eligibilityNote). Caller-trusted, not validated here.
   extras?: Record<string, unknown>
 }
 
@@ -298,13 +318,8 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
     )
   }
 
-  // 2. Permission check. Throws when the viewer can't perform.
+  // 2. Permission check (defence-in-depth — modals already gate rendering).
   if (!canPerform(project, workflow, user, [], {} as OrgStructure, actionId)) {
-    // Permission may require teams/org — re-check with the args caller passed
-    // through. For simplicity here we accept that callers (modals, hooks) have
-    // already gated rendering, and this is a defence-in-depth check that runs
-    // with the lighter actor-only model. Team-role actors won't pass without
-    // teams/org being threaded in; the modal-side check covers that.
     if (!actorOnlyMatch(action.actor, user, project)) {
       throw makeError(
         'permission_denied',
@@ -313,34 +328,29 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
     }
   }
 
-  // 3. Input validation. Throws WorkflowValidationError on failure.
+  // 3. Input validation.
   validateActionInputs(action, inputs)
 
-  // 4. Compose the project patch + the stage-history events to append.
+  // 4. Compose the project patch + the projectHistory events to append.
   const now = Timestamp.now()
   const projectRef = doc(db, 'projects', project.id)
   const patch: Record<string, unknown> = { updatedAt: serverTimestamp() }
   const events: StageEvent[] = []
-  const isCollab = workflow.id === COLLAB_DEFAULT_WORKFLOW_ID
 
-  // Helper: build a single stage event, dual-writing legacy `stage` for collab.
-  function buildEvent(stageId: string, payload: Record<string, unknown> | null): StageEvent {
-    const e: StageEvent = {
+  function buildEvent(
+    stageId: string,
+    payload: Record<string, unknown> | null,
+  ): StageEvent {
+    return {
+      kind: 'stage',
       stageId,
       enteredAt: now,
       enteredBy: user.uid,
-      payload: (payload ?? null) as StageEvent['payload'],
-      // Dual-write the legacy numeric stage so the old side panel renders.
-      // Required field on the old StageEvent type — provide a numeric mirror
-      // when we know it. For workflows without a legacy mapping (basic), we
-      // skip this field by casting; the old side panel isn't rendered for
-      // basic projects anyway.
-      stage: (isCollab ? (ID_TO_LEGACY_STAGE[stageId] ?? 0) : 0) as StageEvent['stage'],
+      actionId,
+      payload,
     }
-    return e
   }
 
-  // Helper: compute the new currentStageId from the effect.
   function effectTargetStage(): string {
     switch (action!.effect.kind) {
       case 'transition':
@@ -357,16 +367,9 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   const toStage = effectTargetStage()
   const stayingAtStage = action.effect.kind === 'set_status'
 
-  // Standard transition fields (unless we're only changing status).
+  // Standard transition (unless we're only changing status).
   if (!stayingAtStage) {
     patch.currentStageId = toStage
-    if (isCollab) {
-      const legacy = ID_TO_LEGACY_STAGE[toStage]
-      if (typeof legacy === 'number') {
-        patch.stage = legacy
-      }
-    }
-    // Push the primary live-stage event.
     events.push(buildEvent(toStage, inputsPayloadOrNull(inputs)))
   }
 
@@ -376,16 +379,7 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
       break
     case 'transition_with_counter': {
       const counter = action.effect.counter
-      // New generic field.
       patch[counter === 'iteration' ? 'iterationCount' : 'escalationCount'] = increment(1)
-      // Legacy back-compat: vhIterationCount mirrors iterationCount until
-      // Sprint 5 cleanup. escalationCount has always been the legacy name too.
-      if (isCollab && counter === 'iteration') {
-        patch.vhIterationCount = increment(1)
-      }
-      // No separate marker event: the live-stage event pushed at the top of
-      // performAction carries the payload, and the side panel detects the
-      // loop-back nature from the payload shape (reason/iteration keys).
       break
     }
     case 'assign_lead': {
@@ -394,27 +388,32 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
         throw makeError('missing_required_input', 'A lead must be selected.')
       }
       patch.leadUid = leadUid
-      if (isCollab) patch.vhId = leadUid
       break
     }
     case 'clear_lead': {
       patch.leadUid = null
-      if (isCollab) patch.vhId = null
       const counter = action.effect.counter
       if (counter) {
         patch[counter === 'iteration' ? 'iterationCount' : 'escalationCount'] = increment(1)
-        if (isCollab && counter === 'iteration') {
-          patch.vhIterationCount = increment(1)
-        }
-        // No separate marker event — see transition_with_counter for the
-        // same reasoning. The single live-stage event with the payload
-        // carries enough context for the side panel to render correctly.
       }
       break
     }
     case 'mark_complete': {
-      const outcome = inputs.outcome ?? inputs.status
-      if (typeof outcome !== 'string' || !action.effect.outcomes.includes(outcome as ProjectStatus)) {
+      // Auto-apply the outcome when the action declares exactly one valid
+      // outcome and didn't ask the user for it (basic.mark_complete,
+      // sales.mark_won, sales.mark_unqualified, etc.). Workflow authors only
+      // need an `outcome`/`status` input when there's a real choice to make.
+      const supplied = inputs.outcome ?? inputs.status
+      const outcome =
+        typeof supplied === 'string'
+          ? supplied
+          : action.effect.outcomes.length === 1
+            ? action.effect.outcomes[0]
+            : undefined
+      if (
+        typeof outcome !== 'string' ||
+        !action.effect.outcomes.includes(outcome as ProjectStatus)
+      ) {
         throw makeError(
           'invalid_option',
           `Outcome must be one of: ${action.effect.outcomes.join(', ')}`,
@@ -432,16 +431,13 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
         )
       }
       patch.status = status
-      // Dual-write the denormalised statusNote for collab so the existing
-      // pill subtitle keeps rendering. The new banner reads it the same way.
       if (typeof inputs.note === 'string' && inputs.note.trim()) {
         patch.statusNote = inputs.note.trim()
       }
-      // For set_status we still want a history event so the timeline shows
-      // the change. Build one staying at the current stage.
+      // Status-only updates still record a history event so the timeline
+      // shows the change, but stay anchored at the current stage.
       events.push(
         buildEvent(project.currentStageId ?? stage.id, {
-          kind: 'status_update',
           from: project.status,
           to: status,
           note: typeof inputs.note === 'string' ? inputs.note : '',
@@ -452,18 +448,17 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   }
 
   if (events.length) {
-    patch.stageHistory = arrayUnion(...events)
+    patch.projectHistory = arrayUnion(...events)
   }
 
-  // Merge transitional extras (e.g. eligibilityNote denormalisation) — these
-  // are caller-supplied and trusted; performAction does not validate them.
+  // Merge caller-supplied extras (e.g. denormalised eligibilityNote). Trusted.
   if (args.extras) {
     for (const [k, v] of Object.entries(args.extras)) {
       if (v !== undefined) patch[k] = v
     }
   }
 
-  // 5. Write. Join the caller's batch when provided; otherwise create one.
+  // 5. Write.
   const ownsBatch = !args.batch
   const batch = args.batch ?? writeBatch(db)
   batch.update(projectRef, patch)
@@ -489,7 +484,7 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
 
 // Build the payload object stored on a history event from the action inputs.
 // Returns null when the inputs object is empty so payload doesn't bloat the
-// doc. Generic shape — future readers should derive meaning from actionId.
+// doc. Generic shape — renderers resolve meaning from actionId + workflow doc.
 function inputsPayloadOrNull(
   inputs: Record<string, unknown>,
 ): Record<string, unknown> | null {
@@ -500,11 +495,9 @@ function inputsPayloadOrNull(
   return out
 }
 
-// Lightweight actor match without org/teams context — used as a fallback in
-// performAction when the full canPerform check can't resolve team roles. Hooks
-// and modals call the full canPerform with teams/org before opening the modal,
-// so this defensive check just needs to catch obvious gaps (e.g. wrong global
-// role, wrong creator).
+// Lightweight actor match without org/teams context — defensive fallback in
+// performAction when the full canPerform check can't resolve team roles.
+// Modal-side gates already cover the full picture; this catches obvious gaps.
 function actorOnlyMatch(actor: ActorRef, user: User, project: Project): boolean {
   switch (actor.kind) {
     case 'global_role':

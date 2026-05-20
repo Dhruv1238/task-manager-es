@@ -1,6 +1,12 @@
 import type { Timestamp } from 'firebase/firestore'
 import type { ProjectStatus, TeamRoleId } from './models'
 
+// Sentinel doc id for the workflow-registry singleton, sibling of the
+// per-workflow docs under /workflows/. Chosen with a leading underscore so it
+// can never collide with a tenant-authored workflow id (validated at write time
+// in 2c's authoring wizard).
+export const WORKFLOW_REGISTRY_ID = '_registry'
+
 // Workflow doc shape. Lives at /workflows/{workflowId}. Each tenant ships
 // with a seeded workflow (collab-default or basic); future authoring wizard
 // (phase 2c) writes tenant-custom docs alongside the seeds.
@@ -17,9 +23,32 @@ export interface Workflow {
   leadRoleName: string
   isSystemDefined: boolean
   stages: Stage[]
+  // Phase 2b: uids the new-project lead picker surfaces under a "Recommended"
+  // group for this workflow. Soft hint — any pickerScope-valid user remains
+  // selectable. Empty (or missing) means the picker just lists everyone
+  // alphabetically. Managed from /admin/config → Workflows → kebab → Manage
+  // recommended leads.
+  recommendedLeads?: string[]
   version: number
   updatedAt: Timestamp
   updatedBy: string
+}
+
+// Phase 2b: registry singleton at /workflows/_registry. Tracks which seeded
+// workflows are *active* (selectable by project creators) and which is the
+// default in the new-project modal. Independent of the per-workflow docs so
+// activation toggles don't churn the workflow doc itself.
+export interface WorkflowRegistry {
+  version: number
+  updatedAt: Timestamp
+  updatedBy: string
+  // Workflow ids in display order. The new-project modal's picker and the
+  // dashboard tabs render in this order; the first active is the implicit
+  // default when `defaultWorkflowId` is null.
+  activeWorkflowIds: string[]
+  // Pre-selected in the new-project modal. Cleared automatically when the
+  // referenced workflow is deactivated.
+  defaultWorkflowId: string | null
 }
 
 export interface Stage {
@@ -41,7 +70,21 @@ export interface Stage {
 export interface StageAction {
   id: string
   label: string
+  // Canonical actor for this action — owns the button in /me inbox routing.
+  // The evaluator checks this first; if it matches, the action surfaces both
+  // in the banner and on the canonical actor's inbox.
   actor: ActorRef
+  // Override actors that ALSO grant permission to perform this action. Used
+  // when several actor classes are equivalent for a given action (e.g. the
+  // creator marks complete, but admins / super_admin can also do it). One
+  // button per action — the banner doesn't render duplicates. For /me inbox
+  // routing, alsoAllow does NOT surface — only the canonical actor does, so
+  // override actors aren't pestered with someone else's work.
+  //
+  // Distinct from team_role's nested alsoAllow which has the additional
+  // "team absent" semantics; that's preserved for back-compat with the
+  // collab workflow.
+  alsoAllow?: ActorRef[]
   effect: ActionEffect
   inputs: ActionInput[]
   // Banner button styling hint. The engine never reads it; only the renderer.
@@ -110,6 +153,58 @@ export interface ActionInput {
   //   'team_role:specialist/any' — any member of any specialist team on the project
   pickerScope?: string
 }
+
+// ─── Project history events ─────────────────────────────────────────────────
+// Discriminated union over every event recorded on a project's timeline. Lives
+// on `project.projectHistory: ProjectHistoryEvent[]`. Replaces the pre-2b
+// `stageHistory` array which was implicitly stage-only.
+//
+// Three kinds:
+//   - 'stage'               — entered a new stage (every transition).
+//   - 'workflow_assignment' — workflow pinned at creation (always first event).
+//   - 'workflow_change'     — workflow swapped on an in-flight project (no 2b
+//                             UI; reserved data slot for 2c).
+//
+// Renderers walk the union via the `kind` discriminator and dispatch per
+// variant. Forward compatibility: adding a new kind requires one variant here
+// + one case in the side-panel renderer; existing data continues to render.
+
+export interface StageEvent {
+  kind: 'stage'
+  // Stable id referencing a stage in the workflow doc this event belongs to.
+  // Resolves to a displayName via workflow.stages.find(s => s.id === stageId).
+  stageId: string
+  enteredAt: Timestamp
+  enteredBy: string
+  // Optional: the workflow action that drove the transition. Empty for the
+  // synthetic initial-stage event written by addProject.
+  actionId?: string
+  // Generic payload mirrors the action's inputs (action.inputs[].id → value).
+  // Renderers resolve labels back to ActionInput declarations via the
+  // workflow doc. Set to null when the action had no inputs.
+  payload?: Record<string, unknown> | null
+}
+
+export interface WorkflowAssignmentEvent {
+  kind: 'workflow_assignment'
+  workflowId: string
+  assignedAt: Timestamp
+  assignedBy: string
+}
+
+export interface WorkflowChangeEvent {
+  kind: 'workflow_change'
+  fromWorkflowId: string
+  toWorkflowId: string
+  changedAt: Timestamp
+  changedBy: string
+  reason: string
+}
+
+export type ProjectHistoryEvent =
+  | StageEvent
+  | WorkflowAssignmentEvent
+  | WorkflowChangeEvent
 
 // Thrown by workflowEvaluator.performAction when inputs fail validation or the
 // caller lacks permission. UI surfaces .message; engine code reads .code.

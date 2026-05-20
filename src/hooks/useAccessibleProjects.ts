@@ -5,7 +5,8 @@ import type { Project } from '../types/models'
 
 // Projects the current user is allowed to view:
 // - super_admins / admins: every project
-// - VHs: projects they're VH on, even if their teams aren't yet attached
+// - project leads: projects they're pinned as lead on, even if their teams
+//   aren't attached yet
 // - regular users: projects they own OR where one of their teams is assigned
 export function useAccessibleProjects(): { projects: Project[]; loading: boolean } {
   const { profile } = useAuth()
@@ -21,7 +22,6 @@ export function useAccessibleProjects(): { projects: Project[]; loading: boolean
       (p) =>
         p.ownerId === profile.uid ||
         p.leadUid === profile.uid ||
-        p.vhId === profile.uid ||
         (p.teamIds ?? []).some((tid) => myTeams.has(tid)),
     )
   }, [projects, profile])

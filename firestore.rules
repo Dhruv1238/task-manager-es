@@ -82,6 +82,12 @@ service cloud.firestore {
     // actions); only super_admins write — via seed scripts today, via the
     // authoring wizard in 2c. Top-level collection so document paths stay
     // valid (config/<id> already occupies the singleton slot).
+    //
+    // Phase 2b adds /workflows/_registry as a sentinel singleton tracking
+    // which workflows are active for the tenant. It rides the same rule:
+    // signed-in users read (the picker / dashboard tabs need it); only
+    // super_admins write (activation toggles, default selection). Workflow
+    // ids never start with `_` so collisions are impossible.
 
     match /workflows/{workflowId} {
       allow read: if isSignedIn();

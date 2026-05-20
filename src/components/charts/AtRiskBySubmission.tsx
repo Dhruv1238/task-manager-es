@@ -3,35 +3,44 @@ import { Link } from 'react-router-dom'
 import ChartCard from './ChartCard'
 import { stageTone } from '../workflow/stageStyle'
 import { isProjectLive } from '../../lib/projectStatus'
-import { useActiveWorkflow } from '../../contexts/AppConfigContext'
 import type { Project } from '../../types/models'
+import type { Workflow } from '../../types/workflow'
 
 interface Props {
   projects: Project[]
+  // Phase 2b: caller picks the workflow this panel reports on. The panel is
+  // collab-only (uses submissionDate, a collab-specific field) so AdminDashboard
+  // renders it only under the collaborative-workflow tab.
+  workflow: Workflow
 }
 
-// Tenders within 7 days of submission and not yet delivered (delta §6.5).
-export default function AtRiskBySubmission({ projects }: Props) {
-  const { workflow } = useActiveWorkflow()
+// Projects within 7 days of submission and not yet at the delivered stage.
+// Workflow-scoped: filters the incoming list to projects on this workflow,
+// then narrows further to those with a submissionDate and a non-delivered
+// currentStageId.
+export default function AtRiskBySubmission({ projects, workflow }: Props) {
   const items = useMemo(() => {
     const now = Date.now()
     const horizon = 7 * 24 * 3600 * 1000
     return projects
       .filter(
         (p) =>
+          p.workflowId === workflow.id &&
           isProjectLive(p.status) &&
           p.currentStageId !== 'delivered' &&
-          p.stage !== 10 &&
           p.submissionDate,
       )
       .map((p) => ({
         p,
-        days: Math.round(((p.submissionDate!.toDate().getTime() - now) / (24 * 3600 * 1000)) * 10) / 10,
+        days:
+          Math.round(
+            ((p.submissionDate!.toDate().getTime() - now) / (24 * 3600 * 1000)) * 10,
+          ) / 10,
       }))
       .filter((x) => x.days < horizon / (24 * 3600 * 1000))
       .sort((a, b) => a.days - b.days)
       .slice(0, 8)
-  }, [projects])
+  }, [projects, workflow])
 
   return (
     <ChartCard
@@ -43,9 +52,8 @@ export default function AtRiskBySubmission({ projects }: Props) {
     >
       <ul className="divide-y divide-line-subtle overflow-y-auto pr-1">
         {items.map(({ p, days }) => {
-          const stage = workflow?.stages.find(
-            (s) => s.id === p.currentStageId,
-          ) ?? workflow?.stages[0]
+          const stage =
+            workflow.stages.find((s) => s.id === p.currentStageId) ?? workflow.stages[0]
           const tone = stageTone(stage?.order ?? 1, stage?.isTerminal ?? false)
           const overdue = days < 0
           return (
@@ -57,13 +65,17 @@ export default function AtRiskBySubmission({ projects }: Props) {
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-fg">{p.title}</div>
                   <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-subtle">
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] ${tone.pill}`}>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] ${tone.pill}`}
+                    >
                       <span className={`h-1 w-1 rounded-full ${tone.dot}`} aria-hidden />
                       {stage?.displayName ?? '—'}
                     </span>
                   </div>
                 </div>
-                <span className={`text-xs font-medium ${overdue ? 'text-tone-danger-fg' : days < 3 ? 'text-tone-warn-fg' : 'text-fg-muted'}`}>
+                <span
+                  className={`text-xs font-medium ${overdue ? 'text-tone-danger-fg' : days < 3 ? 'text-tone-warn-fg' : 'text-fg-muted'}`}
+                >
                   {overdue ? `${Math.abs(days)}d overdue` : `${days}d to go`}
                 </span>
               </Link>

@@ -1,7 +1,8 @@
 /**
- * Seeds /workflows/basic — the 2-stage simple-mode workflow for tenants that
- * disable the pipeline (pipelineEnabled = false). A project starts in
- * `in_progress` and can be marked complete by the creator or any admin.
+ * Seeds /workflows/basic — the 2-stage simple-mode workflow. The implicit
+ * default for any tenant: when no other workflow is activated in
+ * /workflows/_registry, basic is what project creators get. A project starts
+ * in `in_progress` and can be marked complete by the creator or any admin.
  * Top-level `workflows` collection — see seedCollabWorkflow.ts for the path
  * rationale.
  *
@@ -21,34 +22,31 @@ export function buildBasicWorkflow(): Omit<Workflow, 'updatedAt' | 'updatedBy' |
     flowType: 'basic',
     leadRoleName: 'Project Lead',
     isSystemDefined: true,
+    recommendedLeads: [],
     stages: [
       {
         id: 'in_progress',
         displayName: 'In Progress',
         order: 1,
         isTerminal: false,
+        // Single canonical action. The creator owns the inbox routing
+        // ("project is awaiting me" surfaces to them); admins / super_admin
+        // can also press the button as an override (alsoAllow) without
+        // ending up in their inbox for every basic project in the system.
         actions: [
           {
-            id: 'mark_complete_creator',
+            id: 'mark_complete',
             label: 'Mark complete',
             actor: { kind: 'creator' },
-            effect: { kind: 'mark_complete', toStage: 'completed', outcomes: ['completed'] },
-            intent: 'primary',
-            inputs: [],
-          },
-          {
-            id: 'mark_complete_admin',
-            label: 'Mark complete',
-            actor: { kind: 'global_role', role: 'admin' },
-            effect: { kind: 'mark_complete', toStage: 'completed', outcomes: ['completed'] },
-            intent: 'primary',
-            inputs: [],
-          },
-          {
-            id: 'mark_complete_super_admin',
-            label: 'Mark complete',
-            actor: { kind: 'global_role', role: 'super_admin' },
-            effect: { kind: 'mark_complete', toStage: 'completed', outcomes: ['completed'] },
+            alsoAllow: [
+              { kind: 'global_role', role: 'admin' },
+              { kind: 'global_role', role: 'super_admin' },
+            ],
+            effect: {
+              kind: 'mark_complete',
+              toStage: 'completed',
+              outcomes: ['completed'],
+            },
             intent: 'primary',
             inputs: [],
           },

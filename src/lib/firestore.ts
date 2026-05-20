@@ -15,20 +15,13 @@ import type {
   GlobalRole,
   Project,
   ProjectStatus,
-  Stage,
-  StageEvent,
-  StatusUpdatePayload,
   TaskPriority,
   TaskStatus,
   User,
   WorkType,
 } from '../types/models'
-import {
-  getActiveWorkflowId,
-  getActiveWorkflowSnapshot,
-  getAppConfigSnapshot,
-  getWorkflowSnapshot,
-} from '../contexts/AppConfigContext'
+import type { ProjectHistoryEvent, StageEvent, WorkflowAssignmentEvent } from '../types/workflow'
+import { getWorkflowSnapshot } from '../contexts/AppConfigContext'
 import { performAction } from './workflowEvaluator'
 import {
   addDoc,
@@ -48,28 +41,30 @@ import { db } from './firebase'
 
 // --- Workflow action helper --------------------------------------------------
 // Thin shim used by every stage modal. Reads the project's pinned workflow
-// (legacy projects without a workflowId fall back to the active workflow), then
-// delegates to workflowEvaluator.performAction. Throws if the snapshot isn't
-// available — the caller surfaces that as a "try refreshing" error.
+// from the cached snapshot, then delegates to workflowEvaluator.performAction.
+// Throws if the snapshot isn't available — the caller surfaces that as a "try
+// refreshing" error.
 
 export interface RunWorkflowActionInput {
   project: Project
   user: User
   actionId: string
   inputs: Record<string, unknown>
-  // Transitional Sprint 2-3 escape hatch. Modal-side denormalisations (e.g.
-  // mirroring an input onto a top-level project field for the old banner)
-  // pass extras here. Removed when the new banner ships in Sprint 4.
+  // Optional caller-supplied denormalisations to merge onto the project doc
+  // alongside the action's standard patch (e.g. eligibilityNote mirroring).
   extras?: Record<string, unknown>
 }
 
 export async function runWorkflowAction(input: RunWorkflowActionInput): Promise<void> {
-  const workflow = input.project.workflowId
-    ? getWorkflowSnapshot(input.project.workflowId)
-    : getActiveWorkflowSnapshot()
+  if (!input.project.workflowId) {
+    throw new Error(
+      'This project has no workflow pinned — run the project-history migration under /admin/config first.',
+    )
+  }
+  const workflow = getWorkflowSnapshot(input.project.workflowId)
   if (!workflow) {
     throw new Error(
-      'Workflow definition not loaded — refresh the page or ask an admin to seed it under /admin/config.',
+      `Workflow "${input.project.workflowId}" not loaded — refresh the page or ask an admin to seed it under /admin/config.`,
     )
   }
   await performAction({
@@ -284,41 +279,67 @@ export interface AddProjectInput {
   ownerId: string
   createdBy: string
   actorName: string
+  // Required for auto-allocation: the creator's global role + team
+  // memberships. performAction's permission check looks these up to decide
+  // whether the canonical actor on the workflow's first action matches.
+  // Without them, a hardcoded `globalRole: 'user'` shim silently fails
+  // permission for any action that requires 'super_admin' or 'admin' (e.g.
+  // collab.allocate, sales.assign_to_rep).
+  creatorRole: GlobalRole
+  creatorTeamIds?: string[]
+  // Required: the workflow this project pins to. New-project form supplies
+  // it from the WorkflowPicker step (or auto-pins when only one workflow is
+  // active).
+  workflowId: string
   deadline?: Timestamp
   attachments?: Attachment[]
-  // Tender additions:
+  // Collaborative-flow fields. Only set when picked workflow's flowType is
+  // 'collaborative' — the form's CollaborativeFields subcomponent surfaces
+  // these inputs and omits them for other flow types.
   submissionDate?: Timestamp
   presentationDate?: Timestamp
+  // Auto-allocation hook: when the picked workflow's first-stage first action
+  // is an `assign_lead` and the form supplied a lead uid, the project is
+  // created at stage 1 and then immediately advanced via performAction in the
+  // same commit. Falsy → project lands at stage 1 awaiting allocation.
+  initialAction?: {
+    actionId: string
+    inputs: Record<string, unknown>
+  }
 }
 
 export async function addProject(input: AddProjectInput): Promise<string> {
-  // Firestore rejects serverTimestamp() inside arrays — fall back to Timestamp.now()
-  // for events stored in `stageHistory[]`. The top-level `createdAt`/`updatedAt`
-  // fields still use the authoritative serverTimestamp().
-  const pipelineEnabled = getAppConfigSnapshot().pipeline.enabled
+  const workflow = getWorkflowSnapshot(input.workflowId)
+  if (!workflow) {
+    throw new Error(
+      `Workflow "${input.workflowId}" not loaded — refresh the page or ask an admin to seed it under /admin/config.`,
+    )
+  }
+  const firstStage = [...workflow.stages].sort((a, b) => a.order - b.order)[0]
+  if (!firstStage) {
+    throw new Error(`Workflow "${input.workflowId}" has no stages — cannot pin a project.`)
+  }
 
-  // Phase 2a: pin a workflow at creation. The active workflow id is derived
-  // from pipelineEnabled; the doc is read from the cached snapshot. When the
-  // snapshot isn't populated yet (pre-seed) we fall back to legacy behaviour
-  // — Sprint 1's seed buttons populate the cache before any project is
-  // created in a fresh environment.
-  const activeWorkflow = getActiveWorkflowSnapshot()
-  const activeWorkflowId = getActiveWorkflowId()
-  const firstStage = activeWorkflow
-    ? [...activeWorkflow.stages].sort((a, b) => a.order - b.order)[0]
-    : null
-
-  // Compose the initial history event. Dual-writes stage (legacy) and stageId
-  // (new) so the old side panel and the new evaluator both render it. The
-  // numeric stage is 1 (legacy "Project creation") for collab; 0 for basic
-  // (which never used numeric stages).
+  // Initial timeline events. Always start with the workflow_assignment marker
+  // so the side panel renders "pinned to {workflowName} by {creator}". Add the
+  // stage event for the first stage so the project's first "Stage" entry is
+  // also captured. Use Timestamp.now() — Firestore rejects serverTimestamp()
+  // inside arrays.
+  const now = Timestamp.now()
+  const assignment: WorkflowAssignmentEvent = {
+    kind: 'workflow_assignment',
+    workflowId: input.workflowId,
+    assignedAt: now,
+    assignedBy: input.createdBy,
+  }
   const initialStageEvent: StageEvent = {
-    stage: pipelineEnabled ? 1 : (0 as StageEvent['stage']),
-    enteredAt: Timestamp.now(),
+    kind: 'stage',
+    stageId: firstStage.id,
+    enteredAt: now,
     enteredBy: input.createdBy,
     payload: null,
-    ...(firstStage ? { stageId: firstStage.id } : {}),
   }
+  const projectHistory: ProjectHistoryEvent[] = [assignment, initialStageEvent]
 
   const batch = writeBatch(db)
   const projectRef = doc(collection(db, 'projects'))
@@ -333,37 +354,16 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     accessKeys: [input.ownerId],
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),
-    // Workflow pinning (Phase 2a). Always written when a workflow is
-    // available — both pipeline-on and pipeline-off projects participate.
-    ...(activeWorkflow
-      ? {
-          workflowId: activeWorkflowId,
-          currentStageId: firstStage?.id ?? null,
-          leadUid: null,
-          iterationCount: 0,
-        }
-      : {}),
-    // Legacy tender fields. Written only when pipeline is enabled, matching
-    // the pre-2a behaviour so the old StageBanner / usePermissions keep
-    // working through Sprints 2-3. Sprint 5 drops this block.
-    ...(pipelineEnabled
-      ? {
-          vhId: null,
-          stage: 1,
-          stageHistory: [initialStageEvent],
-          escalationCount: 0,
-          vhIterationCount: 0,
-          ...(input.submissionDate ? { submissionDate: input.submissionDate } : {}),
-          ...(input.presentationDate ? { presentationDate: input.presentationDate } : {}),
-        }
-      : activeWorkflow
-        ? {
-            // Pipeline disabled but a workflow is pinned (basic) — still write
-            // an initial history entry so the timeline isn't empty.
-            stageHistory: [initialStageEvent],
-            escalationCount: 0,
-          }
-        : {}),
+    // Workflow pinning — every project carries these post-2b.
+    workflowId: input.workflowId,
+    currentStageId: firstStage.id,
+    leadUid: null,
+    iterationCount: 0,
+    escalationCount: 0,
+    projectHistory,
+    // Collab-flow denormalisations (only present when supplied).
+    ...(input.submissionDate ? { submissionDate: input.submissionDate } : {}),
+    ...(input.presentationDate ? { presentationDate: input.presentationDate } : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -375,9 +375,69 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     targetId: projectRef.id,
     targetTitle: input.title,
     projectId: projectRef.id,
-    payload: activeWorkflow ? { workflowId: activeWorkflowId } : undefined,
+    payload: { workflowId: input.workflowId },
     batch,
   })
+
+  // Auto-allocation: when the form provided the inputs the first action needs,
+  // chain a performAction onto the same batch so the project lands at stage 2
+  // (e.g. 'allocated' / 'assigned') in a single commit. Skips silently when
+  // the action doesn't exist or the supplied inputs fail validation — the
+  // project still gets created at stage 1.
+  if (input.initialAction) {
+    const action = firstStage.actions.find((a) => a.id === input.initialAction!.actionId)
+    if (action) {
+      // Reconstruct a Project shape sufficient for performAction. We don't
+      // have the server-stamped ids/timestamps yet, but performAction only
+      // reads workflowId/currentStageId/leadUid/ownerId/status from the
+      // project to compose the patch — all known here.
+      const projectShim: Project = {
+        id: projectRef.id,
+        title: input.title,
+        description: input.description,
+        ownerId: input.ownerId,
+        status: 'in_progress',
+        teamIds: [],
+        createdAt: now,
+        updatedAt: now,
+        workflowId: input.workflowId,
+        currentStageId: firstStage.id,
+        leadUid: null,
+        iterationCount: 0,
+        escalationCount: 0,
+        projectHistory,
+      }
+      const userShim: User = {
+        uid: input.createdBy,
+        email: '',
+        displayName: input.actorName,
+        // Real role + team memberships so performAction's permission check
+        // sees the actual creator, not a "user"-role placeholder.
+        globalRole: input.creatorRole,
+        teamIds: input.creatorTeamIds ?? [],
+        createdAt: now,
+      }
+      try {
+        await performAction({
+          project: projectShim,
+          workflow,
+          user: userShim,
+          actionId: input.initialAction.actionId,
+          inputs: input.initialAction.inputs,
+          batch,
+        })
+      } catch (e) {
+        // Auto-allocation is best-effort: the project is still created at
+        // stage 1 in the same batch. Log so silent permission / validation
+        // failures surface during dev instead of disappearing.
+        console.warn(
+          `addProject: auto-allocation of action "${input.initialAction.actionId}" failed; project will land at stage 1.`,
+          e,
+        )
+      }
+    }
+  }
+
   await batch.commit()
   return projectRef.id
 }
@@ -390,34 +450,37 @@ export interface UpdateProjectStatusInput {
   note: string
   enteredBy: string
   actorName: string
-  // The stage at which the update was made — recorded on the history event so
-  // the timeline can show "Status changed to Awarded at stage 10".
-  stage: Stage
+  // The stage id the project was sitting at when the update was made — used
+  // as the anchor for the history event so the timeline shows the status
+  // change against its workflow context.
+  stageId: string
 }
 
-// Update project.status and append a status_update event to stageHistory atomically.
-// Used at stage 10 (CS records outcome) and any other time VH/CS adjusts the status.
+// Update project.status and append a stage-anchored status event to
+// projectHistory atomically. Used by the direct status-pill update path (the
+// `set_status` workflow effect goes through performAction). Status changes
+// don't transition the stage — the event's stageId equals project.currentStageId.
 export async function updateProjectStatus(input: UpdateProjectStatusInput): Promise<void> {
   const trimmed = input.note.trim()
   if (!trimmed) {
     throw new Error('A note is required when updating the project status.')
   }
-  const payload: StatusUpdatePayload = {
-    from: input.fromStatus,
-    to: input.toStatus,
-    note: trimmed,
-  }
   const event: StageEvent = {
-    stage: input.stage,
+    kind: 'stage',
+    stageId: input.stageId,
     enteredAt: Timestamp.now(),
     enteredBy: input.enteredBy,
-    payload,
+    payload: {
+      from: input.fromStatus,
+      to: input.toStatus,
+      note: trimmed,
+    },
   }
   const batch = writeBatch(db)
   batch.update(doc(db, 'projects', input.projectId), {
     status: input.toStatus,
     statusNote: trimmed,
-    stageHistory: arrayUnion(event),
+    projectHistory: arrayUnion(event),
     updatedAt: serverTimestamp(),
   })
   recordAuditEvent({
@@ -428,7 +491,7 @@ export async function updateProjectStatus(input: UpdateProjectStatusInput): Prom
     targetId: input.projectId,
     targetTitle: input.projectTitle,
     projectId: input.projectId,
-    payload: { from: input.fromStatus, to: input.toStatus, note: trimmed, stage: input.stage },
+    payload: { from: input.fromStatus, to: input.toStatus, note: trimmed, stageId: input.stageId },
     batch,
   })
   await batch.commit()
@@ -506,33 +569,29 @@ export interface AddTeamTaskInput {
 }
 
 export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
-  // Ensure the team is attached to the project: VH may pick a template whose
-  // canonical team isn't yet on the project — auto-attach so the task renders
-  // correctly on swimlanes and roll-ups. Also auto-advance the workflow when
-  // the lead adds the first team task at the task_setup stage — Phase 2a
-  // routes that transition through workflowEvaluator.performAction.
+  // Ensure the team is attached to the project: the lead may pick a template
+  // whose canonical team isn't yet on the project — auto-attach so the task
+  // renders correctly on swimlanes and roll-ups. Also auto-advance the
+  // workflow when the lead adds the first task at the `task_setup` stage —
+  // routed through workflowEvaluator.performAction so the workflow doc
+  // decides what "confirm setup" means.
   const projectRef = doc(db, 'projects', input.projectId)
   const projectSnap = await getDoc(projectRef)
   const projectData = projectSnap.exists()
     ? (projectSnap.data() as {
-        id?: string
         teamIds?: string[]
-        stage?: number
         currentStageId?: string
         workflowId?: string
         ownerId?: string
         leadUid?: string | null
         title?: string
         status?: string
-        accessKeys?: string[]
+        projectHistory?: ProjectHistoryEvent[]
       })
     : null
   const existingTeamIds: string[] = projectData?.teamIds ?? []
   const needsAttach = !existingTeamIds.includes(input.teamId)
-  // Auto-advance trigger: either the new currentStageId === 'task_setup' or
-  // the legacy stage === 6. Both are accepted during the dual-write window.
-  const advanceFromTaskSetup =
-    projectData?.currentStageId === 'task_setup' || projectData?.stage === 6
+  const advanceFromTaskSetup = projectData?.currentStageId === 'task_setup'
 
   const batch = writeBatch(db)
   const taskRef = doc(collection(db, 'tasks'))
@@ -559,15 +618,14 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     updatedAt: serverTimestamp(),
   })
 
-  const projectPatch: Record<string, unknown> = { updatedAt: serverTimestamp() }
   if (needsAttach) {
-    projectPatch.teamIds = arrayUnion(input.teamId)
-    // Keep the denormalized visibility array in sync so non-admin members of
-    // the auto-attached team can see this project on the Projects listing.
-    projectPatch.accessKeys = arrayUnion(input.teamId)
-  }
-  if (needsAttach) {
-    batch.update(projectRef, projectPatch)
+    batch.update(projectRef, {
+      teamIds: arrayUnion(input.teamId),
+      // Keep the denormalized visibility array in sync so non-admin members
+      // of the auto-attached team can see this project on the Projects list.
+      accessKeys: arrayUnion(input.teamId),
+      updatedAt: serverTimestamp(),
+    })
     batch.update(doc(db, 'teams', input.teamId), {
       projectIds: arrayUnion(input.projectId),
     })
@@ -588,27 +646,26 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     batch,
   })
 
-  // Auto-advance: route through performAction so the workflow doc decides what
-  // happens. The actor is the project lead (who must also be the task creator
-  // at this stage — old code had no separate check, neither does this). When
-  // the workflow snapshot isn't available (pre-seed), we silently skip the
-  // auto-advance and the lead can advance manually via the banner.
-  if (advanceFromTaskSetup) {
-    const workflow = getActiveWorkflowSnapshot()
+  // Auto-advance: only when the workflow snapshot is available AND the
+  // workflow doc has a `confirm_setup` action at the current stage. Anything
+  // else (missing workflow, missing action, permission failure) skips the
+  // auto-advance silently — the lead can advance manually via the banner.
+  if (advanceFromTaskSetup && projectData?.workflowId) {
+    const workflow = getWorkflowSnapshot(projectData.workflowId)
     if (workflow) {
-      // Reconstruct a Project shape from the doc snapshot for performAction.
       const project: Project = {
         id: input.projectId,
-        title: projectData?.title ?? input.projectTitle,
+        title: projectData.title ?? input.projectTitle,
         description: '',
-        ownerId: projectData?.ownerId ?? '',
-        status: (projectData?.status as Project['status']) ?? 'in_progress',
+        ownerId: projectData.ownerId ?? '',
+        status: (projectData.status as Project['status']) ?? 'in_progress',
         teamIds: existingTeamIds,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-        leadUid: projectData?.leadUid ?? null,
-        currentStageId: projectData?.currentStageId ?? 'task_setup',
-        workflowId: projectData?.workflowId,
+        leadUid: projectData.leadUid ?? null,
+        currentStageId: projectData.currentStageId ?? 'task_setup',
+        workflowId: projectData.workflowId,
+        projectHistory: projectData.projectHistory ?? [],
       }
       const user: User = {
         uid: input.createdBy,
@@ -628,54 +685,13 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
           batch,
         })
       } catch {
-        // If the workflow refuses (permission, terminal stage, etc.), fall
-        // back to legacy direct write so existing UX continues. Sprint 4
-        // rewrites this once the banner is generic.
-        projectPatch.stage = 7
-        projectPatch.currentStageId = 'in_execution'
-        projectPatch.stageHistory = arrayUnion({
-          stage: 7 as const,
-          stageId: 'in_execution',
-          enteredAt: Timestamp.now(),
-          enteredBy: input.createdBy,
-          payload: null,
-        })
-        batch.update(projectRef, projectPatch)
-        recordAuditEvent({
-          actorId: input.createdBy,
-          actorName: input.actorName,
-          action: 'project.stage_transitioned',
-          targetType: 'project',
-          targetId: input.projectId,
-          targetTitle: input.projectTitle,
-          projectId: input.projectId,
-          payload: { fromStage: 6, toStage: 7 },
-          batch,
-        })
+        // Auto-advance is best-effort. Silently skip when the workflow
+        // refuses (no confirm_setup action, permission denied, etc.) —
+        // the project still has the new task; the lead advances manually.
       }
-    } else {
-      // No workflow available — fall back to legacy direct write.
-      projectPatch.stage = 7
-      projectPatch.stageHistory = arrayUnion({
-        stage: 7 as const,
-        enteredAt: Timestamp.now(),
-        enteredBy: input.createdBy,
-        payload: null,
-      })
-      batch.update(projectRef, projectPatch)
-      recordAuditEvent({
-        actorId: input.createdBy,
-        actorName: input.actorName,
-        action: 'project.stage_transitioned',
-        targetType: 'project',
-        targetId: input.projectId,
-        targetTitle: input.projectTitle,
-        projectId: input.projectId,
-        payload: { fromStage: 6, toStage: 7 },
-        batch,
-      })
     }
   }
+
   await batch.commit()
   return taskRef.id
 }

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
-import { usePipelineEnabled } from '../../contexts/AppConfigContext'
+import { useWorkflow } from '../../contexts/AppConfigContext'
 import { updateProjectStatus } from '../../lib/firestore'
 import { SIMPLE_STATUS_OPTIONS, STATUS_DISPLAY, STATUS_OPTIONS } from '../../lib/projectStatus'
-import type { Project, ProjectStatus, Stage } from '../../types/models'
+import type { Project, ProjectStatus } from '../../types/models'
+import type { FlowType } from '../../types/workflow'
 
 interface Props {
   open: boolean
@@ -12,17 +13,37 @@ interface Props {
   project: Project
   // Optional: constrain the status cards to a workflow-declared subset (used
   // when the modal is opened from a `set_status` action on the banner). When
-  // omitted (status-pill click on ProjectDetail), all options for the active
-  // mode are shown.
+  // omitted (status-pill click on ProjectDetail), the per-flowType default set
+  // is shown.
   allowedStatuses?: ProjectStatus[]
-  // Override the modal title — the `record_outcome` action wants "Record outcome".
+  // Override the modal title — `record_outcome` wants "Record outcome".
   titleOverride?: string
   submitLabelOverride?: string
 }
 
-// Single source of truth for changing project.status. VH and CS can open this
-// from the project header pill or from a `set_status` workflow action.
-// Records every change in stageHistory with a required note.
+// Per-flowType default status set for the status-pill-driven path. The
+// `set_status` workflow action overrides this with its declared `statuses`
+// array when the modal is opened from the banner instead.
+const INDIVIDUAL_STATUS_OPTIONS: ProjectStatus[] = [
+  'in_progress',
+  'awarded',
+  'lost',
+  'on_hold',
+  'completed',
+]
+
+function statusOptionsForFlowType(flowType: FlowType | undefined): ProjectStatus[] {
+  if (flowType === 'collaborative') return STATUS_OPTIONS
+  if (flowType === 'individual') return INDIVIDUAL_STATUS_OPTIONS
+  if (flowType === 'basic') return SIMPLE_STATUS_OPTIONS
+  // Unknown / workflow still loading — fall back to the simple set so the
+  // pill stays usable but the user sees a conservative menu.
+  return SIMPLE_STATUS_OPTIONS
+}
+
+// Single source of truth for direct status updates (the status-pill click
+// path) and for workflow-driven `set_status` actions. Records every change
+// in projectHistory with a required note.
 export default function UpdateProjectStatusModal({
   open,
   onClose,
@@ -32,8 +53,8 @@ export default function UpdateProjectStatusModal({
   submitLabelOverride,
 }: Props) {
   const { user, profile } = useAuth()
-  const pipelineEnabled = usePipelineEnabled()
-  const baseOptions = pipelineEnabled ? STATUS_OPTIONS : SIMPLE_STATUS_OPTIONS
+  const workflow = useWorkflow(project.workflowId)
+  const baseOptions = statusOptionsForFlowType(workflow?.flowType)
   // Filter to the workflow-declared outcomes when provided. We keep the
   // current status visible even if it isn't in the allowed list — without
   // it the "CURRENT" indicator disappears and the user can't see what
@@ -51,19 +72,12 @@ export default function UpdateProjectStatusModal({
 
   useEffect(() => {
     if (open) {
-      // Default-suggest the most likely transition: at stage 10 it's "Submitted",
-      // anywhere else keep the current status selected.
-      const stage = project.stage
-      if (stage === 10 && currentStatus === 'in_progress') {
-        setNext('submitted')
-      } else {
-        setNext(currentStatus)
-      }
+      setNext(currentStatus)
       setNote('')
       setError(null)
       setSubmitting(false)
     }
-  }, [open, currentStatus, project.stage])
+  }, [open, currentStatus])
 
   async function handleSubmit() {
     if (!user) return
@@ -86,7 +100,9 @@ export default function UpdateProjectStatusModal({
         note: note.trim(),
         enteredBy: user.uid,
         actorName: profile?.displayName ?? user.email ?? 'User',
-        stage: (project.stage ?? 1) as Stage,
+        // The status change anchors to the project's current stage so the
+        // timeline shows it in context.
+        stageId: project.currentStageId,
       })
       onClose()
     } catch (e) {

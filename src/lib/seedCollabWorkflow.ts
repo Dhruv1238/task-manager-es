@@ -32,6 +32,7 @@ export function buildCollabDefaultWorkflow(): Omit<Workflow, 'updatedAt' | 'upda
     flowType: 'collaborative',
     leadRoleName: 'Vertical Head',
     isSystemDefined: true,
+    recommendedLeads: [],
     stages: [
       {
         id: 'created',

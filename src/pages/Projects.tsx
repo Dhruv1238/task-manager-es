@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   collection,
   limit,
@@ -13,7 +13,11 @@ import {
 import { db } from '../lib/firebase'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
-import { useCreateProjectLabel, usePipelineEnabled } from '../contexts/AppConfigContext'
+import {
+  useActiveWorkflows,
+  useCreateProjectLabel,
+  useWorkflow,
+} from '../contexts/AppConfigContext'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import SearchInput from '../components/ui/SearchInput'
@@ -22,6 +26,7 @@ import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
 import UnreadChatBadge from '../components/projects/UnreadChatBadge'
 import ProjectsTable from '../components/projects/ProjectsTable'
 import StagePill from '../components/projects/StagePill'
+import WorkflowBadge from '../components/projects/WorkflowBadge'
 import {
   formatDeadline,
   isOverdue,
@@ -126,13 +131,62 @@ export default function Projects() {
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
 
+  // URL-bound filters (Phase 2b). `?workflows=collab-default,sales-default`
+  // tracks the workflow multi-select; `?stage=in_execution` tracks the
+  // workflow-scoped stage filter. State survives navigation and refresh.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { workflows: activeWorkflows } = useActiveWorkflows()
+
+  const selectedWorkflowIds = useMemo<string[]>(() => {
+    const raw = searchParams.get('workflows')
+    if (!raw) return activeWorkflows.map((w) => w.id)
+    const ids = raw.split(',').map((s) => s.trim()).filter(Boolean)
+    // Drop any ids that aren't in the active set so a stale URL doesn't
+    // produce a query that returns zero results forever.
+    return ids.filter((id) => activeWorkflows.some((w) => w.id === id))
+  }, [searchParams, activeWorkflows])
+
+  const allSelected = selectedWorkflowIds.length === activeWorkflows.length
+  const singleSelectedWorkflowId =
+    selectedWorkflowIds.length === 1 ? selectedWorkflowIds[0] : null
+  const singleSelectedWorkflow = useWorkflow(singleSelectedWorkflowId)
+  const stageFilter = searchParams.get('stage') ?? 'all'
+
+  function setSelectedWorkflowIds(next: string[]) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (next.length === 0 || next.length === activeWorkflows.length) {
+          params.delete('workflows')
+        } else {
+          params.set('workflows', next.join(','))
+        }
+        // Stage filter only valid when exactly one workflow selected.
+        if (next.length !== 1) params.delete('stage')
+        return params
+      },
+      { replace: true },
+    )
+  }
+
+  function setStageFilter(next: string) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (next === 'all') params.delete('stage')
+        else params.set('stage', next)
+        return params
+      },
+      { replace: true },
+    )
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(VIEW_MODE_KEY, viewMode)
   }, [viewMode])
   const { users } = useAllUsers()
   const { profile } = useAuth()
-  const pipelineEnabled = usePipelineEnabled()
   const chatEnabled = useChatEnabled()
   const createLabel = useCreateProjectLabel()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
@@ -161,9 +215,22 @@ export default function Projects() {
       if (statusFilter !== 'all') {
         constraints.push(where('status', '==', statusFilter))
       }
+      // Workflow filter — server-side when narrowed, no filter when "all".
+      if (!allSelected && selectedWorkflowIds.length > 0) {
+        if (selectedWorkflowIds.length === 1) {
+          constraints.push(where('workflowId', '==', selectedWorkflowIds[0]))
+          if (stageFilter !== 'all') {
+            constraints.push(where('currentStageId', '==', stageFilter))
+          }
+        } else {
+          // Firestore `in` caps at 30; ten active workflows is the soft cap
+          // by design so this is fine.
+          constraints.push(where('workflowId', 'in', selectedWorkflowIds.slice(0, 30)))
+        }
+      }
       if (debouncedSearch) {
         constraints.push(where('titleLower', '>=', debouncedSearch))
-        constraints.push(where('titleLower', '<=', debouncedSearch + ''))
+        constraints.push(where('titleLower', '<=', debouncedSearch + ''))
         constraints.push(orderBy('titleLower'))
       } else {
         constraints.push(orderBy('createdAt', sortDir))
@@ -172,7 +239,17 @@ export default function Projects() {
       constraints.push(limit(PAGE_SIZE))
       return query(projectsRef, ...constraints)
     },
-    [accessKeys, debouncedSearch, isAdmin, profile, sortDir, statusFilter],
+    [
+      accessKeys,
+      allSelected,
+      debouncedSearch,
+      isAdmin,
+      profile,
+      selectedWorkflowIds,
+      sortDir,
+      stageFilter,
+      statusFilter,
+    ],
   )
 
   const { items, loading, loadingMore, hasMore, loadMore, error } = usePaginatedQuery<Project>(
@@ -185,6 +262,8 @@ export default function Projects() {
       sortDir,
       profile?.uid,
       (profile?.teamIds ?? []).join('|'),
+      selectedWorkflowIds.join('|'),
+      stageFilter,
     ],
     (snap) => ({ ...(snap.data() as Project), id: snap.id }),
   )
@@ -202,6 +281,51 @@ export default function Projects() {
     ],
     [],
   )
+
+  // Workflow filter dropdown options. The first option toggles between "All
+  // workflows" and the narrowed set; subsequent options each toggle one
+  // workflow on/off.
+  const workflowFilterLabel = useMemo(() => {
+    if (allSelected) return 'All workflows'
+    if (selectedWorkflowIds.length === 1) {
+      const wf = activeWorkflows.find((w) => w.id === selectedWorkflowIds[0])
+      return wf?.displayName ?? 'Workflow'
+    }
+    return `${selectedWorkflowIds.length} workflows`
+  }, [allSelected, selectedWorkflowIds, activeWorkflows])
+
+  const workflowOptions: DropdownOption[] = useMemo(
+    () => [
+      { value: 'all', label: 'All workflows' },
+      ...activeWorkflows.map((wf) => ({
+        value: wf.id,
+        label: wf.displayName,
+      })),
+    ],
+    [activeWorkflows],
+  )
+
+  function handleWorkflowOptionPick(value: string) {
+    if (value === 'all') {
+      setSelectedWorkflowIds(activeWorkflows.map((w) => w.id))
+      return
+    }
+    // Single-select dropdown: picking a workflow switches to just that one.
+    // To broaden back to multiple, pick "All workflows" and start over.
+    setSelectedWorkflowIds([value])
+  }
+
+  // Stage filter options derived from the single selected workflow. Disabled
+  // tooltip when a different number of workflows is selected.
+  const stageOptions: DropdownOption[] = useMemo(() => {
+    if (!singleSelectedWorkflow) return [{ value: 'all', label: 'All stages' }]
+    return [
+      { value: 'all', label: 'All stages' },
+      ...[...singleSelectedWorkflow.stages]
+        .sort((a, b) => a.order - b.order)
+        .map((s) => ({ value: s.id, label: s.displayName })),
+    ]
+  }, [singleSelectedWorkflow])
 
   const userById = useMemo(() => {
     const m = new Map<string, User>()
@@ -243,6 +367,23 @@ export default function Projects() {
           placeholder="Search projects"
           infoText="Matches project names that start with what you type. Search is case-insensitive."
           className="sm:max-w-sm sm:flex-1"
+        />
+        {activeWorkflows.length > 1 && (
+          <Dropdown
+            value={singleSelectedWorkflowId ?? 'all'}
+            displayValue={workflowFilterLabel}
+            onChange={handleWorkflowOptionPick}
+            options={workflowOptions}
+            className="sm:w-44"
+          />
+        )}
+        <Dropdown
+          value={stageFilter}
+          onChange={setStageFilter}
+          options={stageOptions}
+          disabled={!singleSelectedWorkflow}
+          disabledTooltip="Select a single workflow to filter by stage"
+          className="sm:w-44"
         />
         <Dropdown
           value={statusFilter}
@@ -301,7 +442,7 @@ export default function Projects() {
             <ProjectsTable
               projects={items}
               userById={userById}
-              pipelineEnabled={pipelineEnabled}
+              showWorkflowColumn={activeWorkflows.length > 1}
               chatEnabled={chatEnabled}
               chatLastReadAt={profile?.chatLastReadAt}
             />
@@ -330,16 +471,15 @@ export default function Projects() {
                     </div>
                   </div>
 
-                  {pipelineEnabled && (
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      {p.stage && <StagePill project={p} />}
-                      {((p.iterationCount ?? p.vhIterationCount) ?? 0) > 0 && (
-                        <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
-                          Iter {((p.iterationCount ?? p.vhIterationCount) ?? 0) + 1}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <ProjectWorkflowChip workflowId={p.workflowId} />
+                    <StagePill project={p} />
+                    {(p.iterationCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
+                        Iter {(p.iterationCount ?? 0) + 1}
+                      </span>
+                    )}
+                  </div>
 
                   {p.description && (
                     <p className="mt-1 line-clamp-2 text-sm text-fg-subtle">{p.description}</p>
@@ -411,4 +551,13 @@ export default function Projects() {
       )}
     </div>
   )
+}
+
+// Grid-card workflow chip. Lazy-fetches when the project pins to a workflow
+// that isn't in the active set (e.g. an old project on a since-deactivated
+// workflow).
+function ProjectWorkflowChip({ workflowId }: { workflowId: string | undefined }) {
+  const workflow = useWorkflow(workflowId)
+  if (!workflow) return null
+  return <WorkflowBadge workflow={workflow} compact />
 }

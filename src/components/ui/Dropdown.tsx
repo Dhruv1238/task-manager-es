@@ -16,6 +16,9 @@ interface Props {
   className?: string
   align?: 'left' | 'right'
   menuClassName?: string
+  // Override the trigger label when the selected `value` doesn't map 1:1 to
+  // an option's label (e.g. multi-select states rendered as "3 workflows").
+  displayValue?: string
 }
 
 export default function Dropdown({
@@ -28,6 +31,7 @@ export default function Dropdown({
   className,
   align = 'left',
   menuClassName,
+  displayValue,
 }: Props) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -64,8 +68,8 @@ export default function Dropdown({
         }`}
       >
         {current?.leading}
-        <span className={`flex-1 truncate text-left ${current ? '' : 'text-fg-faint'}`}>
-          {current?.label ?? placeholder ?? 'Select…'}
+        <span className={`flex-1 truncate text-left ${current || displayValue ? '' : 'text-fg-faint'}`}>
+          {displayValue ?? current?.label ?? placeholder ?? 'Select…'}
         </span>
         <svg
           width="10"

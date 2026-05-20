@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase/firestore'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import { useAuth } from '../../contexts/AuthContext'
-import { useActiveWorkflow, useOrgStructure } from '../../contexts/AppConfigContext'
+import { useOrgStructure, useWorkflow } from '../../contexts/AppConfigContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { runWorkflowAction } from '../../lib/firestore'
@@ -42,7 +42,7 @@ const STATUS_OPTIONS: ProjectStatus[] = [
 export default function ActionModal({ open, onClose, project, action }: Props) {
   const { user, profile } = useAuth()
   const org = useOrgStructure()
-  const { workflow } = useActiveWorkflow()
+  const workflow = useWorkflow(project.workflowId)
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
   const [values, setValues] = useState<Record<string, unknown>>({})
@@ -89,9 +89,9 @@ export default function ActionModal({ open, onClose, project, action }: Props) {
     try {
       const inputs = coerceInputs(action.inputs, values)
       const extras: Record<string, unknown> = {}
-      // Denormalise the eligibility note onto project.eligibilityNote during
-      // the dual-write window so the side panel + project-detail blockquote
-      // continue rendering. Sprint 5 drops this once readers move off it.
+      // Denormalise the eligibility note onto project.eligibilityNote so the
+      // banner blockquote and status modal can surface it without scanning
+      // projectHistory. The history event still carries the canonical value.
       if (typeof inputs.eligibilityNote === 'string') {
         extras.eligibilityNote = inputs.eligibilityNote
       }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { usePipelineEnabled, useActiveWorkflow, useOrgStructure } from '../contexts/AppConfigContext'
+import { useOrgStructure, useWorkflow } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
 import { resolveCoordinatorTeam, resolveValidatorTeam } from '../lib/orgResolver'
 import { canPerform as evaluatorCanPerform } from '../lib/workflowEvaluator'
@@ -50,8 +50,6 @@ export interface Permissions {
 
 export function usePermissions(projectId?: string, teamId?: string): Permissions {
   const { profile } = useAuth()
-  const pipelineEnabled = usePipelineEnabled()
-  const { workflow } = useActiveWorkflow()
   const org = useOrgStructure()
   const [project, setProject] = useState<Project | null>(null)
   const [team, setTeam] = useState<Team | null>(null)
@@ -59,6 +57,9 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
   const [teamLoading, setTeamLoading] = useState<boolean>(Boolean(teamId))
   const [projectTeams, setProjectTeams] = useState<Team[]>([])
   const [projectTeamsLoading, setProjectTeamsLoading] = useState<boolean>(Boolean(projectId))
+  // Per-project workflow: lazy-fetched when not in the active set (e.g. an
+  // old project on a now-deactivated workflow). Returns null while loading.
+  const workflow = useWorkflow(project?.workflowId)
 
   useEffect(() => {
     if (!projectId) {
@@ -111,9 +112,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const isHorizontalLead = role === 'horizontal_lead'
 
     const isProjectOwner = Boolean(uid && project && project.ownerId === uid)
-    // Prefer the new field, fall back to legacy vhId so old projects (pre-2a
-    // migration) still resolve correctly during the transition window.
-    const projectLeadUid = project?.leadUid ?? project?.vhId ?? null
+    const projectLeadUid = project?.leadUid ?? null
     const isProjectLead = Boolean(uid && projectLeadUid && projectLeadUid === uid)
     const isTeamLead = Boolean(uid && team && team.leadId === uid)
     const isTeamMember = Boolean(uid && team && team.memberIds.includes(uid))
@@ -128,15 +127,29 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
 
     const closed = isProjectClosed(project?.status)
 
-    // Status-update is orthogonal to the workflow engine. Dual-mode kept from
-    // Phase 1: pipeline-on → lead/coordinator/super; pipeline-off → owner/admin.
-    const canUpdateStatus = Boolean(
-      project &&
-        !closed &&
-        (pipelineEnabled
-          ? isProjectLead || isCoordinatorLead || isSuperAdmin
-          : isProjectOwner || isAdmin),
-    )
+    // Status-update is orthogonal to the workflow engine: the status pill
+    // opens a modal that calls updateProjectStatus directly. Who can wield it
+    // depends on the workflow's flow-type:
+    //   - collaborative — lead / coordinator lead / super admin (matches the
+    //     prior "pipeline on" behaviour where the CT lead recorded the
+    //     outcome at stage 10).
+    //   - individual    — the assigned lead, the project owner, and admins.
+    //     Sales rep manages their own pipeline; owner / admin can override.
+    //   - basic         — owner and admins (simple-mode parity).
+    // When the workflow hasn't loaded yet (rare; lazy fetch in flight) we
+    // fall back to the safest superset so the pill isn't gratuitously gated.
+    const flowType = workflow?.flowType
+    const canUpdateStatusByFlow =
+      flowType === 'collaborative'
+        ? isProjectLead || isCoordinatorLead || isSuperAdmin
+        : flowType === 'individual'
+          ? isProjectLead || isProjectOwner || isAdmin
+          : flowType === 'basic'
+            ? isProjectOwner || isAdmin
+            : // Unknown / not yet loaded — allow the admin path through so the
+              // pill remains usable during the lazy fetch.
+              isProjectOwner || isAdmin
+    const canUpdateStatus = Boolean(project && !closed && canUpdateStatusByFlow)
     const canEditProject = Boolean(
       project && (isSuperAdmin || isProjectOwner) && !closed,
     )
@@ -184,5 +197,5 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       team,
       loading: projectLoading || teamLoading || projectTeamsLoading,
     }
-  }, [profile, pipelineEnabled, org, workflow, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
+  }, [profile, org, workflow, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
 }

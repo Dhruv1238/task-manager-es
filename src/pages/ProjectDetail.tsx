@@ -7,7 +7,7 @@ import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useProjectTasks } from '../hooks/useProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
-import { useLeadRoleName, usePipelineEnabled } from '../contexts/AppConfigContext'
+import { useLeadRoleName, useWorkflow } from '../contexts/AppConfigContext'
 import { uploadAsset } from '../lib/uploadAsset'
 import { addProjectAttachment } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
@@ -160,8 +160,14 @@ export default function ProjectDetail() {
   const { tasks: projectTasks } = useProjectTasks(projectId)
   const { isAdmin, isSuperAdmin, isProjectOwner, isProjectLead, canUpdateStatus } =
     usePermissions(projectId)
-  const pipelineEnabled = usePipelineEnabled()
-  const leadRoleName = useLeadRoleName()
+  const orgLeadRoleName = useLeadRoleName()
+  const workflow = useWorkflow(project?.workflowId)
+  // Per-workflow lead label, falling back to the org-wide one for fresh
+  // projects loaded before the workflow doc resolves.
+  const leadRoleName = workflow?.leadRoleName || orgLeadRoleName
+  // Collaborative-flow projects get the full tender sidebar (lead, dates,
+  // pitch metrics). Individual / basic flows render a simpler details block.
+  const isCollabFlow = workflow?.flowType === 'collaborative'
   const { user, profile } = useAuth()
   const attachmentInputRef = useRef<HTMLInputElement>(null)
   const [uploadingAttachment, setUploadingAttachment] = useState(false)
@@ -239,7 +245,7 @@ export default function ProjectDetail() {
   }
 
   const owner = userById.get(project.ownerId)
-  const projectLeadId = project.leadUid ?? project.vhId ?? null
+  const projectLeadId = project.leadUid ?? null
   const vh = projectLeadId ? userById.get(projectLeadId) : undefined
   const submissionDeadline = project.submissionDate ?? project.deadline
   const isClosed = isProjectClosed(project.status)
@@ -334,20 +340,20 @@ export default function ProjectDetail() {
                 </span>
               </div>
             )}
-            {pipelineEnabled && vh && (
+            {vh && (
               <div className="flex items-center gap-2">
                 <Avatar user={vh} size={22} />
                 <span>
                   <span className="text-fg-muted">{vh.displayName}</span>
-                  <span className="ml-1 text-fg-subtle">· VH</span>
+                  <span className="ml-1 text-fg-subtle">· {leadRoleName}</span>
                 </span>
               </div>
             )}
-            {(pipelineEnabled || submissionDeadline) && (
+            {(isCollabFlow || submissionDeadline) && (
               <span className={overdue ? 'text-tone-danger-fg' : undefined}>
                 {overdue ? 'Overdue · ' : ''}
                 {submissionDeadline
-                  ? `${pipelineEnabled ? 'Submit by ' : 'Due '}${formatDate(submissionDeadline)}`
+                  ? `${isCollabFlow ? 'Submit by ' : 'Due '}${formatDate(submissionDeadline)}`
                   : 'No submission date'}
               </span>
             )}
@@ -577,12 +583,19 @@ export default function ProjectDetail() {
               <span className="text-fg-subtle">Owner</span>
               <span className="text-fg-strong">{owner?.displayName ?? '—'}</span>
             </div>
-            {pipelineEnabled && (
+            {/* Lead row: shown for any workflow that has the concept (collab
+             * + individual). Basic-flow projects have no lead. */}
+            {workflow && workflow.flowType !== 'basic' && (
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-fg-subtle">{leadRoleName}</span>
+                <span className="text-fg-strong">{vh?.displayName ?? '— not allocated —'}</span>
+              </div>
+            )}
+            {/* Submission / presentation dates only apply to the
+             * collaborative flow (tender pitches). Other flow types track
+             * deadlines via project.deadline (rendered in the header). */}
+            {isCollabFlow && (
               <>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="text-fg-subtle">{leadRoleName}</span>
-                  <span className="text-fg-strong">{vh?.displayName ?? '— not allocated —'}</span>
-                </div>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-fg-subtle">Submission</span>
                   <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-strong'}>
@@ -594,6 +607,14 @@ export default function ProjectDetail() {
                   <span className="text-fg-strong">{formatDate(project.presentationDate)}</span>
                 </div>
               </>
+            )}
+            {workflow && !isCollabFlow && project.deadline && (
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-fg-subtle">Deadline</span>
+                <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-strong'}>
+                  {formatDate(project.deadline)}
+                </span>
+              </div>
             )}
             <div className="mt-3 flex items-center justify-between">
               <span className="text-fg-subtle">Created</span>

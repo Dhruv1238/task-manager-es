@@ -11,41 +11,43 @@ import {
 } from 'recharts'
 import ChartCard from './ChartCard'
 import { ITEM_STYLE, LABEL_STYLE, TOOLTIP_STYLE } from './chartTheme'
-import { useActiveWorkflow } from '../../contexts/AppConfigContext'
 import { stageTone } from '../workflow/stageStyle'
 import { isProjectClosed } from '../../lib/projectStatus'
 import type { Project } from '../../types/models'
-import { NUMERIC_STAGE_TO_ID } from '../../lib/seedCollabWorkflow'
+import type { Workflow } from '../../types/workflow'
 
 interface Props {
   projects: Project[]
+  // Phase 2b: the workflow this funnel renders. Parent (AdminDashboard) picks
+  // one per tab and passes the projects filtered to that workflow's bucket.
+  workflow: Workflow
 }
 
-// Funnel by workflow stage. Reads the active workflow doc, counts projects
-// bucketed by `currentStageId`, dropping terminal stages from the x-axis
-// (closed projects roll into the last non-terminal bucket so total throughput
-// stays accurate).
-//
-// Legacy projects (created before Sprint 2 dual-write) only have numeric
-// `stage` — derive a stageId via NUMERIC_STAGE_TO_ID so they appear in the
-// funnel too.
-export default function PipelineFunnel({ projects }: Props) {
-  const { workflow } = useActiveWorkflow()
-
+// Funnel by workflow stage. Iterates `workflow.stages` in order, counts
+// projects bucketed by `currentStageId`, dropping terminal stages from the
+// x-axis (closed projects roll into the last non-terminal bucket so total
+// throughput stays accurate). The caller is responsible for narrowing
+// `projects` to those on this workflow before rendering.
+export default function PipelineFunnel({ projects, workflow }: Props) {
   const data = useMemo(() => {
-    if (!workflow) return []
     const ordered = [...workflow.stages].sort((a, b) => a.order - b.order)
     const lastNonTerminal = [...ordered].reverse().find((s) => !s.isTerminal) ?? ordered[ordered.length - 1]
+    const terminalIds = new Set(ordered.filter((s) => s.isTerminal).map((s) => s.id))
+    // Pre-filter to projects on THIS workflow so callers can hand us the full
+    // accessible list without having to slice it themselves.
+    const scoped = projects.filter((p) => p.workflowId === workflow.id)
     return ordered
       .filter((s) => !s.isTerminal)
       .map((stage) => {
         const order = stage.order
-        const matching = projects.filter((p) => {
-          const id = effectiveStageId(p, workflow.id)
-          if (isProjectClosed(p.status)) {
+        const matching = scoped.filter((p) => {
+          // Bucket closed-by-status OR landed-in-terminal-stage projects into
+          // the last non-terminal bucket. Either signal counts as "finished"
+          // for funnel purposes — they shouldn't disappear from totals.
+          if (isProjectClosed(p.status) || (p.currentStageId && terminalIds.has(p.currentStageId))) {
             return stage.id === lastNonTerminal.id
           }
-          return id === stage.id
+          return p.currentStageId === stage.id
         })
         return {
           // X-axis tick — short label when authored, fall back to display name.
@@ -131,14 +133,6 @@ export default function PipelineFunnel({ projects }: Props) {
       </div>
     </ChartCard>
   )
-}
-
-function effectiveStageId(p: Project, workflowId: string): string | undefined {
-  if (p.currentStageId) return p.currentStageId
-  if (workflowId === 'collab-default' && typeof p.stage === 'number') {
-    return NUMERIC_STAGE_TO_ID[p.stage]
-  }
-  return undefined
 }
 
 // Recharts wants a hex/var for `fill`. Map the tone palette index to a CSS var

@@ -2,9 +2,8 @@ import { useMemo, useState } from 'react'
 import type { Project } from '../../types/models'
 import { usePermissions } from '../../hooks/usePermissions'
 import {
-  useActiveWorkflow,
   useOrgStructure,
-  usePipelineEnabled,
+  useWorkflow,
 } from '../../contexts/AppConfigContext'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { isProjectClosed } from '../../lib/projectStatus'
@@ -15,7 +14,7 @@ import {
 import type { StageAction } from '../../types/workflow'
 import { stageTone } from './stageStyle'
 import ActionModal from './ActionModal'
-import StageHistorySidePanel from './StageHistorySidePanel'
+import ProjectHistorySidePanel from './ProjectHistorySidePanel'
 import UpdateProjectStatusModal from './UpdateProjectStatusModal'
 
 interface Props {
@@ -26,17 +25,19 @@ interface Props {
 // renders one button per allowed action. No knowledge of specific action ids
 // or stage names — everything comes from /workflows/{id}.
 //
-// Replaces the per-stage hardcoded banner that shipped in Phase 1.
+// Phase 2b: reads the project's pinned workflow (not "the active one"); the
+// banner renders consistently regardless of which workflow the tenant pinned
+// at creation. Basic-flow projects have a single-stage banner that just shows
+// "Mark complete"; the banner doesn't pretend stages exist when they don't.
 export default function StageBanner({ project }: Props) {
-  const { workflow } = useActiveWorkflow()
+  const workflow = useWorkflow(project.workflowId)
   const org = useOrgStructure()
   const { teams } = useAllTeams()
-  const pipelineEnabled = usePipelineEnabled()
   const perms = usePermissions(project.id)
   const [openAction, setOpenAction] = useState<StageAction | null>(null)
   // Separate state for set_status actions — these route to the rich
   // UpdateProjectStatusModal instead of the generic ActionModal so the
-  // coordinator gets the card-based status picker.
+  // operator gets the card-based status picker.
   const [statusAction, setStatusAction] = useState<StageAction | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
 
@@ -50,7 +51,6 @@ export default function StageBanner({ project }: Props) {
     return renderStageHeadline(stage, project, workflow, org, teams)
   }, [stage, project, workflow, org, teams])
 
-  if (!pipelineEnabled) return null
   if (!workflow || !stage) {
     return (
       <div
@@ -65,7 +65,7 @@ export default function StageBanner({ project }: Props) {
 
   const closed = isProjectClosed(project.status)
   const tone = stageTone(stage.order)
-  const iterations = (project.iterationCount ?? project.vhIterationCount) ?? 0
+  const iterations = project.iterationCount ?? 0
 
   // One button per allowed action. canPerform short-circuits to false when
   // closed, so terminal stages emit no buttons.
@@ -197,7 +197,7 @@ export default function StageBanner({ project }: Props) {
             : undefined
         }
       />
-      <StageHistorySidePanel
+      <ProjectHistorySidePanel
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         project={project}

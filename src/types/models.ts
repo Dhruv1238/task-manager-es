@@ -1,4 +1,14 @@
 import { Timestamp } from 'firebase/firestore'
+import type { ProjectHistoryEvent } from './workflow'
+
+// Re-exported so legacy consumers of models.ts pick up the new event types
+// from a single import site.
+export type {
+  ProjectHistoryEvent,
+  StageEvent,
+  WorkflowAssignmentEvent,
+  WorkflowChangeEvent,
+} from './workflow'
 
 export type GlobalRole = 'super_admin' | 'admin' | 'horizontal_lead' | 'user'
 
@@ -29,16 +39,10 @@ export type TaskPriority = 'low' | 'medium' | 'high'
  */
 export type WorkType = 'CS' | 'CT' | '2D' | '3D' | 'VE'
 
-// Tender workflow stage.
-// Stage 5 = eligibility review (super admin gates the VH's acceptance).
-export type Stage = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-
 // Org-structure role a team can play. Resolved per-tenant via /config/orgStructure
 // and read from team.teamRoleId. Null means uncategorized — the team participates
 // in v1 surfaces but not in role-specific workflow gates.
 export type TeamRoleId = 'coordinator' | 'validator' | 'specialist'
-
-export type StagePriority = 'low' | 'medium' | 'high'
 
 export interface User {
   uid: string
@@ -84,50 +88,6 @@ export interface Team {
   workTypes?: string[]
 }
 
-export interface EscalationPayload {
-  reason: string
-  eta?: Timestamp
-  priority: StagePriority
-}
-
-export interface IterationPayload {
-  iteration: number
-  feedback: string
-  eta?: Timestamp
-  priority: StagePriority
-}
-
-// Replaces DeliveryPayload — used both at stage 10 (CS records outcome) and any
-// other time VH or CS updates the status mid-flow. Always recorded in stageHistory.
-export interface StatusUpdatePayload {
-  from: ProjectStatus
-  to: ProjectStatus
-  note: string
-}
-
-// VH's eligibility assessment when accepting a tender. Recorded on stage-5
-// entry; super admin reads this to decide whether to advance to task setup.
-export interface EligibilityNotePayload {
-  note: string
-}
-
-export type StageEventPayload =
-  | EscalationPayload
-  | IterationPayload
-  | StatusUpdatePayload
-  | EligibilityNotePayload
-  | null
-
-export interface StageEvent {
-  stage: Stage
-  enteredAt: Timestamp
-  enteredBy: string
-  payload?: StageEventPayload
-  // Phase 2a: string id mirror of `stage`. New writes (via workflowEvaluator.performAction)
-  // populate `stageId`; the numeric `stage` is preserved for legacy reads until Sprint 5.
-  stageId?: string
-}
-
 export interface Project {
   id: string
   title: string
@@ -139,30 +99,41 @@ export interface Project {
   attachments?: Attachment[]
   createdAt: Timestamp
   updatedAt: Timestamp
-  // Tender additions:
-  vhId?: string | null
-  stage?: Stage
-  stageHistory?: StageEvent[]
+  // ─── Workflow-driven fields (Phase 2a+) ──────────────────────────────────
+  // The workflow this project is pinned to. Every project carries one — the
+  // basic workflow is the implicit default for tenants with no other active
+  // workflow.
+  workflowId: string
+  // Stable string id of the project's current stage in the workflow doc.
+  currentStageId: string
+  // Discriminated-union timeline of every event in the project's lifecycle.
+  // First event is always `{ kind: 'workflow_assignment' }` written at
+  // creation; subsequent events are `{ kind: 'stage' }` for transitions. See
+  // src/types/workflow.ts for the ProjectHistoryEvent shape.
+  projectHistory: ProjectHistoryEvent[]
+  // ─── Pipeline-role pinned user (collaborative + individual flows) ────────
+  // Absent on basic-flow projects (no lead concept). Set by the
+  // `assign_lead` effect; cleared by `clear_lead`.
+  leadUid?: string | null
+  iterationCount?: number
   escalationCount?: number
-  vhIterationCount?: number
+  // ─── Collaborative-flow denormalisations ─────────────────────────────────
+  // Carry collab-only metadata. Present on collab projects only; the new
+  // project form gates their visibility on flowType, and ProjectDetail reads
+  // them defensively (optional).
   submissionDate?: Timestamp
   presentationDate?: Timestamp
-  // Last status-update note (mirrors the most recent StatusUpdatePayload in
-  // stageHistory). Convenience for rendering the pill subtitle without scanning history.
+  // Latest status-update note (mirrors the most recent set_status payload on
+  // projectHistory). Convenience for rendering pill subtitles without
+  // scanning history.
   statusNote?: string
-  // VH's eligibility assessment, captured on Accept. Mirrors the latest
-  // EligibilityNotePayload so the StageBanner can render it without history scans.
+  // Lead's eligibility assessment, captured on accept. Mirrors the latest
+  // eligibility payload on projectHistory so the banner / status modal can
+  // surface it without timeline traversal.
   eligibilityNote?: string
   // Chat: denormalized "latest activity" timestamp, bumped in the same writeBatch
   // as every chat mutation so the projects-list unread dot needs zero extra reads.
   chatLastMessageAt?: Timestamp
-  // Phase 2a additions. New projects (post-Sprint 2) write these; legacy
-  // projects keep the old numeric `stage` / `vhId` / `vhIterationCount` fields
-  // until the Client A migration runs in Sprint 5.
-  workflowId?: string
-  currentStageId?: string
-  leadUid?: string | null
-  iterationCount?: number
 }
 
 export interface Attachment {
@@ -220,70 +191,6 @@ export interface Comment {
   editedAt?: Timestamp
 }
 
-// Stage reference card (delta §4) — user-facing labels (no internal jargon).
-// Kept generic so they stay tenant-correct without interpolation. The longer
-// banner headline/hint (with the configured lead-role name) lives below.
-export const STAGE_NAMES: Record<Stage, string> = {
-  1: 'Project creation',
-  2: 'Awaiting lead',
-  3: 'Escalation',
-  4: 'Accepted',
-  5: 'Eligibility review',
-  6: 'Task setup',
-  7: 'In execution',
-  8: 'Lead review',
-  9: 'Rework',
-  10: 'Sent to client',
-}
-
-// Compact one-word labels for tight spaces (chart axes, etc.)
-export const STAGE_SHORT_NAMES: Record<Stage, string> = {
-  1: 'Created',
-  2: 'Awaiting',
-  3: 'Escalation',
-  4: 'Accepted',
-  5: 'Eligibility',
-  6: 'Setup',
-  7: 'Execution',
-  8: 'Review',
-  9: 'Rework',
-  10: 'Sent',
-}
-
-// Stage banner headline. Interpolates the tenant's leadRoleName for stages
-// that reference the project lead, and the validator team name for stage 8
-// when it's resolvable on the project.
-export function getStageHeadline(
-  stage: Stage,
-  org: OrgStructure,
-  validatorTeamName?: string | null,
-): string {
-  switch (stage) {
-    case 1:
-      return `Awaiting allocation to a ${org.leadRoleName}`
-    case 2:
-      return `Awaiting ${org.leadRoleName} decision`
-    case 3:
-      return 'Escalated — back to allocation queue'
-    case 4:
-      return 'Accepted'
-    case 5:
-      return 'Awaiting super admin eligibility review'
-    case 6:
-      return 'Add tasks for each team to start execution'
-    case 7:
-      return 'Teams executing'
-    case 8:
-      return validatorTeamName
-        ? `${org.leadRoleName} reviewing with ${validatorTeamName}`
-        : `${org.leadRoleName} reviewing the deliverable`
-    case 9:
-      return `Reworking after ${org.leadRoleName} feedback`
-    case 10:
-      return 'Pitch sent to client'
-  }
-}
-
 // Task template config doc shape (Firestore at /config/taskTemplates).
 export interface TaskTemplate {
   code: WorkType
@@ -298,16 +205,17 @@ export interface TaskTemplateConfig {
 
 // App-wide configuration doc shape (Firestore at /config/appConfig).
 // Written by super_admins via /admin/config; read by every authenticated client
-// once at boot (with a 24h localStorage TTL) to render pipeline UI, CTAs, etc.
+// once at boot (with a 24h localStorage TTL).
+//
+// Phase 2b retired `pipeline.enabled` — workflow selection lives in
+// /workflows/_registry. The migration script writes deleteField() to strip
+// the legacy key from existing docs.
 export interface AppConfig {
   // Monotonic counter bumped on every save. Drives cache invalidation when the
   // admin screen pushes an update — clients compare to localStorage and refresh.
   version: number
   updatedAt: Timestamp
   updatedBy: string
-  pipeline: {
-    enabled: boolean
-  }
   features: {
     chat: boolean
   }

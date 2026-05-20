@@ -1,15 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { Timestamp } from 'firebase/firestore'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import FileBadge, { formatFileSize } from '../ui/FileBadge'
+import WorkflowPicker from './WorkflowPicker'
+import LeadPickerWithRecommendations from './LeadPickerWithRecommendations'
 import { useAuth } from '../../contexts/AuthContext'
-import { useLeadRoleName, usePipelineEnabled } from '../../contexts/AppConfigContext'
+import {
+  useActiveWorkflows,
+  useDefaultWorkflow,
+  useOrgStructure,
+} from '../../contexts/AppConfigContext'
+import { useAllUsers } from '../../hooks/useAllUsers'
 import { addProject } from '../../lib/firestore'
 import { uploadAsset } from '../../lib/uploadAsset'
-import type { Attachment } from '../../types/models'
+import type { Attachment, User } from '../../types/models'
+import type { ActionInput, Workflow } from '../../types/workflow'
 
 interface Props {
   open: boolean
@@ -23,17 +31,35 @@ function friendlyError(err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong.'
 }
 
+// The new-project modal walks the user through two conceptual steps:
+//   0. Workflow pick (only shown when more than one workflow is active).
+//   1. Form fields adapted to the chosen workflow's flowType.
+// The form's auto-allocation path: when the workflow's first stage's first
+// action is `assign_lead` and the user picks a lead, addProject is called
+// with `initialAction` so the project lands at stage 2 in one commit.
 export default function NewProjectModal({ open, onClose }: Props) {
   const { user, profile } = useAuth()
-  const pipelineEnabled = usePipelineEnabled()
-  const leadRoleName = useLeadRoleName()
+  const org = useOrgStructure()
+  const { workflows: activeWorkflows } = useActiveWorkflows()
+  const defaultWorkflow = useDefaultWorkflow()
+  const { users } = useAllUsers()
   const navigate = useNavigate()
+
+  // Workflow selection. Pre-seeded to the default workflow when available;
+  // re-seeds when the modal opens.
+  const [workflowId, setWorkflowId] = useState<string | null>(null)
+  const pickedWorkflow = useMemo<Workflow | null>(
+    () => activeWorkflows.find((wf) => wf.id === workflowId) ?? null,
+    [activeWorkflows, workflowId],
+  )
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [submissionDate, setSubmissionDate] = useState('')
   const [presentationDate, setPresentationDate] = useState('')
+  const [deadline, setDeadline] = useState('')
   const [ownerId, setOwnerId] = useState<string | null>(null)
+  const [leadUid, setLeadUid] = useState<string | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
@@ -44,18 +70,51 @@ export default function NewProjectModal({ open, onClose }: Props) {
   useEffect(() => {
     if (open) {
       setOwnerId((prev) => prev ?? user?.uid ?? null)
+      setWorkflowId((prev) => prev ?? defaultWorkflow?.id ?? activeWorkflows[0]?.id ?? null)
     } else {
+      setWorkflowId(null)
       setTitle('')
       setDescription('')
       setSubmissionDate('')
       setPresentationDate('')
+      setDeadline('')
       setOwnerId(null)
+      setLeadUid(null)
       setFiles([])
       setError(null)
       setSubmitting(false)
       setUploadStatus(null)
     }
-  }, [open, user?.uid])  
+  }, [open, user?.uid, defaultWorkflow?.id, activeWorkflows])
+
+  // The first action on the first stage — drives the lead-picker UI and the
+  // auto-allocation path. When this action's effect is `assign_lead`, the
+  // form surfaces a lead picker; submitting with a chosen lead chains the
+  // action onto the create batch so the project lands at stage 2.
+  const firstAction = useMemo(() => {
+    if (!pickedWorkflow) return null
+    const firstStage = [...pickedWorkflow.stages].sort((a, b) => a.order - b.order)[0]
+    return firstStage?.actions[0] ?? null
+  }, [pickedWorkflow])
+
+  const leadInput: ActionInput | null = useMemo(() => {
+    if (!firstAction || firstAction.effect.kind !== 'assign_lead') return null
+    return firstAction.inputs.find((i) => i.type === 'user_picker') ?? null
+  }, [firstAction])
+
+  // Resolve the lead-picker candidate pool from the action's pickerScope.
+  // Mirrors ActionModal's resolvePickerScope, scoped to the global-role
+  // case which is what the lead pickers in the shipped workflows use.
+  const candidateLeadUids = useMemo<string[] | undefined>(() => {
+    if (!leadInput?.pickerScope) return undefined
+    const [kind, rest] = leadInput.pickerScope.split(':')
+    if (kind === 'global_role') {
+      return users
+        .filter((u) => u.globalRole === (rest as User['globalRole']))
+        .map((u) => u.uid)
+    }
+    return undefined
+  }, [leadInput, users])
 
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? [])
@@ -77,6 +136,10 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
   async function handleSubmit() {
     if (!user) return
+    if (!pickedWorkflow) {
+      setError('Pick a workflow.')
+      return
+    }
     const trimmedTitle = title.trim()
     if (!trimmedTitle) {
       setError('Project title is required.')
@@ -106,19 +169,45 @@ export default function NewProjectModal({ open, onClose }: Props) {
         setUploadStatus('Saving project…')
       }
 
+      // Auto-allocation: only when the workflow's first action is assign_lead
+      // AND the form supplied a lead.
+      const initialAction =
+        firstAction && firstAction.effect.kind === 'assign_lead' && leadUid
+          ? {
+              actionId: firstAction.id,
+              inputs: { leadUid },
+            }
+          : undefined
+
       const projectId = await addProject({
         title: trimmedTitle,
         description: description.trim(),
         ownerId,
         createdBy: user.uid,
         actorName: profile?.displayName ?? user.email ?? 'User',
-        submissionDate: submissionDate
-          ? Timestamp.fromDate(new Date(submissionDate))
-          : undefined,
-        presentationDate: presentationDate
-          ? Timestamp.fromDate(new Date(presentationDate))
-          : undefined,
+        // Pass the real role + team ids so addProject's auto-allocation
+        // permission check matches the actual creator. Fall back to 'user'
+        // only when profile isn't loaded yet (which would also block any
+        // global-role-gated first action — the create succeeds, the lead
+        // pick lands at stage 1 awaiting manual allocation).
+        creatorRole: profile?.globalRole ?? 'user',
+        creatorTeamIds: profile?.teamIds ?? [],
+        workflowId: pickedWorkflow.id,
+        ...(pickedWorkflow.flowType === 'collaborative'
+          ? {
+              submissionDate: submissionDate
+                ? Timestamp.fromDate(new Date(submissionDate))
+                : undefined,
+              presentationDate: presentationDate
+                ? Timestamp.fromDate(new Date(presentationDate))
+                : undefined,
+            }
+          : {}),
+        ...(pickedWorkflow.flowType === 'individual' && deadline
+          ? { deadline: Timestamp.fromDate(new Date(deadline)) }
+          : {}),
         attachments,
+        ...(initialAction ? { initialAction } : {}),
       })
       onClose()
       navigate(`/projects/${projectId}`)
@@ -133,18 +222,40 @@ export default function NewProjectModal({ open, onClose }: Props) {
   const inputCls =
     'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
-  const canSubmit = !!title.trim() && !!ownerId && !submitting
+  const canSubmit = !!title.trim() && !!ownerId && !!pickedWorkflow && !submitting
+
+  const showWorkflowPicker = activeWorkflows.length > 1
+  const flowType = pickedWorkflow?.flowType
+  const showCollabFields = flowType === 'collaborative'
+  const showIndividualFields = flowType === 'individual'
+
+  // Title + description copy adapts to the picked workflow's displayName so a
+  // Sales tenant sees "New Sales Project" while a Tender tenant sees "New
+  // Tender". When no workflow is picked yet (rare; first render before
+  // useEffect fires), fall back to a generic title.
+  const modalTitle = pickedWorkflow
+    ? `New ${pickedWorkflow.displayName.toLowerCase().endsWith('project') ? pickedWorkflow.displayName : `${pickedWorkflow.displayName} project`}`
+    : 'New project'
+
+  const modalDescription = useMemo(() => {
+    if (!pickedWorkflow) return 'Pick a workflow to get started.'
+    const lead = pickedWorkflow.leadRoleName || org.leadRoleName || 'lead'
+    switch (pickedWorkflow.flowType) {
+      case 'collaborative':
+        return `Lands at the first stage. You'll allocate a ${lead} once it's created.`
+      case 'individual':
+        return `Tracked by a single ${lead}. Pick one now to auto-assign, or leave blank to allocate later.`
+      case 'basic':
+        return 'Tracked by status. Add tasks after it’s created.'
+    }
+  }, [pickedWorkflow, org])
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={pipelineEnabled ? 'New tender' : 'New project'}
-      description={
-        pipelineEnabled
-          ? `Lands at stage 1. You'll allocate a ${leadRoleName} once it's created.`
-          : 'Tracked by status. Assign teams and tasks after it’s created.'
-      }
+      title={modalTitle}
+      description={modalDescription}
       size="lg"
       closeOnBackdrop={!submitting}
     >
@@ -157,6 +268,14 @@ export default function NewProjectModal({ open, onClose }: Props) {
         className="space-y-5"
         noValidate
       >
+        {showWorkflowPicker && (
+          <WorkflowPicker
+            workflows={activeWorkflows}
+            pickedId={workflowId}
+            onPick={setWorkflowId}
+          />
+        )}
+
         <div className="space-y-1.5">
           <label htmlFor="project-title" className="text-sm font-medium text-fg-muted">
             Title
@@ -173,19 +292,21 @@ export default function NewProjectModal({ open, onClose }: Props) {
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="project-description" className="text-sm font-medium text-fg-muted">
-            Description <span className="font-normal text-fg-subtle">(optional)</span>
-          </label>
-          <textarea
-            id="project-description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="What is this project delivering?"
-            rows={3}
-            className={`${inputCls} resize-none`}
-          />
-        </div>
+        {flowType !== 'basic' && (
+          <div className="space-y-1.5">
+            <label htmlFor="project-description" className="text-sm font-medium text-fg-muted">
+              Description <span className="font-normal text-fg-subtle">(optional)</span>
+            </label>
+            <textarea
+              id="project-description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What is this project delivering?"
+              rows={3}
+              className={`${inputCls} resize-none`}
+            />
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
@@ -244,7 +365,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
-          {pipelineEnabled && (
+          {showCollabFields && (
             <>
               <div className="space-y-1.5">
                 <label htmlFor="project-submission" className="text-sm font-medium text-fg-muted">
@@ -274,6 +395,21 @@ export default function NewProjectModal({ open, onClose }: Props) {
             </>
           )}
 
+          {showIndividualFields && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="project-deadline" className="text-sm font-medium text-fg-muted">
+                Deadline <span className="font-normal text-fg-subtle">(optional)</span>
+              </label>
+              <input
+                id="project-deadline"
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className={`${inputCls} scheme-dark`}
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5 sm:col-span-2">
             <label htmlFor="project-owner" className="text-sm font-medium text-fg-muted">
               Owner
@@ -287,6 +423,26 @@ export default function NewProjectModal({ open, onClose }: Props) {
               allowCreate
             />
           </div>
+
+          {leadInput && pickedWorkflow && (
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="project-lead" className="text-sm font-medium text-fg-muted">
+                {leadInput.label.replace(
+                  /\{leadRoleName\}/g,
+                  pickedWorkflow.leadRoleName || org.leadRoleName,
+                )}{' '}
+                <span className="font-normal text-fg-subtle">(optional — assigns immediately)</span>
+              </label>
+              <LeadPickerWithRecommendations
+                id="project-lead"
+                value={leadUid}
+                onChange={setLeadUid}
+                recommendedUids={pickedWorkflow.recommendedLeads ?? []}
+                candidateUids={candidateLeadUids}
+                placeholder={`Pick a ${(pickedWorkflow.leadRoleName || org.leadRoleName).toLowerCase()}…`}
+              />
+            </div>
+          )}
         </div>
 
         {error && (

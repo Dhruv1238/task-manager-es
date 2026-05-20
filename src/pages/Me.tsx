@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { useActiveWorkflow } from '../contexts/AppConfigContext'
+import WorkflowBadge from '../components/projects/WorkflowBadge'
 import { useMyTasks } from '../hooks/useMyTasks'
 import { useMyLedTeamTasks } from '../hooks/useMyLedTeamTasks'
 import { useMyReviewQueue } from '../hooks/useMyReviewQueue'
@@ -250,7 +250,6 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
 
 function ProjectsAwaitingActionSection() {
   const { projects } = useProjectsAwaitingMyAction()
-  const { workflow } = useActiveWorkflow()
   if (projects.length === 0) return null
   return (
     <section className="mb-10">
@@ -263,16 +262,16 @@ function ProjectsAwaitingActionSection() {
         </p>
       </div>
       <ul className="grid gap-2 sm:grid-cols-2">
-        {projects.map(({ project, cta, reason }) => {
+        {projects.map(({ project, cta, reason, workflow }) => {
           const stage =
-            workflow?.stages.find((s) => s.id === project.currentStageId) ??
-            workflow?.stages[0]
+            workflow.stages.find((s) => s.id === project.currentStageId) ??
+            workflow.stages[0]
           const tone = stageTone(stage?.order ?? 1, stage?.isTerminal ?? false)
           // Escalation-flavoured visual: surface danger styling when the project
           // sits back at the starting stage with at least one escalation logged.
           const isEscalated =
             (project.escalationCount ?? 0) > 0 &&
-            (stage?.id === workflow?.stages[0]?.id || reason === 'allocate')
+            (stage?.id === workflow.stages[0]?.id || reason === 'allocate')
           const cardCls = isEscalated
             ? 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-tone-danger-bd bg-tone-danger-bg p-4 transition hover:opacity-90'
             : 'group flex h-full flex-col justify-between gap-3 rounded-xl border border-tone-warn-bd bg-tone-warn-bg p-4 transition hover:opacity-90'
@@ -283,11 +282,12 @@ function ProjectsAwaitingActionSection() {
             <li key={project.id}>
               <Link to={`/projects/${project.id}`} className={cardCls}>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.pill}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
                       {stage?.displayName ?? '—'}
                     </span>
+                    <WorkflowBadge workflow={workflow} compact />
                   </div>
                   <h3 className="mt-2 text-sm font-medium text-fg">{project.title}</h3>
                   {project.description && (
