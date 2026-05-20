@@ -61,7 +61,11 @@ export async function runWorkflowAction(input: RunWorkflowActionInput): Promise<
       'This project has no workflow pinned — run the project-history migration under /admin/config first.',
     )
   }
-  const workflow = getWorkflowSnapshot(input.project.workflowId)
+  // Phase 2c: prefer the snapshot pinned on the project at creation. Workflow
+  // edits never alter the behaviour of in-flight projects. The cached snapshot
+  // is the fallback for projects that pre-date the pinning migration.
+  const workflow =
+    input.project.pinnedWorkflow ?? getWorkflowSnapshot(input.project.workflowId)
   if (!workflow) {
     throw new Error(
       `Workflow "${input.project.workflowId}" not loaded — refresh the page or ask an admin to seed it under /admin/config.`,
@@ -341,6 +345,16 @@ export async function addProject(input: AddProjectInput): Promise<string> {
   }
   const projectHistory: ProjectHistoryEvent[] = [assignment, initialStageEvent]
 
+  // Phase 2c: snapshot the workflow doc into the project so future workflow
+  // edits never affect this project's behavior. Strip the live `updatedAt`
+  // Timestamp — it's a Firestore Timestamp instance which round-trips fine
+  // inside an object, but we don't want stale snapshot bookkeeping confusing
+  // a future reader. We keep version/lastEdited as informational copies.
+  const pinnedWorkflow = {
+    ...workflow,
+    id: workflow.id,
+  }
+
   const batch = writeBatch(db)
   const projectRef = doc(collection(db, 'projects'))
   batch.set(projectRef, {
@@ -356,6 +370,7 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     ...(input.deadline ? { deadline: input.deadline } : {}),
     // Workflow pinning — every project carries these post-2b.
     workflowId: input.workflowId,
+    pinnedWorkflow,
     currentStageId: firstStage.id,
     leadUid: null,
     iterationCount: 0,
@@ -401,6 +416,7 @@ export async function addProject(input: AddProjectInput): Promise<string> {
         createdAt: now,
         updatedAt: now,
         workflowId: input.workflowId,
+        pinnedWorkflow,
         currentStageId: firstStage.id,
         leadUid: null,
         iterationCount: 0,
@@ -582,6 +598,7 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
         teamIds?: string[]
         currentStageId?: string
         workflowId?: string
+        pinnedWorkflow?: import('../types/workflow').Workflow
         ownerId?: string
         leadUid?: string | null
         title?: string
@@ -651,7 +668,8 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
   // else (missing workflow, missing action, permission failure) skips the
   // auto-advance silently — the lead can advance manually via the banner.
   if (advanceFromTaskSetup && projectData?.workflowId) {
-    const workflow = getWorkflowSnapshot(projectData.workflowId)
+    const workflow =
+      projectData.pinnedWorkflow ?? getWorkflowSnapshot(projectData.workflowId)
     if (workflow) {
       const project: Project = {
         id: input.projectId,
@@ -665,6 +683,7 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
         leadUid: projectData.leadUid ?? null,
         currentStageId: projectData.currentStageId ?? 'task_setup',
         workflowId: projectData.workflowId,
+        pinnedWorkflow: projectData.pinnedWorkflow,
         projectHistory: projectData.projectHistory ?? [],
       }
       const user: User = {

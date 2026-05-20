@@ -1,15 +1,15 @@
 import type { Project } from '../../types/models'
 import type { Stage } from '../../types/workflow'
-import { useWorkflow } from '../../contexts/AppConfigContext'
+import { useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { stageTone } from '../workflow/stageStyle'
 
-// Compact stage pill for project list rows. Reads the *project's* workflow
-// (not the active one) so multi-workflow tenants see stages labelled in
-// their own workflow's vocabulary. Lazy-fetches the workflow when the
-// project is pinned to one that isn't in the active set (e.g. a project on
-// a since-deactivated workflow).
+// Compact stage pill for project list rows. Reads the *project's* pinned
+// workflow snapshot (or falls back to live workflow for legacy projects) so
+// multi-workflow tenants see stages labelled in their own workflow's
+// vocabulary. After Phase 2c snapshot-pin migration, this is always the
+// snapshot — workflow edits never alter labels on in-flight projects.
 export default function StagePill({ project }: { project: Project }) {
-  const workflow = useWorkflow(project.workflowId)
+  const workflow = useProjectWorkflow(project)
 
   if (!workflow) {
     // Workflow not loaded yet (lazy fetch in flight) — render nothing.

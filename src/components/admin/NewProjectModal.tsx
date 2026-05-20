@@ -149,6 +149,10 @@ export default function NewProjectModal({ open, onClose }: Props) {
       setError('Pick a project owner.')
       return
     }
+    if (pickedWorkflow.flowType === 'basic' && !description.trim()) {
+      setError('Add a short description so others know what this is about.')
+      return
+    }
     setError(null)
     setSubmitting(true)
     try {
@@ -222,12 +226,21 @@ export default function NewProjectModal({ open, onClose }: Props) {
   const inputCls =
     'w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
 
-  const canSubmit = !!title.trim() && !!ownerId && !!pickedWorkflow && !submitting
-
   const showWorkflowPicker = activeWorkflows.length > 1
   const flowType = pickedWorkflow?.flowType
   const showCollabFields = flowType === 'collaborative'
   const showIndividualFields = flowType === 'individual'
+  const isBasicFlow = flowType === 'basic'
+
+  // Description is required for basic-flow projects (the redefined Simple
+  // Project surfaces it as the "what is this about" textarea) and optional
+  // elsewhere.
+  const canSubmit =
+    !!title.trim() &&
+    !!ownerId &&
+    !!pickedWorkflow &&
+    !submitting &&
+    (!isBasicFlow || !!description.trim())
 
   // Title + description copy adapts to the picked workflow's displayName so a
   // Sales tenant sees "New Sales Project" while a Tender tenant sees "New
@@ -239,6 +252,11 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
   const modalDescription = useMemo(() => {
     if (!pickedWorkflow) return 'Pick a workflow to get started.'
+    // Phase 2c: prefer the workflow-supplied copy when present so tenants who
+    // author their own workflows can give the modal a custom subtitle.
+    if (pickedWorkflow.creationModalDescription) {
+      return pickedWorkflow.creationModalDescription
+    }
     const lead = pickedWorkflow.leadRoleName || org.leadRoleName || 'lead'
     switch (pickedWorkflow.flowType) {
       case 'collaborative':
@@ -292,21 +310,30 @@ export default function NewProjectModal({ open, onClose }: Props) {
           />
         </div>
 
-        {flowType !== 'basic' && (
-          <div className="space-y-1.5">
-            <label htmlFor="project-description" className="text-sm font-medium text-fg-muted">
-              Description <span className="font-normal text-fg-subtle">(optional)</span>
-            </label>
-            <textarea
-              id="project-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this project delivering?"
-              rows={3}
-              className={`${inputCls} resize-none`}
-            />
-          </div>
-        )}
+        {/* Description: required for the redefined Simple Project (basic
+         * flow) where it carries the "what is this about" weight; optional on
+         * other flow types where it's just supplemental context. */}
+        <div className="space-y-1.5">
+          <label htmlFor="project-description" className="text-sm font-medium text-fg-muted">
+            Description{' '}
+            <span className="font-normal text-fg-subtle">
+              {isBasicFlow ? '' : '(optional)'}
+            </span>
+          </label>
+          <textarea
+            id="project-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={
+              isBasicFlow
+                ? "What's this project about? (e.g., 'Q3 launch deck')"
+                : 'What is this project delivering?'
+            }
+            rows={3}
+            className={`${inputCls} resize-none`}
+            required={isBasicFlow}
+          />
+        </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">

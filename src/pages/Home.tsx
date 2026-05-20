@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { useSetupCompleted } from '../contexts/AppConfigContext'
-import { isDevConfigUser } from '../components/DevConfigRoute'
+import {
+  useSetupCompleted,
+  useWorkflowRegistry,
+} from '../contexts/AppConfigContext'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import ProjectPicker from '../components/ui/ProjectPicker'
 
@@ -96,11 +98,18 @@ function BoardViewCard() {
 export default function Home() {
   const { profile } = useAuth()
   const setupCompleted = useSetupCompleted()
-  // First-time auto-launch: gated dev-config users land on the setup wizard
-  // until /config/orgStructure has setupCompleted: true. Other users see the
-  // app in default-minimal state regardless of setup state.
-  if (!setupCompleted && isDevConfigUser(profile)) {
+  const workflowRegistry = useWorkflowRegistry()
+  // Phase 2c: broadened auto-launch. Any super_admin in a fresh tenant gets
+  // routed to the unified onboarding flow (org wizard → workflow wizard).
+  // The dev-config allowlist no longer gates the redirect — only super_admins
+  // are routed because they're the only role that can complete the wizard.
+  const isSuperAdmin = profile?.globalRole === 'super_admin'
+  const noActiveWorkflows = (workflowRegistry?.activeWorkflowIds ?? []).length === 0
+  if (isSuperAdmin && !setupCompleted) {
     return <Navigate to="/admin/setup" replace />
+  }
+  if (isSuperAdmin && noActiveWorkflows) {
+    return <Navigate to="/admin/workflows/new?onboarding=1" replace />
   }
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
   const firstName = profile?.displayName?.split(/\s+/)[0] ?? ''

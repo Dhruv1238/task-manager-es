@@ -5,7 +5,7 @@ import UnreadChatBadge from './UnreadChatBadge'
 import Avatar from '../ui/Avatar'
 import StagePill from './StagePill'
 import WorkflowBadge from './WorkflowBadge'
-import { useWorkflow } from '../../contexts/AppConfigContext'
+import { useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { formatDeadline, submissionDeadline, isOverdue } from './projectListUtils'
 
 interface Props {
@@ -140,7 +140,7 @@ export default function ProjectsTable({
 
                   {showWorkflowColumn && (
                     <td className="px-4 py-3 align-middle">
-                      <ProjectWorkflowCell projectId={p.id} workflowId={p.workflowId} />
+                      <ProjectWorkflowCell project={p} />
                     </td>
                   )}
                   <td className="px-4 py-3 align-middle">
@@ -233,18 +233,10 @@ export default function ProjectsTable({
   )
 }
 
-// Cell-scoped workflow lookup. Each row asks the context for its project's
-// workflow — workflows in the active set return synchronously, ones for old
-// projects on deactivated workflows lazy-fetch and resolve on the next
-// render.
-function ProjectWorkflowCell({
-  projectId,
-  workflowId,
-}: {
-  projectId: string
-  workflowId: string | undefined
-}) {
-  void projectId
-  const workflow = useWorkflow(workflowId)
+// Cell-scoped workflow lookup. Prefers the pinned snapshot on the project so
+// label + flowType color match what the project was created on — workflow
+// edits don't propagate.
+function ProjectWorkflowCell({ project }: { project: Project }) {
+  const workflow = useProjectWorkflow(project)
   return <WorkflowBadge workflow={workflow} compact />
 }

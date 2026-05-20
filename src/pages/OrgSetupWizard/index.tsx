@@ -164,7 +164,10 @@ export default function OrgSetupWizard() {
 
       // Small breath before redirect so the user sees the "all done" state.
       await new Promise((resolve) => window.setTimeout(resolve, 350))
-      navigate('/', { replace: true })
+      // Phase 2c: the org wizard now chains into the workflow wizard. Home's
+      // auto-launch logic would route there anyway when the registry is empty,
+      // but routing directly avoids the home-screen flash for fresh tenants.
+      navigate('/admin/workflows/new?onboarding=1', { replace: true })
     } catch (err) {
       setFinishError(err instanceof Error ? err.message : 'Something went wrong saving setup.')
       setFinishing(false)

@@ -1,6 +1,9 @@
 interface Props {
   onBack?: () => void
   onSkip?: () => void
+  // Optional override for the "Skip" button label — used by the workflow
+  // wizard's onboarding mode to read "I'll do this later — use Simple Project".
+  skipLabel?: string
   onPrimary: () => void
   primaryLabel: string
   primaryDisabled?: boolean
@@ -12,6 +15,7 @@ interface Props {
 export default function WizardFooter({
   onBack,
   onSkip,
+  skipLabel = 'Skip',
   onPrimary,
   primaryLabel,
   primaryDisabled = false,
@@ -36,7 +40,7 @@ export default function WizardFooter({
           disabled={primarySubmitting}
           className="rounded-full border border-line bg-fill-2 px-5 py-2.5 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-50"
         >
-          Skip
+          {skipLabel}
         </button>
       )}
       <button

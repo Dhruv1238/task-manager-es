@@ -3,7 +3,7 @@ import type { Project } from '../../types/models'
 import { usePermissions } from '../../hooks/usePermissions'
 import {
   useOrgStructure,
-  useWorkflow,
+  useProjectWorkflow,
 } from '../../contexts/AppConfigContext'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { isProjectClosed } from '../../lib/projectStatus'
@@ -30,7 +30,7 @@ interface Props {
 // at creation. Basic-flow projects have a single-stage banner that just shows
 // "Mark complete"; the banner doesn't pretend stages exist when they don't.
 export default function StageBanner({ project }: Props) {
-  const workflow = useWorkflow(project.workflowId)
+  const workflow = useProjectWorkflow(project)
   const org = useOrgStructure()
   const { teams } = useAllTeams()
   const perms = usePermissions(project.id)

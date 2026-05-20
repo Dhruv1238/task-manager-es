@@ -12,7 +12,7 @@ import type {
   WorkflowChangeEvent,
 } from '../../types/workflow'
 import { useAllUsers } from '../../hooks/useAllUsers'
-import { useAppConfigContext, useOrgStructure, useWorkflow } from '../../contexts/AppConfigContext'
+import { useAppConfigContext, useOrgStructure, useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { stageTone } from './stageStyle'
 import { STATUS_DISPLAY } from '../../lib/projectStatus'
 
@@ -220,7 +220,7 @@ function isLoopBackStageEvent(e: StageEvent): boolean {
 
 export default function ProjectHistorySidePanel({ open, onClose, project }: Props) {
   const { users } = useAllUsers()
-  const workflow = useWorkflow(project.workflowId)
+  const workflow = useProjectWorkflow(project)
   const { workflowsById, ensureWorkflow } = useAppConfigContext()
   const org = useOrgStructure()
   const userById = useMemo(() => new Map(users.map((u) => [u.uid, u])), [users])

@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   useActiveWorkflows,
   useCreateProjectLabel,
+  useProjectWorkflow,
   useWorkflow,
 } from '../contexts/AppConfigContext'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
@@ -472,7 +473,7 @@ export default function Projects() {
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <ProjectWorkflowChip workflowId={p.workflowId} />
+                    <ProjectWorkflowChip project={p} />
                     <StagePill project={p} />
                     {(p.iterationCount ?? 0) > 0 && (
                       <span className="inline-flex items-center rounded-full border border-tone-accent-bd bg-tone-accent-bg px-2 py-0.5 text-[11px] font-medium text-tone-accent-fg">
@@ -553,11 +554,10 @@ export default function Projects() {
   )
 }
 
-// Grid-card workflow chip. Lazy-fetches when the project pins to a workflow
-// that isn't in the active set (e.g. an old project on a since-deactivated
-// workflow).
-function ProjectWorkflowChip({ workflowId }: { workflowId: string | undefined }) {
-  const workflow = useWorkflow(workflowId)
+// Grid-card workflow chip. Prefers the snapshot pinned on the project at
+// creation so workflow edits don't affect labelling on in-flight projects.
+function ProjectWorkflowChip({ project }: { project: Project }) {
+  const workflow = useProjectWorkflow(project)
   if (!workflow) return null
   return <WorkflowBadge workflow={workflow} compact />
 }

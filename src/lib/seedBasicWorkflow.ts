@@ -18,10 +18,15 @@ export const BASIC_WORKFLOW_ID = 'basic'
 export function buildBasicWorkflow(): Omit<Workflow, 'updatedAt' | 'updatedBy' | 'version'> {
   return {
     id: BASIC_WORKFLOW_ID,
-    displayName: 'Basic Project',
+    displayName: 'Simple Project',
     flowType: 'basic',
-    leadRoleName: 'Project Lead',
+    leadRoleName: '',
     isSystemDefined: true,
+    description:
+      'Track work with a title, description, and a small team. Add tasks and mark complete when done.',
+    creationModalCardSubtitle: 'Simple status flow',
+    creationModalDescription:
+      "Tracked by status. Add tasks and team members after it's created.",
     recommendedLeads: [],
     stages: [
       {

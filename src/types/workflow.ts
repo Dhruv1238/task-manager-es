@@ -20,6 +20,10 @@ export interface Workflow {
   id: string
   displayName: string
   flowType: FlowType
+  // Optional per-workflow override of `orgStructure.leadRoleName`. Empty string
+  // (or missing) means readers resolve the org-wide value. Phase 2c sets this
+  // by default only when the wizard's "Lead role override" field is filled in
+  // the Settings drawer — the conversational wizard never asks for it.
   leadRoleName: string
   isSystemDefined: boolean
   stages: Stage[]
@@ -29,7 +33,21 @@ export interface Workflow {
   // alphabetically. Managed from /admin/config → Workflows → kebab → Manage
   // recommended leads.
   recommendedLeads?: string[]
+  // Phase 2c: optional long-form copy shown in the wizard's first step and the
+  // template picker description. Falls back to a derived flow-type sentence.
+  description?: string
+  // Phase 2c: optional subtitle under the template card title (4-card picker).
+  // Falls back to "<flowType> flow · N stages".
+  creationModalCardSubtitle?: string
+  // Phase 2c: optional copy under NewProjectModal's title. Falls back to the
+  // existing flow-type-derived sentence.
+  creationModalDescription?: string
   version: number
+  // Phase 2c: last-edited timestamp + actor surfaced in /admin/config
+  // workflows table. Distinct from updatedAt which mirrors createdAt for new
+  // docs; lastEditedAt only bumps on user-driven saves through the editor.
+  lastEditedAt?: Timestamp
+  lastEditedBy?: string
   updatedAt: Timestamp
   updatedBy: string
 }

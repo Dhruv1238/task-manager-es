@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
-import { useWorkflow } from '../../contexts/AppConfigContext'
+import { useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { updateProjectStatus } from '../../lib/firestore'
 import { SIMPLE_STATUS_OPTIONS, STATUS_DISPLAY, STATUS_OPTIONS } from '../../lib/projectStatus'
 import type { Project, ProjectStatus } from '../../types/models'
@@ -53,7 +53,7 @@ export default function UpdateProjectStatusModal({
   submitLabelOverride,
 }: Props) {
   const { user, profile } = useAuth()
-  const workflow = useWorkflow(project.workflowId)
+  const workflow = useProjectWorkflow(project)
   const baseOptions = statusOptionsForFlowType(workflow?.flowType)
   // Filter to the workflow-declared outcomes when provided. We keep the
   // current status visible even if it isn't in the allowed list — without

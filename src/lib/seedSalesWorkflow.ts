@@ -27,6 +27,11 @@ export function buildSalesDefaultWorkflow(): Omit<
     flowType: 'individual',
     leadRoleName: 'Sales Manager',
     isSystemDefined: true,
+    description:
+      'Each item is owned by one person who moves it through defined stages — like a sales flow.',
+    creationModalCardSubtitle: 'Individual flow',
+    creationModalDescription:
+      'Tracked by a single lead. Pick one now to auto-assign, or leave blank to allocate later.',
     recommendedLeads: [],
     stages: [
       {

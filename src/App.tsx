@@ -1,5 +1,5 @@
 import { Route, Routes, useLocation, type Location } from 'react-router-dom'
-import AdminRoute from './components/AdminRoute'
+import AdminRoute, { SuperAdminRoute } from './components/AdminRoute'
 import DevConfigRoute from './components/DevConfigRoute'
 import ProtectedRoute from './components/ProtectedRoute'
 import TaskDetailModal from './components/tasks/TaskDetailModal'
@@ -10,6 +10,8 @@ import AppConfigPage from './pages/AppConfigPage'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import OrgSetupWizard from './pages/OrgSetupWizard'
+import WorkflowEdit from './pages/WorkflowEdit'
+import WorkflowWizard from './pages/WorkflowWizard'
 import Me from './pages/Me'
 import NotFound from './pages/NotFound'
 import ProjectBoard from './pages/ProjectBoard'
@@ -47,7 +49,14 @@ function App() {
           </Route>
           <Route element={<DevConfigRoute />}>
             <Route path="/admin/config" element={<AppConfigPage />} />
+          </Route>
+          {/* Phase 2c: setup + workflow authoring open to any super_admin so a
+            * fresh tenant's owner can complete onboarding without being on the
+            * dev-config allowlist. */}
+          <Route element={<SuperAdminRoute />}>
             <Route path="/admin/setup" element={<OrgSetupWizard />} />
+            <Route path="/admin/workflows/new" element={<WorkflowWizard />} />
+            <Route path="/admin/workflows/:id/edit" element={<WorkflowEdit />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>

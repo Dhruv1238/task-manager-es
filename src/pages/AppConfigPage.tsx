@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { doc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
@@ -342,12 +343,22 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
 
   return (
     <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
-      <h2 className="text-lg font-semibold text-fg">Workflows</h2>
-      <p className="mt-1 text-sm text-fg-subtle">
-        Activate the workflows project creators can pick from, manage recommended leads, run
-        seeds, and trigger one-shot migrations. The legacy <code>pipeline.enabled</code> toggle
-        retired in Phase 2b — workflow selection is now per-project.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-fg">Workflows</h2>
+          <p className="mt-1 text-sm text-fg-subtle">
+            Activate the workflows project creators can pick from, edit them, and manage
+            recommended leads. Workflow edits never affect projects already in flight — every
+            project carries its own snapshot.
+          </p>
+        </div>
+        <Link
+          to="/admin/workflows/new"
+          className="shrink-0 rounded-lg bg-brand-gradient px-3 py-1.5 text-sm font-medium text-white shadow hover-brand-gradient"
+        >
+          + Create new workflow
+        </Link>
+      </div>
 
       {workflowRegistry.defaultWorkflowId === null &&
         workflowRegistry.activeWorkflowIds.length > 0 && (
@@ -362,30 +373,62 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
         </div>
       )}
 
-      <div className="mt-4 space-y-2">
-        <h3 className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
-          Active workflows
-        </h3>
-        {rowWorkflows.length === 0 ? (
-          <p className="text-xs text-fg-subtle">
-            No workflows loaded yet. Run the seeds below to create them.
-          </p>
-        ) : (
-          rowWorkflows.map((wf) => (
-            <WorkflowRow
-              key={wf.id}
-              workflow={wf}
-              isActive={isActive(wf.id)}
-              isDefault={workflowRegistry.defaultWorkflowId === wf.id}
-              activeProjectCount={liveCounts[wf.id] ?? 0}
-              onToggleActive={(next) => void handleToggleActive(wf.id, next)}
-              onSetDefault={() => void handleSetDefault(wf.id)}
-              onManageRecommended={() => setManageRecommendedFor(wf.id)}
-              disabled={!adminUid}
-            />
-          ))
-        )}
-      </div>
+      {(() => {
+        const activeRows = rowWorkflows.filter((wf) => isActive(wf.id))
+        const inactiveRows = rowWorkflows.filter((wf) => !isActive(wf.id))
+        return (
+          <>
+            <div className="mt-4 space-y-2">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
+                Active workflows
+              </h3>
+              {activeRows.length === 0 ? (
+                <p className="text-xs text-fg-subtle">
+                  No workflows active yet. Create one with the button above, or activate one
+                  from the Inactive section.
+                </p>
+              ) : (
+                activeRows.map((wf) => (
+                  <WorkflowRow
+                    key={wf.id}
+                    workflow={wf}
+                    isActive
+                    isDefault={workflowRegistry.defaultWorkflowId === wf.id}
+                    activeProjectCount={liveCounts[wf.id] ?? 0}
+                    onToggleActive={(next) => void handleToggleActive(wf.id, next)}
+                    onSetDefault={() => void handleSetDefault(wf.id)}
+                    onManageRecommended={() => setManageRecommendedFor(wf.id)}
+                    disabled={!adminUid}
+                  />
+                ))
+              )}
+            </div>
+
+            {inactiveRows.length > 0 && (
+              <details className="mt-6">
+                <summary className="cursor-pointer text-xs font-medium uppercase tracking-wider text-fg-subtle">
+                  Inactive workflows ({inactiveRows.length})
+                </summary>
+                <div className="mt-2 space-y-2">
+                  {inactiveRows.map((wf) => (
+                    <WorkflowRow
+                      key={wf.id}
+                      workflow={wf}
+                      isActive={false}
+                      isDefault={false}
+                      activeProjectCount={liveCounts[wf.id] ?? 0}
+                      onToggleActive={(next) => void handleToggleActive(wf.id, next)}
+                      onSetDefault={() => void handleSetDefault(wf.id)}
+                      onManageRecommended={() => setManageRecommendedFor(wf.id)}
+                      disabled={!adminUid}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
+          </>
+        )
+      })()}
 
       <SeedsSection
         adminUid={adminUid}
@@ -440,6 +483,11 @@ function WorkflowRow({
   onManageRecommended,
   disabled,
 }: WorkflowRowProps) {
+  const lastEdited =
+    workflow.lastEditedAt && workflow.lastEditedAt.seconds > 0
+      ? formatDate(workflow.lastEditedAt)
+      : formatDate(workflow.updatedAt)
+
   return (
     <div className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card p-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -466,6 +514,11 @@ function WorkflowRow({
             <code className="rounded bg-fill-2 px-1.5 py-0.5 text-[10px] text-fg-subtle">
               {workflow.id}
             </code>
+            {workflow.isSystemDefined && (
+              <span className="rounded-full border border-line bg-fill-3 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fg-subtle">
+                System
+              </span>
+            )}
             {isDefault && (
               <span className="rounded-full border border-brand-edge bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand">
                 Default
@@ -474,11 +527,22 @@ function WorkflowRow({
           </div>
           <div className="mt-0.5 text-xs text-fg-subtle">
             {activeProjectCount} active project{activeProjectCount === 1 ? '' : 's'} · v
-            {workflow.version} · {workflow.stages.length} stages
+            {workflow.version} · {workflow.stages.length} stages · last edited {lastEdited}
           </div>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        <Link
+          to={`/admin/workflows/${workflow.id}/edit`}
+          aria-label={`Edit ${workflow.displayName}`}
+          title={workflow.isSystemDefined ? 'View (system templates are read-only)' : 'Edit'}
+          className="inline-flex items-center justify-center rounded-md border border-line bg-fill-2 px-2 py-1 text-[11px] font-medium text-fg-muted transition hover:bg-fill-4 hover:text-fg"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </Link>
         {!isDefault && isActive && (
           <button
             type="button"

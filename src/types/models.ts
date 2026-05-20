@@ -1,5 +1,5 @@
 import { Timestamp } from 'firebase/firestore'
-import type { ProjectHistoryEvent } from './workflow'
+import type { ProjectHistoryEvent, Workflow } from './workflow'
 
 // Re-exported so legacy consumers of models.ts pick up the new event types
 // from a single import site.
@@ -102,8 +102,16 @@ export interface Project {
   // ─── Workflow-driven fields (Phase 2a+) ──────────────────────────────────
   // The workflow this project is pinned to. Every project carries one — the
   // basic workflow is the implicit default for tenants with no other active
-  // workflow.
+  // workflow. Kept as a denormalized convenience for Firestore queries; the
+  // authoritative source for stage/action/role info is `pinnedWorkflow`.
   workflowId: string
+  // Phase 2c: snapshot of the workflow doc at project creation time. Once set,
+  // never updated — workflow edits never affect in-flight projects. All
+  // workflow readers (StageBanner, ActionModal, etc.) prefer this over
+  // re-fetching /workflows/{workflowId}. Optional only for legacy projects
+  // created before 2c; the dev-only backfill (lib/migratePinnedWorkflow.ts)
+  // populates it everywhere before client handoff.
+  pinnedWorkflow?: Workflow
   // Stable string id of the project's current stage in the workflow doc.
   currentStageId: string
   // Discriminated-union timeline of every event in the project's lifecycle.

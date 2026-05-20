@@ -655,6 +655,20 @@ export function useWorkflow(workflowId: string | null | undefined): Workflow | n
   return cached ?? null
 }
 
+// Phase 2c: resolve the workflow a project should render against. Prefers the
+// snapshot pinned at creation (workflow edits never affect in-flight projects)
+// and falls back to a live lookup for legacy projects that pre-date the
+// snapshot-pin migration. Once the dev backfill (lib/migratePinnedWorkflow.ts)
+// has been run across all tenants, the fallback path is dead code — keep it
+// during the rollout window so unbackfilled projects still render.
+export function useProjectWorkflow(
+  project: { workflowId?: string; pinnedWorkflow?: Workflow } | null | undefined,
+): Workflow | null {
+  const liveWorkflow = useWorkflow(project?.pinnedWorkflow ? null : project?.workflowId)
+  if (project?.pinnedWorkflow) return project.pinnedWorkflow
+  return liveWorkflow
+}
+
 // Derived label for project-creation CTAs. Reads the default workflow's
 // displayName so a Sales tenant sees "New Sales Project" and a Tender tenant
 // sees "New Tender". When no default is set yet, falls back to "New Project".

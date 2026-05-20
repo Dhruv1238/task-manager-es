@@ -7,7 +7,7 @@ import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useProjectTasks } from '../hooks/useProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
-import { useLeadRoleName, useWorkflow } from '../contexts/AppConfigContext'
+import { useLeadRoleName, useProjectWorkflow } from '../contexts/AppConfigContext'
 import { uploadAsset } from '../lib/uploadAsset'
 import { addProjectAttachment } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
@@ -161,7 +161,7 @@ export default function ProjectDetail() {
   const { isAdmin, isSuperAdmin, isProjectOwner, isProjectLead, canUpdateStatus } =
     usePermissions(projectId)
   const orgLeadRoleName = useLeadRoleName()
-  const workflow = useWorkflow(project?.workflowId)
+  const workflow = useProjectWorkflow(project)
   // Per-workflow lead label, falling back to the org-wide one for fresh
   // projects loaded before the workflow doc resolves.
   const leadRoleName = workflow?.leadRoleName || orgLeadRoleName

@@ -32,6 +32,11 @@ export function buildCollabDefaultWorkflow(): Omit<Workflow, 'updatedAt' | 'upda
     flowType: 'collaborative',
     leadRoleName: 'Vertical Head',
     isSystemDefined: true,
+    description:
+      'Multi-team work that hands off between stages — allocation, eligibility review, task setup, execution, validation, and delivery.',
+    creationModalCardSubtitle: 'Multi-team flow',
+    creationModalDescription:
+      "Lands at the first stage. You'll allocate a lead once it's created.",
     recommendedLeads: [],
     stages: [
       {

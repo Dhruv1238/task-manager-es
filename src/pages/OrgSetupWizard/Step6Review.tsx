@@ -125,7 +125,7 @@ export default function Step6Review({
       <WizardFooter
         onBack={onBack}
         onPrimary={onFinish}
-        primaryLabel="Finish setup"
+        primaryLabel="Finish setup → Continue to workflow"
         primarySubmitting={submitting}
       />
     </>

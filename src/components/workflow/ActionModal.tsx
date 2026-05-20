@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase/firestore'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import { useAuth } from '../../contexts/AuthContext'
-import { useOrgStructure, useWorkflow } from '../../contexts/AppConfigContext'
+import { useOrgStructure, useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { runWorkflowAction } from '../../lib/firestore'
@@ -42,7 +42,7 @@ const STATUS_OPTIONS: ProjectStatus[] = [
 export default function ActionModal({ open, onClose, project, action }: Props) {
   const { user, profile } = useAuth()
   const org = useOrgStructure()
-  const workflow = useWorkflow(project.workflowId)
+  const workflow = useProjectWorkflow(project)
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
   const [values, setValues] = useState<Record<string, unknown>>({})

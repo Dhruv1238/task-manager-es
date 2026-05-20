@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { useOrgStructure, useWorkflow } from '../contexts/AppConfigContext'
+import { useOrgStructure, useProjectWorkflow } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
 import { resolveCoordinatorTeam, resolveValidatorTeam } from '../lib/orgResolver'
 import { canPerform as evaluatorCanPerform } from '../lib/workflowEvaluator'
@@ -57,9 +57,10 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
   const [teamLoading, setTeamLoading] = useState<boolean>(Boolean(teamId))
   const [projectTeams, setProjectTeams] = useState<Team[]>([])
   const [projectTeamsLoading, setProjectTeamsLoading] = useState<boolean>(Boolean(projectId))
-  // Per-project workflow: lazy-fetched when not in the active set (e.g. an
-  // old project on a now-deactivated workflow). Returns null while loading.
-  const workflow = useWorkflow(project?.workflowId)
+  // Phase 2c: prefer the snapshot pinned at creation so workflow edits never
+  // change permission resolution on an in-flight project. Falls back to the
+  // live lookup for projects that pre-date the pinning migration.
+  const workflow = useProjectWorkflow(project)
 
   useEffect(() => {
     if (!projectId) {
