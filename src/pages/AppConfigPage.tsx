@@ -46,112 +46,76 @@ function formatDate(ts: Timestamp | { seconds?: number; nanoseconds?: number } |
   })
 }
 
-function configsEqual(a: AppConfig, b: AppConfig): boolean {
-  if (a.features.chat !== b.features.chat) return false
-  return true
-}
-
-interface ToggleProps {
-  checked: boolean
-  onChange: (next: boolean) => void
-  disabled?: boolean
-  label: string
-  hint?: string
-}
-
-function Toggle({ checked, onChange, disabled, label, hint }: ToggleProps) {
-  return (
-    <label
-      className={`flex items-start gap-3 rounded-xl border border-line bg-card p-4 transition ${
-        disabled ? 'opacity-60' : 'hover:bg-fill-2'
-      }`}
-    >
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
-          checked ? 'bg-brand-edge' : 'bg-fill-4'
-        } disabled:cursor-not-allowed`}
-      >
-        <span
-          aria-hidden
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-fg">{label}</div>
-        {hint && <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>}
-      </div>
-    </label>
-  )
-}
 
 export default function AppConfigPage() {
-  const { user, profile } = useAuth()
-  const { config: cachedConfig, refresh, refreshing, setConfigOptimistic } = useAppConfigContext()
+  const { user } = useAuth()
+  const { config: cachedConfig } = useAppConfigContext()
   const { config: liveConfig } = useAppConfigLive()
 
+  // Kept so any commented-out feature flag UI below can be re-enabled without
+  // re-deriving the baseline. The chat-toggle save flow was retired with
+  // Phase 2c — workflow management took its place as the main concern of this
+  // page. Re-add a draft/setDraft/handleSave trio here if/when a new flag
+  // needs editing.
   const baseline: AppConfig = liveConfig ?? cachedConfig ?? DEFAULT_APP_CONFIG
+  void baseline
 
-  const [draft, setDraft] = useState<AppConfig>(baseline)
-  const [saving, setSaving] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
-  const [savedAt, setSavedAt] = useState<number | null>(null)
-
-  const [lastSeenBaseline, setLastSeenBaseline] = useState<AppConfig>(baseline)
-  useEffect(() => {
-    if (configsEqual(draft, lastSeenBaseline)) {
-      setDraft(baseline)
-    }
-    setLastSeenBaseline(baseline)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseline.version, baseline.features.chat])
-
-  const dirty = useMemo(() => !configsEqual(draft, baseline), [draft, baseline])
-
-  async function handleSave() {
-    if (!user) return
-    setSaving(true)
-    setError(null)
-    try {
-      const next: AppConfig = {
-        ...draft,
-        version: baseline.version + 1,
-        updatedAt: Timestamp.now(),
-        updatedBy: user.uid,
-      }
-      await setDoc(doc(db, 'config', 'appConfig'), {
-        ...next,
-        updatedAt: serverTimestamp(),
-      })
-      setConfigOptimistic(next)
-      setSavedAt(Date.now())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const [error] = useState<string | null>(null)
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <p className="text-sm text-fg-subtle">Super Admin</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-fg">App Configuration</h1>
-        <p className="mt-2 max-w-2xl text-fg-muted">
-          Per-deployment feature flags and workflow setup. Reads cache for 24 hours after each
-          refresh — bump the config here when you ship a behavior change.
-        </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm text-fg-subtle">Super Admin</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-fg">App Configuration</h1>
+          <p className="mt-2 max-w-2xl text-fg-muted">
+            Shape how your organization runs — the roles your teams play and the workflows
+            your projects move through. Changes apply to new projects going forward; work
+            already in flight keeps its current settings.
+          </p>
+        </div>
+        <Link
+          to="/admin/setup"
+          title="Walk through the setup wizard again — values are pre-filled with what you have now."
+          className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-brand-edge/40 bg-brand-soft/60 px-4 py-2 text-sm font-medium text-fg-strong shadow-sm transition hover:border-brand-edge hover:bg-brand-gradient hover:text-white hover:shadow-lg hover:shadow-purple-900/30"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-brand transition group-hover:text-white"
+            aria-hidden
+          >
+            <path d="M12 3 14 9l6 2-6 2-2 6-2-6-6-2 6-2 2-6Z" />
+          </svg>
+          <span>Re-run setup wizard</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-fg-subtle transition group-hover:translate-x-0.5 group-hover:text-white/90"
+            aria-hidden
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </Link>
       </div>
 
       <OrgStructureSection />
 
       <WorkflowsSection adminUid={user?.uid ?? null} />
+
+      <DevToolsSection adminUid={user?.uid ?? null} />
 
       {/* <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Features</h2>
@@ -233,7 +197,6 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
     workflowRegistry,
     workflowsById,
     setRegistryOptimistic,
-    refreshRegistry,
     refreshWorkflow,
     discoverWorkflows,
   } = useAppConfigContext()
@@ -439,12 +402,6 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
           </>
         )
       })()}
-
-      <SeedsSection
-        adminUid={adminUid}
-        onRegistryRefresh={() => void refreshRegistry()}
-      />
-      <MigrationsSection adminUid={adminUid} />
 
       {confirmDeactivateId && (
         <DeactivateConfirmModal
@@ -765,6 +722,182 @@ function ManageRecommendedLeadsModal({
 }
 
 // ─── Seeds + migrations rows ──────────────────────────────────────────────
+
+// ─── Dev Tools (REMOVE BEFORE SHIPPING TO PROD) ───────────────────────────
+// Wraps Seeds + Migrations + the destructive "Reset to fresh tenant" reset
+// behind a single collapsible. Anything inside here is for platform-team use
+// during dev/handoff and should not survive into a customer build.
+
+function DevToolsSection({ adminUid }: { adminUid: string | null }) {
+  const { refreshRegistry } = useAppConfigContext()
+  const [open, setOpen] = useState(false)
+  const onRegistryRefresh = () => void refreshRegistry()
+
+  return (
+    <section className="mb-6 rounded-2xl border border-tone-warn-bd/40 bg-fill-1 p-5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-start justify-between gap-3 text-left"
+      >
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-tone-warn-bd bg-tone-warn-bg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-tone-warn-fg">
+              Dev only
+            </span>
+            <h2 className="text-lg font-semibold text-fg">Dev Tools</h2>
+          </div>
+          <p className="mt-1 text-sm text-fg-subtle">
+            Platform-team utilities for seeding system workflows, running one-off migrations,
+            and resetting the tenant. <strong className="text-fg-muted">Removed in production.</strong>
+          </p>
+        </div>
+        <span className="mt-1 shrink-0 text-fg-subtle" aria-hidden>
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-5 space-y-6">
+          <ResetTenantTool adminUid={adminUid} />
+          <SeedsSection adminUid={adminUid} onRegistryRefresh={onRegistryRefresh} />
+          <MigrationsSection adminUid={adminUid} />
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ResetTenantTool({ adminUid }: { adminUid: string | null }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [summary, setSummary] = useState<string | null>(null)
+
+  const canConfirm = confirmText.trim().toUpperCase() === 'RESET'
+
+  async function runReset() {
+    if (!adminUid || !canConfirm) return
+    setRunning(true)
+    setError(null)
+    setSummary(null)
+    try {
+      const { wipeTenant } = await import('../lib/wipeTenant')
+      const res = await wipeTenant()
+      const parts: string[] = []
+      for (const [name, count] of Object.entries(res.collectionsCleared)) {
+        parts.push(`${name}: ${count}`)
+      }
+      parts.push(`config: ${res.configsCleared.length}`)
+      parts.push(`users reset: ${res.usersReset}`)
+      setSummary(`Wiped — ${parts.join(' · ')}. Reloading…`)
+      // Hard reload so every in-memory React state + provider resets and
+      // Home's redirect logic re-evaluates against the now-empty Firestore.
+      setTimeout(() => {
+        window.location.assign('/')
+      }, 700)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Reset failed')
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-tone-danger-bd/60 bg-tone-danger-bg/10 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-tone-danger-fg"
+              aria-hidden
+            >
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <h3 className="text-sm font-semibold text-fg">Reset to fresh tenant</h3>
+          </div>
+          <p className="mt-1 text-xs text-fg-subtle">
+            Deletes every project, task, team, workflow, and config doc from Firestore, clears
+            every localStorage cache, and resets each user's team memberships. The next page
+            load behaves like a brand-new tenant — org wizard launches, then the workflow
+            wizard. User identities stay so you can log right back in.
+          </p>
+        </div>
+        {!confirmOpen && (
+          <button
+            type="button"
+            onClick={() => setConfirmOpen(true)}
+            disabled={!adminUid}
+            className="shrink-0 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-1.5 text-xs font-medium text-tone-danger-fg transition hover:opacity-90 disabled:opacity-50"
+          >
+            Reset tenant…
+          </button>
+        )}
+      </div>
+
+      {confirmOpen && (
+        <div className="mt-4 space-y-2 rounded-lg border border-tone-danger-bd bg-tone-danger-bg/20 p-3">
+          <p className="text-xs text-fg-strong">
+            This is irreversible. Type <code className="rounded bg-fill-3 px-1.5 py-0.5 text-fg">RESET</code> below to confirm.
+          </p>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="RESET"
+            disabled={running}
+            className="w-full rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-tone-danger-bd focus:ring-2 focus:ring-tone-danger-bd disabled:opacity-60"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmOpen(false)
+                setConfirmText('')
+                setError(null)
+                setSummary(null)
+              }}
+              disabled={running}
+              className="rounded-lg border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void runReset()}
+              disabled={running || !canConfirm}
+              className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-1.5 text-xs font-medium text-tone-danger-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {running ? 'Wiping…' : 'Wipe everything'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-2 text-xs text-tone-danger-fg" role="alert">
+          {error}
+        </p>
+      )}
+      {summary && (
+        <p className="mt-2 text-xs text-tone-success-fg" role="status">
+          {summary}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function SeedsSection({
   adminUid,
