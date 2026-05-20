@@ -224,21 +224,44 @@ function workflowStorageKey(id: string): string {
   return `workflow:${id}:v1`
 }
 
-interface SerializedWorkflow extends Omit<Workflow, 'updatedAt'> {
+interface SerializedWorkflow extends Omit<Workflow, 'updatedAt' | 'lastEditedAt'> {
   updatedAt: SerializedTimestamp
+  // Phase 2c added lastEditedAt as an optional Timestamp on Workflow. It needs
+  // the same serialize/hydrate dance as updatedAt, or readers get a plain
+  // {seconds, nanoseconds} object with no `.toDate()` method.
+  lastEditedAt?: SerializedTimestamp
 }
 
 function serializeWorkflow(w: Workflow): SerializedWorkflow {
   return {
     ...w,
     updatedAt: { seconds: w.updatedAt.seconds, nanoseconds: w.updatedAt.nanoseconds },
+    ...(w.lastEditedAt
+      ? {
+          lastEditedAt: {
+            seconds: w.lastEditedAt.seconds,
+            nanoseconds: w.lastEditedAt.nanoseconds,
+          },
+        }
+      : {}),
   }
 }
 
 function hydrateWorkflow(s: SerializedWorkflow): Workflow {
+  // Pull the serialized timestamps off explicitly so the spread doesn't carry
+  // their incompatible types into the Workflow shape.
+  const { updatedAt: rawUpdatedAt, lastEditedAt: rawLastEditedAt, ...rest } = s
   return {
-    ...s,
-    updatedAt: new Timestamp(s.updatedAt.seconds, s.updatedAt.nanoseconds),
+    ...rest,
+    updatedAt: new Timestamp(rawUpdatedAt.seconds, rawUpdatedAt.nanoseconds),
+    ...(rawLastEditedAt
+      ? {
+          lastEditedAt: new Timestamp(
+            rawLastEditedAt.seconds,
+            rawLastEditedAt.nanoseconds,
+          ),
+        }
+      : {}),
   }
 }
 

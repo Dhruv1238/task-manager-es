@@ -25,9 +25,19 @@ import { isProjectClosed } from '../lib/projectStatus'
 import Modal from '../components/ui/Modal'
 import UserPicker from '../components/ui/UserPicker'
 
-function formatDate(ts: Timestamp | undefined): string {
-  if (!ts || ts.seconds === 0) return '—'
-  return ts.toDate().toLocaleString(undefined, {
+// Defensive against plain {seconds, nanoseconds} objects coming back from the
+// localStorage cache when a Timestamp field wasn't explicitly rehydrated to a
+// Firestore Timestamp instance. Falls back to Date.now()-style parsing so a
+// freshly-saved workflow whose lastEditedAt is still a serverTimestamp sentinel
+// (null until the round-trip) doesn't crash the row.
+function formatDate(ts: Timestamp | { seconds?: number; nanoseconds?: number } | undefined | null): string {
+  if (!ts) return '—'
+  const seconds = (ts as { seconds?: number }).seconds
+  if (typeof seconds !== 'number' || seconds === 0) return '—'
+  const date = typeof (ts as Timestamp).toDate === 'function'
+    ? (ts as Timestamp).toDate()
+    : new Date(seconds * 1000)
+  return date.toLocaleString(undefined, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -143,7 +153,7 @@ export default function AppConfigPage() {
 
       <WorkflowsSection adminUid={user?.uid ?? null} />
 
-      <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
+      {/* <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Features</h2>
         <div className="mt-4 space-y-3">
           <Toggle
@@ -155,7 +165,7 @@ export default function AppConfigPage() {
             hint="Placeholder — chat is not yet built. Toggling on adds a disabled 'Chat' nav item."
           />
         </div>
-      </section>
+      </section> */}
 
       {error && (
         <div className="mb-4 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
@@ -163,7 +173,7 @@ export default function AppConfigPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+      {/* <div className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-fg-subtle">
           <div>
             Version <span className="font-medium text-fg-muted">{baseline.version}</span> · last
@@ -200,7 +210,7 @@ export default function AppConfigPage() {
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
-      </div>
+      </div> */}
     </main>
   )
 }
