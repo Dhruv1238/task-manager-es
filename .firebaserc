@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "clm-phase-2",
+    "exp360": "clm-phase-1",
+    "es": "task-manager-235f6"
+  },
+  "targets": {},
+  "etags": {}
+}
