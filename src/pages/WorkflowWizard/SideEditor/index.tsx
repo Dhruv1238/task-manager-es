@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../contexts/AuthContext'
-import { useOrgStructure } from '../../../contexts/AppConfigContext'
+import { useAppConfigContext, useOrgStructure } from '../../../contexts/AppConfigContext'
 import type { Stage } from '../../../types/workflow'
 import {
   saveWorkflowAndMaybeActivate,
@@ -29,8 +29,9 @@ interface Props {
   // "Finish setup" and the helper text below it.
   mode?: 'standalone' | 'create' | 'onboarding'
   // Callback fired with the saved workflow id after a successful save. The
-  // host page can navigate away or show a toast.
-  onSaved?: (workflowId: string) => void
+  // host page can navigate away or show a toast. May return a Promise — the
+  // editor awaits it so post-save state refreshes complete before unmounting.
+  onSaved?: (workflowId: string) => void | Promise<void>
 }
 
 // Phase 2c: the authoritative editing surface. Used by the workflow wizard's
@@ -44,6 +45,7 @@ export default function SideEditor({
 }: Props) {
   const { user } = useAuth()
   const org = useOrgStructure()
+  const { setWorkflowOptimistic, setRegistryOptimistic } = useAppConfigContext()
   const navigate = useNavigate()
   const [draft, setDraft] = useState<WorkflowDraft>(initialDraft)
   const [selectedStageId, setSelectedStageId] = useState<string | null>(
@@ -174,7 +176,16 @@ export default function SideEditor({
         activate,
         workflowId,
       })
-      if (onSaved) onSaved(res.workflowId)
+      // Push the just-saved doc + (when activating) the new registry into
+      // local context + localStorage so the next render sees the new state
+      // immediately. Without this, the destination page (Home redirect logic
+      // or /admin/config's WorkflowsSection) reads stale cache and either
+      // loops back into the wizard or shows the new workflow as inactive.
+      setWorkflowOptimistic(res.workflow)
+      if (res.registry) {
+        setRegistryOptimistic(res.registry)
+      }
+      if (onSaved) await onSaved(res.workflowId)
       else navigate(`/admin/config?workflow=${res.workflowId}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save the workflow.')

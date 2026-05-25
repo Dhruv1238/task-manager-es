@@ -199,17 +199,25 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
     setRegistryOptimistic,
     refreshWorkflow,
     discoverWorkflows,
+    bootLoaded,
   } = useAppConfigContext()
   const { projects } = useAllProjects()
   const [confirmDeactivateId, setConfirmDeactivateId] = useState<string | null>(null)
   const [manageRecommendedFor, setManageRecommendedFor] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [discovered, setDiscovered] = useState<boolean>(false)
 
   // On mount: scan /workflows/ so the row list shows every seeded workflow,
   // not just the active set the boot eager-load fetched. Without this,
   // workflows seeded after boot would only appear after a hard reload.
   useEffect(() => {
-    void discoverWorkflows()
+    let cancelled = false
+    void discoverWorkflows().finally(() => {
+      if (!cancelled) setDiscovered(true)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [discoverWorkflows])
 
   // Project count per workflow, scoped to non-terminal projects. Drives the
@@ -346,7 +354,20 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
         </div>
       )}
 
-      {(() => {
+      {/* On a fresh device the boot fetches haven't finished yet AND the
+        * /workflows/ collection scan hasn't returned. Showing the "no
+        * workflows" empty state during that window misleads the user into
+        * thinking nothing's configured — render a spinner instead. */}
+      {(!bootLoaded || !discovered) ? (
+        <div
+          role="status"
+          aria-label="Loading workflows"
+          className="mt-4 flex items-center gap-3 rounded-xl border border-line bg-card px-4 py-6 text-sm text-fg-subtle"
+        >
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-fg-strong" />
+          Loading workflows…
+        </div>
+      ) : (() => {
         const activeRows = rowWorkflows.filter((wf) => isActive(wf.id))
         const inactiveRows = rowWorkflows.filter((wf) => !isActive(wf.id))
         return (

@@ -13,6 +13,7 @@ import type { AppConfig, OrgStructure } from '../types/models'
 import { DEFAULT_ORG_STRUCTURE } from '../types/models'
 import type { Workflow, WorkflowRegistry } from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
+import { useAuth } from './AuthContext'
 
 const STORAGE_KEY = 'appConfig:v1'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
@@ -37,12 +38,17 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
 export const COLLAB_DEFAULT_WORKFLOW_ID = 'collab-default'
 export const BASIC_WORKFLOW_ID = 'basic'
 
+// Empty default. A fresh tenant (no /workflows/_registry doc in Firestore)
+// has zero active workflows — Home.tsx detects this and auto-launches the
+// workflow wizard. The pre-Phase-2c default assumed `basic` was implicitly
+// seeded, but post-2c we don't seed anything until the tenant explicitly
+// picks a template / starts blank / clicks "I'll do this later".
 export const DEFAULT_WORKFLOW_REGISTRY: WorkflowRegistry = {
   version: 0,
   updatedAt: Timestamp.fromMillis(0),
   updatedBy: '',
-  activeWorkflowIds: [BASIC_WORKFLOW_ID],
-  defaultWorkflowId: BASIC_WORKFLOW_ID,
+  activeWorkflowIds: [],
+  defaultWorkflowId: null,
 }
 
 interface CachedEntry {
@@ -312,6 +318,12 @@ interface AppConfigContextValue {
   // True while the initial Firestore refresh is in flight. UI doesn't need
   // to wait — the cached / default value is rendered synchronously.
   refreshing: boolean
+  // True once the first boot fetch round for orgStructure + workflowRegistry
+  // has finished (either from network or because both had usable localStorage
+  // caches at mount). Home and similar surfaces gate their redirect decisions
+  // on this so a fresh device doesn't bounce to the wizard before the data
+  // has had a chance to load from Firestore.
+  bootLoaded: boolean
   refresh: () => Promise<void>
   refreshOrg: () => Promise<void>
   refreshRegistry: () => Promise<void>
@@ -333,6 +345,7 @@ interface AppConfigContextValue {
 const AppConfigContext = createContext<AppConfigContextValue | undefined>(undefined)
 
 export function AppConfigProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth()
   const [config, setConfig] = useState<AppConfig>(() => readCache()?.config ?? DEFAULT_APP_CONFIG)
   const [orgStructure, setOrgStructure] = useState<OrgStructure>(
     () => readOrgCache()?.org ?? DEFAULT_ORG_STRUCTURE,
@@ -352,6 +365,21 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     return seed
   })
   const [refreshing, setRefreshing] = useState<boolean>(false)
+  // `bootLoaded` flips true after the first boot fetch round completes. The
+  // initial value is true ONLY when both orgStructure and workflowRegistry
+  // have non-stale localStorage caches at mount — otherwise we have to wait
+  // on the network. Without this gate, Home renders the redirect decision
+  // against DEFAULT state (setupCompleted=false, no workflows) and bounces
+  // the user to the wizard on a fresh device even when Firestore has the
+  // real state.
+  const [bootLoaded, setBootLoaded] = useState<boolean>(() => {
+    const cachedOrg = readOrgCache()
+    const cachedRegistry = readRegistryCache()
+    if (!cachedOrg || !cachedRegistry) return false
+    if (Date.now() - cachedOrg.fetchedAt > TTL_MS) return false
+    if (Date.now() - cachedRegistry.fetchedAt > TTL_MS) return false
+    return true
+  })
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -435,30 +463,79 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   }, [refreshWorkflow])
 
   // Boot: refresh every doc whose cache is missing or stale. Run in parallel
-  // so the UI's first render isn't blocked by a single slow doc.
+  // so the UI's first render isn't blocked by a single slow doc. Once the
+  // critical pair (orgStructure + registry) settles, flip `bootLoaded` so
+  // gated UI (Home redirect) can make its decision.
+  //
+  // Gating on auth: Firestore rules require isSignedIn() for /config and
+  // /workflows reads. If we fire before auth settles (which is the common case
+  // on a fresh device — onAuthStateChanged hasn't yet had a chance to run when
+  // this provider mounts), reads fail and bootLoaded flips against empty
+  // DEFAULT state. Wait for auth to settle and only flip bootLoaded after the
+  // critical fetches complete under an authenticated user — otherwise Home's
+  // <Navigate> fires against DEFAULT state in the window between sign-in and
+  // first fetch.
   useEffect(() => {
-    const cached = readCache()
-    if (!cached || Date.now() - cached.fetchedAt > TTL_MS) {
-      void refresh()
+    if (authLoading) return
+    if (!user) {
+      // No authenticated user — login screen renders unconditionally (it
+      // doesn't gate on bootLoaded), but reset the flag in case a previous
+      // authenticated session flipped it: a future sign-in must wait for its
+      // own fetch round before Home is allowed to make a redirect decision.
+      setBootLoaded(false)
+      return
     }
-    const cachedOrg = readOrgCache()
-    if (!cachedOrg || Date.now() - cachedOrg.fetchedAt > TTL_MS) {
-      void refreshOrg()
-    }
-    const cachedRegistry = readRegistryCache()
-    if (!cachedRegistry || Date.now() - cachedRegistry.fetchedAt > TTL_MS) {
-      void refreshRegistry()
-    } else {
-      // Even if the registry cache is fresh, individual workflow caches may
-      // be stale or missing — refresh each in the background.
-      for (const id of cachedRegistry.registry.activeWorkflowIds) {
-        const wfCache = readWorkflowCache(id)
-        if (!wfCache || Date.now() - wfCache.fetchedAt > TTL_MS) {
-          void refreshWorkflow(id)
+
+    let cancelled = false
+    // Force-reset before the fetch so any prior `bootLoaded=true` from a
+    // different session can't leak through.
+    setBootLoaded(false)
+
+    async function boot() {
+      // appConfig refresh — non-critical for redirect decisions.
+      const cached = readCache()
+      if (!cached || Date.now() - cached.fetchedAt > TTL_MS) {
+        void refresh()
+      }
+
+      // Critical pair: orgStructure + registry. Home gates on these.
+      const orgPromise = (() => {
+        const cachedOrg = readOrgCache()
+        if (!cachedOrg || Date.now() - cachedOrg.fetchedAt > TTL_MS) {
+          return refreshOrg()
         }
+        return Promise.resolve()
+      })()
+
+      const registryPromise = (() => {
+        const cachedRegistry = readRegistryCache()
+        if (!cachedRegistry || Date.now() - cachedRegistry.fetchedAt > TTL_MS) {
+          return refreshRegistry()
+        }
+        // Even when the registry cache is fresh, individual workflow caches
+        // may be stale or missing — fire-and-forget those in the background.
+        for (const id of cachedRegistry.registry.activeWorkflowIds) {
+          const wfCache = readWorkflowCache(id)
+          if (!wfCache || Date.now() - wfCache.fetchedAt > TTL_MS) {
+            void refreshWorkflow(id)
+          }
+        }
+        return Promise.resolve()
+      })()
+
+      try {
+        await Promise.allSettled([orgPromise, registryPromise])
+      } finally {
+        if (!cancelled) setBootLoaded(true)
       }
     }
-  }, [refresh, refreshOrg, refreshRegistry, refreshWorkflow])
+
+    void boot()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, user, refresh, refreshOrg, refreshRegistry, refreshWorkflow])
 
   // Cross-tab sync. One listener handles every cache: storage events fire on
   // peer tabs when this tab writes through its optimistic setter.
@@ -514,6 +591,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
       workflowRegistry,
       workflowsById,
       refreshing,
+      bootLoaded,
       refresh,
       refreshOrg,
       refreshRegistry,
@@ -531,6 +609,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
       workflowRegistry,
       workflowsById,
       refreshing,
+      bootLoaded,
       refresh,
       refreshOrg,
       refreshRegistry,
@@ -551,6 +630,13 @@ export function useAppConfigContext(): AppConfigContextValue {
   const ctx = useContext(AppConfigContext)
   if (!ctx) throw new Error('useAppConfig must be used inside <AppConfigProvider>')
   return ctx
+}
+
+// True once orgStructure + workflowRegistry have completed their first boot
+// fetch (or were already in cache at mount). Surfaces like Home use this to
+// avoid redirecting against DEFAULT state on a fresh device.
+export function useBootLoaded(): boolean {
+  return useAppConfigContext().bootLoaded
 }
 
 export function useAppConfig(): AppConfig {

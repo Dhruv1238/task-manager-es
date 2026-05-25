@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 // Emails permitted to reach /admin/config. Kept here (not in Firestore) so the
 // gate survives any data corruption and so other super_admins a client might
 // provision can't stumble onto the dev console.
-export const DEV_CONFIG_EMAILS = ['dhruv.sharma1@eventstrat.ai','sarvesh@eventstrat.ai']
+export const DEV_CONFIG_EMAILS = ['dhruv.sharma1@eventstrat.ai','sarvesh@eventstrat.ai', 'abhishek@eventstrat.ai', 'parul.singh1@eventstrat.ai', 'rachet@eventstrat.ai']
 
 export function isDevConfigUser(profile: { globalRole?: string; email?: string } | null | undefined): boolean {
   if (!profile) return false

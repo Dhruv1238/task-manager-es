@@ -172,6 +172,16 @@ export interface SaveWorkflowResult {
   workflowId: string
   newVersion: number
   activated: boolean
+  // The exact workflow doc that was written, so the caller can
+  // `setWorkflowOptimistic(workflow)` without waiting for a re-fetch. Uses
+  // Timestamp.now() approximations for the server-stamped fields — close
+  // enough for cache + render purposes; a future read will get the real
+  // server values.
+  workflow: Workflow
+  // The exact registry doc that was written, OR null when not activating.
+  // Same approximation note as `workflow`. Caller should call
+  // `setRegistryOptimistic(registry)` when present.
+  registry: WorkflowRegistry | null
 }
 
 // Read an iterable of existing workflow ids from the registry + a single
@@ -232,6 +242,7 @@ export async function saveWorkflowAndMaybeActivate(
 
     let activated = false
     let registryWrite: Record<string, unknown> | null = null
+    let nextRegistry: WorkflowRegistry | null = null
     if (input.activate && registrySnap) {
       const registry: WorkflowRegistry = registrySnap.exists()
         ? (registrySnap.data() as WorkflowRegistry)
@@ -254,6 +265,21 @@ export async function saveWorkflowAndMaybeActivate(
           updatedBy: input.adminUid,
         }
         activated = true
+        // Mirror the same shape (with Timestamp.now() approximating the
+        // server timestamp) so the caller can update local state immediately
+        // — readers don't differentiate the two in the millisecond between
+        // the optimistic update and the eventual server-stamped read.
+        nextRegistry = {
+          version: (registry.version ?? 0) + 1,
+          activeWorkflowIds: nextIds,
+          defaultWorkflowId: nextDefault,
+          updatedAt: Timestamp.now(),
+          updatedBy: input.adminUid,
+        }
+      } else {
+        // Already active — surface the existing registry so the caller can
+        // still refresh its in-memory copy without an extra read.
+        nextRegistry = registry
       }
     }
 
@@ -267,7 +293,13 @@ export async function saveWorkflowAndMaybeActivate(
       tx.set(registryRef, registryWrite)
     }
 
-    return { workflowId, newVersion, activated }
+    return {
+      workflowId,
+      newVersion,
+      activated,
+      workflow: payload,
+      registry: nextRegistry,
+    }
   })
 }
 

@@ -125,9 +125,13 @@ export default function WorkflowWizard() {
     navigate(onboardingMode ? '/' : '/admin/config')
   }
 
-  function handleSaved(savedId: string) {
-    // refresh registry so the new active workflow shows up everywhere
-    void refreshRegistry()
+  async function handleSaved(savedId: string) {
+    // SideEditor has already pushed the just-saved workflow + registry into
+    // local context optimistically. Awaiting a full registry re-fetch here
+    // is belt-and-braces — it pulls any concurrent operator edits and
+    // refreshes the localStorage TTL clock — but it doesn't gate navigation
+    // anymore, so the user sees an instant transition.
+    await refreshRegistry().catch(() => null)
     if (onboardingMode) {
       navigate('/', { replace: true })
     } else {

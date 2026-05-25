@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
+  useBootLoaded,
   useSetupCompleted,
   useWorkflowRegistry,
 } from '../contexts/AppConfigContext'
@@ -97,6 +98,7 @@ function BoardViewCard() {
 
 export default function Home() {
   const { profile } = useAuth()
+  const bootLoaded = useBootLoaded()
   const setupCompleted = useSetupCompleted()
   const workflowRegistry = useWorkflowRegistry()
   // Phase 2c: broadened auto-launch. Any super_admin in a fresh tenant gets
@@ -105,6 +107,23 @@ export default function Home() {
   // are routed because they're the only role that can complete the wizard.
   const isSuperAdmin = profile?.globalRole === 'super_admin'
   const noActiveWorkflows = (workflowRegistry?.activeWorkflowIds ?? []).length === 0
+
+  // Wait for the first Firestore fetch round to settle before deciding to
+  // redirect. Without this, a fresh device (no localStorage cache) renders
+  // against DEFAULT state — setupCompleted=false, no workflows — and the
+  // user gets bounced to the wizard even when Firestore has the real values.
+  if (!bootLoaded) {
+    return (
+      <div
+        role="status"
+        aria-label="Loading workspace"
+        className="flex min-h-[60vh] items-center justify-center text-fg-subtle"
+      >
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-line-strong border-t-fg-strong" />
+      </div>
+    )
+  }
+
   if (isSuperAdmin && !setupCompleted) {
     return <Navigate to="/admin/setup" replace />
   }
