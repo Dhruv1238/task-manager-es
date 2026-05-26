@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot } from 'firebase/firestore'
+import { tenantDoc } from '../lib/firestore'
 import type { TaskTemplate, TaskTemplateConfig } from '../types/models'
 
 // Reads the singleton config doc at /config/taskTemplates (delta §5 Flow 17).
@@ -10,7 +10,7 @@ export function useTaskTemplates(): { templates: TaskTemplate[]; loading: boolea
   const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    return onSnapshot(doc(db, 'config', 'taskTemplates'), (snap) => {
+    return onSnapshot(tenantDoc('config', 'taskTemplates'), (snap) => {
       if (snap.exists()) {
         const data = snap.data() as TaskTemplateConfig
         setTemplates(Array.isArray(data.templates) ? data.templates : [])

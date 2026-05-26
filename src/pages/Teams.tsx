@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, orderBy, query } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
 import AdminActionBar from '../components/admin/AdminActionBar'
@@ -35,7 +35,7 @@ export default function Teams() {
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
   useEffect(() => {
-    const q = query(collection(db, 'teams'), orderBy('createdAt', 'desc'))
+    const q = query(tenantCol('teams'), orderBy('createdAt', 'desc'))
     return onSnapshot(
       q,
       (snap) => {

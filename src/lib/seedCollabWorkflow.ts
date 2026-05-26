@@ -17,8 +17,8 @@
  * Sprint 2-3 period can dual-write without behaviour drift. The legacy numeric
  * mapping is the reverse of NUMERIC_STAGE_TO_ID at the bottom of this file.
  */
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
+import {  getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { tenantDoc } from './firestore'
 import type { Workflow } from '../types/workflow'
 
 export const COLLAB_DEFAULT_WORKFLOW_ID = 'collab-default'
@@ -339,7 +339,7 @@ export interface SeedCollabResult {
 }
 
 export async function seedCollabWorkflow(adminUid: string): Promise<SeedCollabResult> {
-  const ref = doc(db, 'workflows', COLLAB_DEFAULT_WORKFLOW_ID)
+  const ref = tenantDoc('workflows', COLLAB_DEFAULT_WORKFLOW_ID)
   const existing = await getDoc(ref)
   const previousVersion = existing.exists()
     ? ((existing.data() as { version?: number }).version ?? 0)

@@ -38,9 +38,17 @@ export default function WizardShell({ title, step, totalSteps, children }: Props
           <KiethAI size={140} />
         </div>
 
-        <h1 className="mb-8 text-center text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
+        <h1 className="mb-3 text-center text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
           {title}
         </h1>
+
+        {__IS_SANDBOX__ ? (
+          <p className="mx-auto mb-6 max-w-md text-center text-xs text-fg-subtle">
+            In a real deployment you'd configure this for your team. In the sandbox we've pre-filled an example — feel free to change anything.
+          </p>
+        ) : (
+          <div className="mb-6" />
+        )}
 
         <div className="w-full rounded-3xl border border-line bg-card/70 p-6 shadow-xl shadow-purple-900/10 backdrop-blur-sm sm:p-8">
           <div className="mb-6">

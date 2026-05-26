@@ -8,8 +8,6 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  collection,
-  doc,
   getDoc,
   getDocs,
   limit,
@@ -20,7 +18,7 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
+import { tenantCol, tenantDoc } from '../../lib/firestore'
 import { useAuth } from '../../contexts/AuthContext'
 import { usePaginatedQuery } from '../../hooks/usePaginatedQuery'
 import type { Project } from '../../types/models'
@@ -92,7 +90,7 @@ export default function ProjectPicker({
       return
     }
     let cancelled = false
-    getDoc(doc(db, 'projects', value))
+    getDoc(tenantDoc('projects', value))
       .then((snap) => {
         if (cancelled) return
         if (snap.exists()) {
@@ -128,7 +126,7 @@ export default function ProjectPicker({
   })
   useEffect(() => {
     if (!autoSelectFirst || value || !profile) return
-    const projectsRef = collection(db, 'projects')
+    const projectsRef = tenantCol('projects')
     const constraints = []
     if (!isAdmin) {
       if (accessKeys.length === 0) return
@@ -149,7 +147,7 @@ export default function ProjectPicker({
   const buildQuery = useCallback(
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
       if (!open || !profile) return null
-      const projectsRef = collection(db, 'projects')
+      const projectsRef = tenantCol('projects')
       const constraints = []
       if (!isAdmin) {
         if (accessKeys.length === 0) return null

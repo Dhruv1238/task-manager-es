@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, query, where } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Live subscription to every team-level task (parentTaskId === null) on a given project.
@@ -19,7 +19,7 @@ export function useProjectTasks(projectId: string | undefined) {
     }
     setLoading(true)
     const q = query(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       where('projectId', '==', projectId),
       where('parentTaskId', '==', null),
     )

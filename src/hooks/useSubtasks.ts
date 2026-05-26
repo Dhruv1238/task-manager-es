@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Firestore will prompt (once) for a composite index on: parentTaskId, createdAt.
@@ -17,7 +17,7 @@ export function useSubtasks(parentTaskId: string | undefined) {
     }
     setLoading(true)
     const q = query(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       where('parentTaskId', '==', parentTaskId),
       orderBy('createdAt', 'asc'),
     )

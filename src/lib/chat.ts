@@ -1,11 +1,11 @@
 import {
-  collection,
   doc,
   serverTimestamp,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { tenantCol, tenantDoc } from './firestore'
 import type { ChatAttachment } from '../types/models'
 
 export interface SendMessageInput {
@@ -26,8 +26,8 @@ export async function sendMessage(input: SendMessageInput): Promise<string> {
     throw new Error('Cannot send an empty message.')
   }
 
-  const msgRef = doc(collection(db, 'projects', input.projectId, 'chat'))
-  const projectRef = doc(db, 'projects', input.projectId)
+  const msgRef = doc(tenantCol('projects', input.projectId, 'chat'))
+  const projectRef = tenantDoc('projects', input.projectId)
 
   const batch = writeBatch(db)
   const payload: Record<string, unknown> = {
@@ -54,8 +54,8 @@ export async function editMessage(input: EditMessageInput): Promise<void> {
   const text = input.newText.trim()
   if (!text) throw new Error('Edited message cannot be empty.')
 
-  const msgRef = doc(db, 'projects', input.projectId, 'chat', input.messageId)
-  const projectRef = doc(db, 'projects', input.projectId)
+  const msgRef = tenantDoc('projects', input.projectId, 'chat', input.messageId)
+  const projectRef = tenantDoc('projects', input.projectId)
 
   const batch = writeBatch(db)
   batch.update(msgRef, {
@@ -73,7 +73,7 @@ export async function editMessage(input: EditMessageInput): Promise<void> {
 // ProjectChatContext; the Firestore write merely persists the high-water mark
 // so the badge stays cleared after a reload.
 export async function markChatRead(uid: string, projectId: string): Promise<void> {
-  const ref = doc(db, 'users', uid)
+  const ref = tenantDoc('users', uid)
   await updateDoc(ref, {
     [`chatLastReadAt.${projectId}`]: serverTimestamp(),
   })

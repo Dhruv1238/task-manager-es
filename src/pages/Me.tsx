@@ -205,7 +205,7 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
   const location = useLocation()
   if (tasks.length === 0) return null
   return (
-    <section className="mb-10">
+    <section className="mb-10" data-tour-id="review-queue">
       <div className="mb-3">
         <h2 className="text-xs font-medium uppercase tracking-wider text-brand">
           🔍 Awaiting my review
@@ -252,7 +252,7 @@ function ProjectsAwaitingActionSection() {
   const { projects } = useProjectsAwaitingMyAction()
   if (projects.length === 0) return null
   return (
-    <section className="mb-10">
+    <section className="mb-10" data-tour-id="projects-awaiting-action">
       <div className="mb-3">
         <h2 className="text-xs font-medium uppercase tracking-wider text-tone-warn-fg">
           🚦 Projects awaiting my action
@@ -308,18 +308,23 @@ function ProjectsAwaitingActionSection() {
 }
 
 export default function Me() {
-  const { user, profile } = useAuth()
+  const { user, profile, effectiveUid, effectiveProfile } = useAuth()
+  // Sandbox: when a persona is being acted as, all "my tasks / my review
+  // queue / my led teams" surfaces should reflect *that* persona's lens, not
+  // the real visitor's. Production: effectiveUid === user.uid, no-op branch.
+  const lensUid = __IS_SANDBOX__ ? (effectiveUid ?? user?.uid) : user?.uid
+  const lensProfile = __IS_SANDBOX__ ? (effectiveProfile ?? profile) : profile
   const {
     tasks: myTasks,
     loading: myLoading,
     error: myError,
-  } = useMyTasks(user?.uid)
+  } = useMyTasks(lensUid)
   const {
     tasks: ledTasks,
     loading: ledLoading,
     error: ledError,
-  } = useMyLedTeamTasks(user?.uid)
-  const { tasks: reviewQueue } = useMyReviewQueue(user?.uid)
+  } = useMyLedTeamTasks(lensUid)
+  const { tasks: reviewQueue } = useMyReviewQueue(lensUid)
   const [showCompleted, setShowCompleted] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true)
 
@@ -355,10 +360,10 @@ export default function Me() {
     [ledTasks],
   )
 
-  const firstName = profile?.displayName?.split(/\s+/)[0] ?? ''
+  const firstName = lensProfile?.displayName?.split(/\s+/)[0] ?? ''
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8" data-tour-id="my-tasks">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm text-fg-subtle">My workspace</p>

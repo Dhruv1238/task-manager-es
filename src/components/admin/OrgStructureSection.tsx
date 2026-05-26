@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  doc,
   increment,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
 } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
+import { tenantDoc } from '../../lib/firestore'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   useAppConfigContext,
@@ -69,7 +68,7 @@ export default function OrgStructureSection() {
     try {
       // updateDoc with version increment so concurrent edits surface a
       // monotonic delta — caches detect a change and refresh.
-      await updateDoc(doc(db, 'config', 'orgStructure'), {
+      await updateDoc(tenantDoc('config', 'orgStructure'), {
         ...patch,
         version: increment(1),
         updatedAt: serverTimestamp(),
@@ -79,7 +78,7 @@ export default function OrgStructureSection() {
         // the full shape.
         const message = err instanceof Error ? err.message : ''
         if (!/no document to update/i.test(message)) throw err
-        await setDoc(doc(db, 'config', 'orgStructure'), {
+        await setDoc(tenantDoc('config', 'orgStructure'), {
           ...baseline,
           ...patch,
           version: (baseline.version ?? 0) + 1,
@@ -132,7 +131,7 @@ export default function OrgStructureSection() {
     setSavingField(`team:${teamId}`)
     setError(null)
     try {
-      await updateDoc(doc(db, 'teams', teamId), {
+      await updateDoc(tenantDoc('teams', teamId), {
         teamRoleId: roleId,
         // Clear workTypes when leaving the specialist role.
         ...(roleId === 'specialist' ? {} : { workTypes: [] }),
@@ -154,7 +153,7 @@ export default function OrgStructureSection() {
     setSavingField(`team:${teamId}:workTypes`)
     setError(null)
     try {
-      await updateDoc(doc(db, 'teams', teamId), { workTypes: updated })
+      await updateDoc(tenantDoc('teams', teamId), { workTypes: updated })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
     } finally {

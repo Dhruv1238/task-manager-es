@@ -9,8 +9,9 @@ import {
   type WorkflowDraft,
 } from '../../lib/workflowAuthoring'
 import { seedBasicWorkflow, BASIC_WORKFLOW_ID } from '../../lib/seedBasicWorkflow'
-import { runTransaction, doc, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import { tenantDoc } from '../../lib/firestore'
 import { WORKFLOW_REGISTRY_ID, type WorkflowRegistry } from '../../types/workflow'
 import TemplatePicker, { type TemplateChoice } from './TemplatePicker'
 import Step1Name from './Step1Name'
@@ -81,7 +82,7 @@ export default function WorkflowWizard() {
       // 1. Idempotent seed of /workflows/basic (no-op if already at latest).
       await seedBasicWorkflow(user.uid)
       // 2. Atomically add basic to /workflows/_registry.activeWorkflowIds.
-      const registryRef = doc(db, 'workflows', WORKFLOW_REGISTRY_ID)
+      const registryRef = tenantDoc('workflows', WORKFLOW_REGISTRY_ID)
       const nextRegistry = await runTransaction(db, async (tx) => {
         const snap = await tx.get(registryRef)
         const existing: WorkflowRegistry = snap.exists()

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { FirebaseError } from 'firebase/app'
-import { collection, getCountFromServer, query, where } from 'firebase/firestore'
+import {  getCountFromServer, query, where } from 'firebase/firestore'
 import Modal from '../ui/Modal'
-import { db } from '../../lib/firebase'
-import { removeMemberFromTeam } from '../../lib/firestore'
+import { removeMemberFromTeam, tenantCol } from '../../lib/firestore'
 import { useAuth } from '../../contexts/AuthContext'
 import type { User } from '../../types/models'
 
@@ -44,7 +43,7 @@ export default function RemoveMemberConfirmModal({
     let cancelled = false
     setCounting(true)
     const q = query(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       where('assigneeId', '==', member.uid),
       where('status', '!=', 'done'),
     )

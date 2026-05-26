@@ -35,9 +35,56 @@ import {
   setDoc,
   Timestamp,
   writeBatch,
+  type CollectionReference,
+  type DocumentReference,
   type WriteBatch,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { auth, db } from './firebase'
+
+// --- Tenant routing helpers --------------------------------------------------
+// Every Firestore reference in this codebase MUST go through tenantCol /
+// tenantDoc (lint-enforced — see eslint-rules/no-direct-firestore-refs.js).
+//
+// In production builds (VITE_IS_SANDBOX !== 'true') these are a pass-through:
+// the same top-level paths the app has always used (/projects, /workflows,
+// /config/orgStructure, …) get returned verbatim.
+//
+// In sandbox builds they prepend `sandbox/{visitorUid}/...` to every path so
+// each visitor's data is path-isolated under their own subtree. The security
+// rules enforce that visitors can only read/write under their own uid.
+//
+// Two top-level paths are intentionally NOT tenant-prefixed in sandbox mode:
+// /leads/{leadId} and /sandboxConfig/main. Those are written via raw `db` +
+// firestore primitives, with an ESLint exemption for the specific callers.
+
+export const IS_SANDBOX = import.meta.env.VITE_IS_SANDBOX === 'true'
+
+function sandboxRoot(): readonly [string, string] | null {
+  if (!IS_SANDBOX) return null
+  const uid = auth.currentUser?.uid
+  if (!uid) {
+    throw new Error(
+      'tenantCol/tenantDoc called before auth resolved in sandbox build — wait for AuthContext to settle first.',
+    )
+  }
+  return ['sandbox', uid] as const
+}
+
+export function tenantCol(path: string, ...rest: string[]): CollectionReference {
+  const root = sandboxRoot()
+  // NOTE: these are the only `collection(db, ...)` / `doc(db, ...)` calls
+  // permitted outside `db`. The ESLint rule has an exemption for this file.
+  return root
+    ? collection(db, root[0], root[1], path, ...rest)
+    : collection(db, path, ...rest)
+}
+
+export function tenantDoc(path: string, ...rest: string[]): DocumentReference {
+  const root = sandboxRoot()
+  return root
+    ? doc(db, root[0], root[1], path, ...rest)
+    : doc(db, path, ...rest)
+}
 
 // --- Workflow action helper --------------------------------------------------
 // Thin shim used by every stage modal. Reads the project's pinned workflow
@@ -103,7 +150,7 @@ export interface RecordAuditEventInput {
 }
 
 export function recordAuditEvent(input: RecordAuditEventInput): Promise<void> | void {
-  const ref = doc(collection(db, 'auditEvents'))
+  const ref = doc(tenantCol('auditEvents'))
   const data = {
     actorId: input.actorId,
     actorName: input.actorName,
@@ -115,6 +162,14 @@ export function recordAuditEvent(input: RecordAuditEventInput): Promise<void> | 
     ...(input.teamId ? { teamId: input.teamId } : {}),
     ...(input.payload ? { payload: input.payload } : {}),
     createdAt: serverTimestamp(),
+  }
+  // Sandbox: mirror the action name into engagement.actionsCompleted so the
+  // capture coordinator can react and the lead doc receives an up-to-date
+  // signal. Dead-code-eliminated in production builds.
+  if (__IS_SANDBOX__) {
+    void import('./engagement').then((m) => {
+      void m.recordAction(input.action).catch(() => {})
+    })
   }
   if (input.batch) {
     input.batch.set(ref, data)
@@ -136,7 +191,7 @@ export interface AddTeamInput {
 
 export async function addTeam(input: AddTeamInput): Promise<string> {
   const batch = writeBatch(db)
-  const teamRef = doc(collection(db, 'teams'))
+  const teamRef = doc(tenantCol('teams'))
 
   batch.set(teamRef, {
     name: input.name,
@@ -149,7 +204,7 @@ export async function addTeam(input: AddTeamInput): Promise<string> {
   })
 
   for (const uid of input.memberIds) {
-    batch.update(doc(db, 'users', uid), {
+    batch.update(tenantDoc('users', uid), {
       teamIds: arrayUnion(teamRef.id),
     })
   }
@@ -194,8 +249,8 @@ export interface AddMemberToTeamInput {
 
 export async function addMemberToTeam(input: AddMemberToTeamInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'teams', input.teamId), { memberIds: arrayUnion(input.uid) })
-  batch.update(doc(db, 'users', input.uid), { teamIds: arrayUnion(input.teamId) })
+  batch.update(tenantDoc('teams', input.teamId), { memberIds: arrayUnion(input.uid) })
+  batch.update(tenantDoc('users', input.uid), { teamIds: arrayUnion(input.teamId) })
   recordAuditEvent({
     actorId: input.actorId,
     actorName: input.actorName,
@@ -221,8 +276,8 @@ export interface RemoveMemberFromTeamInput {
 
 export async function removeMemberFromTeam(input: RemoveMemberFromTeamInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'teams', input.teamId), { memberIds: arrayRemove(input.uid) })
-  batch.update(doc(db, 'users', input.uid), { teamIds: arrayRemove(input.teamId) })
+  batch.update(tenantDoc('teams', input.teamId), { memberIds: arrayRemove(input.uid) })
+  batch.update(tenantDoc('users', input.uid), { teamIds: arrayRemove(input.teamId) })
   recordAuditEvent({
     actorId: input.actorId,
     actorName: input.actorName,
@@ -251,11 +306,11 @@ export interface SetTeamLeadInput {
 
 export async function setTeamLead(input: SetTeamLeadInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'teams', input.teamId), {
+  batch.update(tenantDoc('teams', input.teamId), {
     leadId: input.newLeadUid,
     memberIds: arrayUnion(input.newLeadUid),
   })
-  batch.update(doc(db, 'users', input.newLeadUid), {
+  batch.update(tenantDoc('users', input.newLeadUid), {
     teamIds: arrayUnion(input.teamId),
   })
   recordAuditEvent({
@@ -356,7 +411,7 @@ export async function addProject(input: AddProjectInput): Promise<string> {
   }
 
   const batch = writeBatch(db)
-  const projectRef = doc(collection(db, 'projects'))
+  const projectRef = doc(tenantCol('projects'))
   batch.set(projectRef, {
     title: input.title,
     titleLower: input.title.trim().toLowerCase(),
@@ -493,7 +548,7 @@ export async function updateProjectStatus(input: UpdateProjectStatusInput): Prom
     },
   }
   const batch = writeBatch(db)
-  batch.update(doc(db, 'projects', input.projectId), {
+  batch.update(tenantDoc('projects', input.projectId), {
     status: input.toStatus,
     statusNote: trimmed,
     projectHistory: arrayUnion(event),
@@ -534,18 +589,18 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
   const removed = [...previous].filter((id) => !next.has(id))
 
   const batch = writeBatch(db)
-  batch.update(doc(db, 'projects', input.projectId), {
+  batch.update(tenantDoc('projects', input.projectId), {
     teamIds: input.newTeamIds,
     accessKeys: [input.ownerId, ...input.newTeamIds],
     updatedAt: serverTimestamp(),
   })
   for (const teamId of added) {
-    batch.update(doc(db, 'teams', teamId), {
+    batch.update(tenantDoc('teams', teamId), {
       projectIds: arrayUnion(input.projectId),
     })
   }
   for (const teamId of removed) {
-    batch.update(doc(db, 'teams', teamId), {
+    batch.update(tenantDoc('teams', teamId), {
       projectIds: arrayRemove(input.projectId),
     })
   }
@@ -591,7 +646,7 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
   // workflow when the lead adds the first task at the `task_setup` stage —
   // routed through workflowEvaluator.performAction so the workflow doc
   // decides what "confirm setup" means.
-  const projectRef = doc(db, 'projects', input.projectId)
+  const projectRef = tenantDoc('projects', input.projectId)
   const projectSnap = await getDoc(projectRef)
   const projectData = projectSnap.exists()
     ? (projectSnap.data() as {
@@ -611,7 +666,7 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
   const advanceFromTaskSetup = projectData?.currentStageId === 'task_setup'
 
   const batch = writeBatch(db)
-  const taskRef = doc(collection(db, 'tasks'))
+  const taskRef = doc(tenantCol('tasks'))
   batch.set(taskRef, {
     projectId: input.projectId,
     teamId: input.teamId,
@@ -643,7 +698,7 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
       accessKeys: arrayUnion(input.teamId),
       updatedAt: serverTimestamp(),
     })
-    batch.update(doc(db, 'teams', input.teamId), {
+    batch.update(tenantDoc('teams', input.teamId), {
       projectIds: arrayUnion(input.projectId),
     })
   }
@@ -733,7 +788,7 @@ export interface AddSubtaskInput {
 
 export async function addSubtask(input: AddSubtaskInput): Promise<string> {
   const batch = writeBatch(db)
-  const subtaskRef = doc(collection(db, 'tasks'))
+  const subtaskRef = doc(tenantCol('tasks'))
 
   batch.set(subtaskRef, {
     projectId: input.projectId,
@@ -757,7 +812,7 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
     updatedAt: serverTimestamp(),
   })
 
-  batch.update(doc(db, 'tasks', input.parentTaskId), {
+  batch.update(tenantDoc('tasks', input.parentTaskId), {
     subtaskCount: increment(1),
     updatedAt: serverTimestamp(),
   })
@@ -789,7 +844,7 @@ export interface SetTaskStatusInput {
 }
 
 export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
-  const ref = doc(db, 'tasks', input.taskId)
+  const ref = tenantDoc('tasks', input.taskId)
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('Task not found')
   const task = snap.data() as {
@@ -812,7 +867,7 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
     const wasDone = task.status === 'done'
     const isDone = input.status === 'done'
     if (wasDone !== isDone) {
-      batch.update(doc(db, 'tasks', task.parentTaskId), {
+      batch.update(tenantDoc('tasks', task.parentTaskId), {
         subtaskDoneCount: increment(isDone ? 1 : -1),
         updatedAt: serverTimestamp(),
       })
@@ -845,7 +900,7 @@ export interface AddProjectAttachmentInput {
 
 export async function addProjectAttachment(input: AddProjectAttachmentInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'projects', input.projectId), {
+  batch.update(tenantDoc('projects', input.projectId), {
     attachments: arrayUnion(input.attachment),
     updatedAt: serverTimestamp(),
   })
@@ -879,7 +934,7 @@ export interface AddTaskAttachmentInput {
 
 export async function addTaskAttachment(input: AddTaskAttachmentInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'tasks', input.taskId), {
+  batch.update(tenantDoc('tasks', input.taskId), {
     attachments: arrayUnion(input.attachment),
     updatedAt: serverTimestamp(),
   })
@@ -913,7 +968,7 @@ export interface RemoveTaskAttachmentInput {
 
 export async function removeTaskAttachment(input: RemoveTaskAttachmentInput): Promise<void> {
   const batch = writeBatch(db)
-  batch.update(doc(db, 'tasks', input.taskId), {
+  batch.update(tenantDoc('tasks', input.taskId), {
     attachments: arrayRemove(input.attachment),
     updatedAt: serverTimestamp(),
   })
@@ -950,7 +1005,7 @@ export interface SetUserRoleInput {
 export async function setUserRole(input: SetUserRoleInput): Promise<void> {
   if (input.fromRole === input.toRole) return
   const batch = writeBatch(db)
-  batch.update(doc(db, 'users', input.uid), { globalRole: input.toRole })
+  batch.update(tenantDoc('users', input.uid), { globalRole: input.toRole })
   recordAuditEvent({
     actorId: input.actorId,
     actorName: input.actorName,
@@ -975,7 +1030,7 @@ export interface AddCommentInput {
 }
 
 export async function addComment(input: AddCommentInput): Promise<string> {
-  const ref = await addDoc(collection(db, 'tasks', input.taskId, 'comments'), {
+  const ref = await addDoc(tenantCol('tasks', input.taskId, 'comments'), {
     taskId: input.taskId,
     authorId: input.authorId,
     authorName: input.authorName,
@@ -995,7 +1050,7 @@ export interface AddProjectCommentInput {
 
 // Project-level comment thread (used by stage 8 VH review per delta §5 Flow 19).
 export async function addProjectComment(input: AddProjectCommentInput): Promise<string> {
-  const ref = await addDoc(collection(db, 'projects', input.projectId, 'comments'), {
+  const ref = await addDoc(tenantCol('projects', input.projectId, 'comments'), {
     projectId: input.projectId,
     authorId: input.authorId,
     authorName: input.authorName,
@@ -1034,7 +1089,7 @@ export async function transitionTaskToReview(
   let taskTitle = input.taskTitle
   let projectId = input.projectId
   if (!taskTitle || !projectId) {
-    const snap = await getDoc(doc(db, 'tasks', input.taskId))
+    const snap = await getDoc(tenantDoc('tasks', input.taskId))
     if (snap.exists()) {
       const data = snap.data() as { title?: string; projectId?: string }
       taskTitle = taskTitle ?? data.title
@@ -1043,7 +1098,7 @@ export async function transitionTaskToReview(
   }
 
   const batch = writeBatch(db)
-  batch.update(doc(db, 'tasks', input.taskId), {
+  batch.update(tenantDoc('tasks', input.taskId), {
     status: 'in_review',
     reviewerId: input.reviewerId,
     reviewerName: input.reviewerName ?? null,
@@ -1051,7 +1106,7 @@ export async function transitionTaskToReview(
   })
   const trimmed = input.notes?.trim()
   if (trimmed) {
-    const commentRef = doc(collection(db, 'tasks', input.taskId, 'comments'))
+    const commentRef = doc(tenantCol('tasks', input.taskId, 'comments'))
     batch.set(commentRef, {
       taskId: input.taskId,
       authorId: input.authorId,
@@ -1103,7 +1158,7 @@ export async function transitionTaskFromReview(
     throw new Error('Feedback is required when sending a task back from review.')
   }
 
-  const ref = doc(db, 'tasks', input.taskId)
+  const ref = tenantDoc('tasks', input.taskId)
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('Task not found')
   const task = snap.data() as {
@@ -1126,13 +1181,13 @@ export async function transitionTaskFromReview(
       updatedAt: serverTimestamp(),
     })
     if (task.parentTaskId && task.status !== 'done') {
-      batch.update(doc(db, 'tasks', task.parentTaskId), {
+      batch.update(tenantDoc('tasks', task.parentTaskId), {
         subtaskDoneCount: increment(1),
         updatedAt: serverTimestamp(),
       })
     }
     if (trimmed) {
-      const commentRef = doc(collection(db, 'tasks', input.taskId, 'comments'))
+      const commentRef = doc(tenantCol('tasks', input.taskId, 'comments'))
       batch.set(commentRef, {
         taskId: input.taskId,
         authorId: input.authorId,
@@ -1167,12 +1222,12 @@ export async function transitionTaskFromReview(
     // If the task was previously done (rare but possible if approve was reverted),
     // decrement the parent's subtaskDoneCount.
     if (task.parentTaskId && task.status === 'done') {
-      batch.update(doc(db, 'tasks', task.parentTaskId), {
+      batch.update(tenantDoc('tasks', task.parentTaskId), {
         subtaskDoneCount: increment(-1),
         updatedAt: serverTimestamp(),
       })
     }
-    const commentRef = doc(collection(db, 'tasks', input.taskId, 'comments'))
+    const commentRef = doc(tenantCol('tasks', input.taskId, 'comments'))
     batch.set(commentRef, {
       taskId: input.taskId,
       authorId: input.authorId,

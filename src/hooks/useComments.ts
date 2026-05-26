@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, orderBy, query } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Comment } from '../types/models'
 
 export function useComments(taskId: string | undefined) {
@@ -15,7 +15,7 @@ export function useComments(taskId: string | undefined) {
     }
     setLoading(true)
     const q = query(
-      collection(db, 'tasks', taskId, 'comments'),
+      tenantCol('tasks', taskId, 'comments'),
       orderBy('createdAt', 'asc'),
     )
     return onSnapshot(

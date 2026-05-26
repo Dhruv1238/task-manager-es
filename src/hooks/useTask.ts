@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot } from 'firebase/firestore'
+import { tenantDoc } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 export function useTask(taskId: string | undefined) {
@@ -15,7 +15,7 @@ export function useTask(taskId: string | undefined) {
     }
     setLoading(true)
     return onSnapshot(
-      doc(db, 'tasks', taskId),
+      tenantDoc('tasks', taskId),
       (snap) => {
         setTask(snap.exists() ? ({ ...(snap.data() as Task), id: snap.id }) : null)
         setLoading(false)

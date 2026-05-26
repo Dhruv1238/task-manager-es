@@ -11,8 +11,8 @@
  *               → won / lost (terminal). Two loop-backs (decline-reroute,
  * revision request) exercise counter increments.
  */
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
+import {  getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { tenantDoc } from './firestore'
 import type { Workflow } from '../types/workflow'
 
 export const SALES_DEFAULT_WORKFLOW_ID = 'sales-default'
@@ -246,7 +246,7 @@ export interface SeedSalesResult {
 }
 
 export async function seedSalesWorkflow(adminUid: string): Promise<SeedSalesResult> {
-  const ref = doc(db, 'workflows', SALES_DEFAULT_WORKFLOW_ID)
+  const ref = tenantDoc('workflows', SALES_DEFAULT_WORKFLOW_ID)
   const existing = await getDoc(ref)
   const previousVersion = existing.exists()
     ? ((existing.data() as { version?: number }).version ?? 0)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, orderBy, query } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Project } from '../types/models'
 
 export function useAllProjects() {
@@ -8,7 +8,7 @@ export function useAllProjects() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'))
+    const q = query(tenantCol('projects'), orderBy('createdAt', 'desc'))
     return onSnapshot(
       q,
       (snap) => {

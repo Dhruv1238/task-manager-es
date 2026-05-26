@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
-  collection,
   onSnapshot,
   query,
   where,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Team-level tasks (parentTaskId === null) for every team where this user is the lead.
@@ -27,7 +26,7 @@ export function useMyLedTeamTasks(uid: string | undefined) {
     let taskUnsub: Unsubscribe | null = null
 
     const teamsUnsub = onSnapshot(
-      query(collection(db, 'teams'), where('leadId', '==', uid)),
+      query(tenantCol('teams'), where('leadId', '==', uid)),
       (teamsSnap) => {
         const ledIds = teamsSnap.docs.map((d) => d.id)
 
@@ -44,7 +43,7 @@ export function useMyLedTeamTasks(uid: string | undefined) {
 
         taskUnsub = onSnapshot(
           query(
-            collection(db, 'tasks'),
+            tenantCol('tasks'),
             where('teamId', 'in', ledIds.slice(0, 30)),
             where('parentTaskId', '==', null),
           ),

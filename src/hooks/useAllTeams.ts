@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, orderBy, query } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Team } from '../types/models'
 
 export function useAllTeams() {
@@ -8,7 +8,7 @@ export function useAllTeams() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const q = query(collection(db, 'teams'), orderBy('name'))
+    const q = query(tenantCol('teams'), orderBy('name'))
     return onSnapshot(
       q,
       (snap) => {

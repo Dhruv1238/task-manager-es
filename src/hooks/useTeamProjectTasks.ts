@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
-  collection,
   onSnapshot,
   orderBy,
   query,
   where,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Live subscription to every task (team-level parent + subtasks) for a given (project, team) pair.
@@ -27,7 +26,7 @@ export function useTeamProjectTasks(
     }
     setLoading(true)
     const q = query(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       where('projectId', '==', projectId),
       where('teamId', '==', teamId),
       orderBy('createdAt', 'desc'),

@@ -17,7 +17,6 @@ import type { AuditAction, OrgStructure, Project, ProjectStatus, Team, User } fr
 import { resolveTeamOfRoleOn, resolveValidatorTeam } from './orgResolver'
 import {
   arrayUnion,
-  doc,
   increment,
   serverTimestamp,
   Timestamp,
@@ -25,6 +24,7 @@ import {
   type WriteBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { tenantDoc } from './firestore'
 import { recordAuditEvent } from './firestore'
 
 // Re-export so callers can import the error class directly from this module.
@@ -333,7 +333,7 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
 
   // 4. Compose the project patch + the projectHistory events to append.
   const now = Timestamp.now()
-  const projectRef = doc(db, 'projects', project.id)
+  const projectRef = tenantDoc('projects', project.id)
   const patch: Record<string, unknown> = { updatedAt: serverTimestamp() }
   const events: StageEvent[] = []
 

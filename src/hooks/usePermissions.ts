@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {   onSnapshot, query, where } from 'firebase/firestore'
+import { tenantCol, tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useOrgStructure, useProjectWorkflow } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
@@ -69,7 +69,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       return
     }
     setProjectLoading(true)
-    return onSnapshot(doc(db, 'projects', projectId), (snap) => {
+    return onSnapshot(tenantDoc('projects', projectId), (snap) => {
       setProject(snap.exists() ? ({ id: snap.id, ...snap.data() } as Project) : null)
       setProjectLoading(false)
     })
@@ -82,7 +82,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       return
     }
     setTeamLoading(true)
-    return onSnapshot(doc(db, 'teams', teamId), (snap) => {
+    return onSnapshot(tenantDoc('teams', teamId), (snap) => {
       setTeam(snap.exists() ? ({ id: snap.id, ...snap.data() } as Team) : null)
       setTeamLoading(false)
     })
@@ -96,16 +96,24 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       return
     }
     setProjectTeamsLoading(true)
-    const q = query(collection(db, 'teams'), where('projectIds', 'array-contains', projectId))
+    const q = query(tenantCol('teams'), where('projectIds', 'array-contains', projectId))
     return onSnapshot(q, (snap) => {
       setProjectTeams(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Team))
       setProjectTeamsLoading(false)
     })
   }, [projectId])
 
+  // Phase S3 (sandbox): when the visitor has switched persona via
+  // setActAs, permission resolution must run against the *persona's* profile
+  // so role-gated UI flips (VH-only buttons hide when acting as Sneha, etc.).
+  // In production __IS_SANDBOX__ is false and effectiveProfile === profile —
+  // these branches are dead code in production bundles.
+  const { effectiveUid, effectiveProfile } = useAuth()
+  const resolvedProfile = __IS_SANDBOX__ ? (effectiveProfile ?? profile) : profile
+
   return useMemo<Permissions>(() => {
-    const uid = profile?.uid ?? null
-    const role = profile?.globalRole
+    const uid = __IS_SANDBOX__ ? (effectiveUid ?? resolvedProfile?.uid ?? null) : profile?.uid ?? null
+    const role = resolvedProfile?.globalRole
 
     const isSuperAdmin = role === 'super_admin'
     const isAdminOnly = role === 'admin'
@@ -155,7 +163,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       project && (isSuperAdmin || isProjectOwner) && !closed,
     )
 
-    const userTeamIds = profile?.teamIds ?? []
+    const userTeamIds = resolvedProfile?.teamIds ?? []
     const isProjectTeamMember = Boolean(
       uid && project && project.teamIds.some((tid) => userTeamIds.includes(tid)),
     )
@@ -170,9 +178,9 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     //   - project is closed
     //   - the workflow's permission check rejects this user for this action
     function canPerform(actionId: string): boolean {
-      if (!project || !profile || !workflow || closed) return false
+      if (!project || !resolvedProfile || !workflow || closed) return false
       try {
-        return evaluatorCanPerform(project, workflow, profile, projectTeams, org, actionId)
+        return evaluatorCanPerform(project, workflow, resolvedProfile, projectTeams, org, actionId)
       } catch {
         return false
       }
@@ -198,5 +206,5 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       team,
       loading: projectLoading || teamLoading || projectTeamsLoading,
     }
-  }, [profile, org, workflow, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
+  }, [profile, resolvedProfile, org, workflow, project, team, projectTeams, projectLoading, teamLoading, projectTeamsLoading])
 }

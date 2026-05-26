@@ -10,15 +10,13 @@
  */
 import {
   addDoc,
-  collection,
-  doc,
   getDocs,
   query,
   serverTimestamp,
   setDoc,
   where,
 } from 'firebase/firestore'
-import { db } from './firebase'
+import { tenantCol, tenantDoc } from './firestore'
 import type { Team, TaskTemplate, WorkType } from '../types/models'
 
 interface SeedTeamSpec {
@@ -91,7 +89,7 @@ export async function seedTenderWorkspace(
 
   for (const spec of SEED_TEAMS) {
     const existingSnap = await getDocs(
-      query(collection(db, 'teams'), where('name', '==', spec.name)),
+      query(tenantCol('teams'), where('name', '==', spec.name)),
     )
     if (!existingSnap.empty) {
       const teamDoc = existingSnap.docs[0]
@@ -100,7 +98,7 @@ export async function seedTenderWorkspace(
       continue
     }
 
-    const ref = await addDoc(collection(db, 'teams'), {
+    const ref = await addDoc(tenantCol('teams'), {
       name: spec.name,
       description: spec.description,
       leadId: options.noMembers ? '' : adminUid,
@@ -124,7 +122,7 @@ export async function seedTenderWorkspace(
     return { code, label: tpl.label, teamId, defaultTitle: tpl.defaultTitle }
   })
 
-  await setDoc(doc(db, 'config', 'taskTemplates'), {
+  await setDoc(tenantDoc('config', 'taskTemplates'), {
     templates,
     updatedAt: serverTimestamp(),
     updatedBy: adminUid,

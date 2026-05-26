@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, query, where } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Tasks where I am the named reviewer and the task is in_review (delta §7.1).
@@ -23,7 +23,7 @@ export function useMyReviewQueue(uid: string | null | undefined): {
     }
     setLoading(true)
     const q = query(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       where('reviewerId', '==', uid),
       where('status', '==', 'in_review'),
     )

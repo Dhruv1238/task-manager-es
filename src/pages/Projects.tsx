@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  collection,
   limit,
   orderBy,
   query,
@@ -10,7 +9,7 @@ import {
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { tenantCol } from '../lib/firestore'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -207,7 +206,7 @@ export default function Projects() {
   const buildQuery = useCallback(
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
       if (!profile) return null
-      const projectsRef = collection(db, 'projects')
+      const projectsRef = tenantCol('projects')
       const constraints = []
       if (!isAdmin) {
         if (accessKeys.length === 0) return null

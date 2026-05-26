@@ -7,8 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { collection, doc, getDoc, getDocs, onSnapshot, Timestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {   getDoc, getDocs, onSnapshot, Timestamp } from 'firebase/firestore'
+import { tenantCol, tenantDoc } from '../lib/firestore'
 import type { AppConfig, OrgStructure } from '../types/models'
 import { DEFAULT_ORG_STRUCTURE } from '../types/models'
 import type { Workflow, WorkflowRegistry } from '../types/workflow'
@@ -384,7 +384,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      const snap = await getDoc(doc(db, 'config', 'appConfig'))
+      const snap = await getDoc(tenantDoc('config', 'appConfig'))
       if (snap.exists()) {
         const next = snap.data() as AppConfig
         setConfig(next)
@@ -398,7 +398,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshOrg = useCallback(async () => {
-    const snap = await getDoc(doc(db, 'config', 'orgStructure'))
+    const snap = await getDoc(tenantDoc('config', 'orgStructure'))
     if (snap.exists()) {
       const next = snap.data() as OrgStructure
       setOrgStructure(next)
@@ -411,7 +411,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   // Fetch a single workflow doc, normalise id from doc path so the in-memory
   // shape always matches the storage key, and write through both caches.
   const refreshWorkflow = useCallback(async (id: string): Promise<Workflow | null> => {
-    const snap = await getDoc(doc(db, 'workflows', id))
+    const snap = await getDoc(tenantDoc('workflows', id))
     if (!snap.exists()) return null
     const data = snap.data() as Workflow
     const normalised: Workflow = { ...data, id }
@@ -424,7 +424,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   // basic-only registry when no doc exists so a fresh tenant still gets a
   // usable system.
   const refreshRegistry = useCallback(async () => {
-    const snap = await getDoc(doc(db, 'workflows', WORKFLOW_REGISTRY_ID))
+    const snap = await getDoc(tenantDoc('workflows', WORKFLOW_REGISTRY_ID))
     let next: WorkflowRegistry
     if (snap.exists()) {
       next = snap.data() as WorkflowRegistry
@@ -454,7 +454,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   // sentinel) into the in-memory map so admin surfaces can see seeded-but-
   // inactive workflows without waiting for a registry toggle.
   const discoverWorkflows = useCallback(async () => {
-    const snap = await getDocs(collection(db, 'workflows'))
+    const snap = await getDocs(tenantCol('workflows'))
     await Promise.all(
       snap.docs
         .filter((d) => d.id !== WORKFLOW_REGISTRY_ID)
@@ -654,7 +654,7 @@ export function useAppConfigLive(): { config: AppConfig | null; loading: boolean
   const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    return onSnapshot(doc(db, 'config', 'appConfig'), (snap) => {
+    return onSnapshot(tenantDoc('config', 'appConfig'), (snap) => {
       if (snap.exists()) {
         setConfig(snap.data() as AppConfig)
       } else {
@@ -702,7 +702,7 @@ export function useOrgStructureLive(): { org: OrgStructure | null; loading: bool
   const [loading, setLoading] = useState<boolean>(true)
 
   useEffect(() => {
-    return onSnapshot(doc(db, 'config', 'orgStructure'), (snap) => {
+    return onSnapshot(tenantDoc('config', 'orgStructure'), (snap) => {
       if (snap.exists()) {
         setOrg(snap.data() as OrgStructure)
       } else {

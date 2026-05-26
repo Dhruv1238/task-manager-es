@@ -1,7 +1,8 @@
 import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import {  serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, firebaseConfig } from './firebase'
+import { tenantDoc } from './firestore'
 import type { GlobalRole } from '../types/models'
 import { recordAuditEvent } from './firestore'
 
@@ -34,7 +35,7 @@ export async function createMember(
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, tempPassword)
 
     const batch = writeBatch(db)
-    batch.set(doc(db, 'users', cred.user.uid), {
+    batch.set(tenantDoc('users', cred.user.uid), {
       uid: cred.user.uid,
       email,
       displayName,

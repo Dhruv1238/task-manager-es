@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Live subscription to every task in Firestore. Used only by the admin dashboard
@@ -14,7 +14,7 @@ export function useAllTasks() {
   useEffect(() => {
     setLoading(true)
     return onSnapshot(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       (snap) => {
         setTasks(snap.docs.map((d) => ({ ...(d.data() as Task), id: d.id })))
         setLoading(false)

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { doc, onSnapshot, Timestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
@@ -9,7 +8,7 @@ import { useProjectTasks } from '../hooks/useProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
 import { useLeadRoleName, useProjectWorkflow } from '../contexts/AppConfigContext'
 import { uploadAsset } from '../lib/uploadAsset'
-import { addProjectAttachment } from '../lib/firestore'
+import { addProjectAttachment, tenantDoc } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
@@ -176,7 +175,7 @@ export default function ProjectDetail() {
   useEffect(() => {
     if (!projectId) return
     return onSnapshot(
-      doc(db, 'projects', projectId),
+      tenantDoc('projects', projectId),
       (snap) => {
         if (!snap.exists()) {
           setNotFound(true)
@@ -310,7 +309,9 @@ export default function ProjectDetail() {
       </Link>
 
       <div className="mt-4">
-        <StageBanner project={project} />
+        <div data-tour-id="project-stage-banner">
+          <StageBanner project={project} />
+        </div>
       </div>
 
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot } from 'firebase/firestore'
+import { tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import type { Task, Team } from '../types/models'
 
@@ -28,7 +28,7 @@ export function useTaskPermissions(task: Task | null | undefined): TaskPermissio
       return
     }
     setLoading(true)
-    return onSnapshot(doc(db, 'teams', task.teamId), (snap) => {
+    return onSnapshot(tenantDoc('teams', task.teamId), (snap) => {
       setTeam(snap.exists() ? ({ id: snap.id, ...snap.data() } as Team) : null)
       setLoading(false)
     })

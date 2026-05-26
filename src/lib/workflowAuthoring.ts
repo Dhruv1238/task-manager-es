@@ -5,13 +5,13 @@
  * /workflows/{id} and the registry's activeWorkflowIds in a transaction.
  */
 import {
-  doc,
   getDoc,
   runTransaction,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { tenantDoc } from './firestore'
 import type { Workflow, WorkflowRegistry } from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
 import { buildBasicWorkflow } from './seedBasicWorkflow'
@@ -189,7 +189,7 @@ export interface SaveWorkflowResult {
 // transaction since the transaction's readset is limited.
 async function gatherExistingIds(): Promise<string[]> {
   const ids: string[] = []
-  const registrySnap = await getDoc(doc(db, 'workflows', WORKFLOW_REGISTRY_ID))
+  const registrySnap = await getDoc(tenantDoc('workflows', WORKFLOW_REGISTRY_ID))
   if (registrySnap.exists()) {
     const r = registrySnap.data() as WorkflowRegistry
     for (const id of r.activeWorkflowIds ?? []) ids.push(id)
@@ -209,8 +209,8 @@ export async function saveWorkflowAndMaybeActivate(
   return runTransaction(db, async (tx) => {
     // Firestore enforces: ALL reads must happen before ANY writes inside a
     // transaction. Read both docs up-front, then compute, then write.
-    const workflowRef = doc(db, 'workflows', workflowId)
-    const registryRef = doc(db, 'workflows', WORKFLOW_REGISTRY_ID)
+    const workflowRef = tenantDoc('workflows', workflowId)
+    const registryRef = tenantDoc('workflows', WORKFLOW_REGISTRY_ID)
 
     // ─── Reads ──────────────────────────────────────────────────────────
     const existing = await tx.get(workflowRef)

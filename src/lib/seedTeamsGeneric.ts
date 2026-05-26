@@ -1,5 +1,5 @@
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
-import { db } from './firebase'
+import { addDoc, getDocs, query, serverTimestamp, where } from 'firebase/firestore'
+import { tenantCol } from './firestore'
 import type { Team, TeamRoleId } from '../types/models'
 
 export interface GenericSeedTeam {
@@ -72,7 +72,7 @@ export async function seedSelectedGenericTeams(
   const selectedSpecs = GENERIC_SEED_TEAMS.filter((t) => selectedKeys.includes(t.key))
 
   for (const spec of selectedSpecs) {
-    const existing = await getDocs(query(collection(db, 'teams'), where('name', '==', spec.name)))
+    const existing = await getDocs(query(tenantCol('teams'), where('name', '==', spec.name)))
     if (!existing.empty) {
       results.push({
         teamId: existing.docs[0].id,
@@ -85,7 +85,7 @@ export async function seedSelectedGenericTeams(
       continue
     }
 
-    const ref = await addDoc(collection(db, 'teams'), {
+    const ref = await addDoc(tenantCol('teams'), {
       name: spec.name,
       description: spec.description,
       leadId: '',
@@ -116,7 +116,7 @@ export async function createBareTeam(
   name: string,
   description: string,
 ): Promise<string> {
-  const ref = await addDoc(collection(db, 'teams'), {
+  const ref = await addDoc(tenantCol('teams'), {
     name: name.trim(),
     description: description.trim(),
     leadId: '',

@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { onSnapshot } from 'firebase/firestore'
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
@@ -15,8 +16,6 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth'
 import {
-  collection,
-  doc,
   getDoc,
   getDocs,
   query,
@@ -24,7 +23,8 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore'
-import { auth, db } from '../lib/firebase'
+import { auth } from '../lib/firebase'
+import { tenantCol, tenantDoc } from '../lib/firestore'
 import { clearAllSyncStateForUser } from '../lib/chatSyncState'
 import type { User as UserProfile } from '../types/models'
 
@@ -49,6 +49,17 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   clearSignInError: () => void
+  // Sandbox-only persona switching. In production these are always null/no-op.
+  // `effectiveUid` is what permission code should read instead of authUser.uid
+  // — it equals actAsUid when set, else the real auth uid.
+  actAsUid: string | null
+  effectiveUid: string | null
+  // The profile permissions should resolve against. Equals `profile` when no
+  // persona is being acted as; equals the persona's user doc when actAsUid is
+  // set. usePermissions reads role + teamIds from this. Production: always
+  // equals `profile`.
+  effectiveProfile: UserProfile | null
+  setActAs: (uid: string | null) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -62,7 +73,7 @@ const BOOTSTRAP_SUPER_ADMIN_EMAILS = new Set([
 ])
 
 async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
-  const ref = doc(db, 'users', u.uid)
+  const ref = tenantDoc('users', u.uid)
   const snap = await getDoc(ref)
   if (snap.exists()) {
     return snap.data() as UserProfile
@@ -71,6 +82,27 @@ async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
   const email = u.email ?? ''
   const isBootstrap = BOOTSTRAP_SUPER_ADMIN_EMAILS.has(email.toLowerCase())
 
+  // Sandbox: every visitor is the implicit super_admin of their own /sandbox/
+  // subtree, so unknown emails should never bounce. sandboxBoot.runPhaseA also
+  // writes this doc, but the two listeners race — we may land here first.
+  // Both writes are byte-equivalent for the role/teamIds fields, so the
+  // last-write-wins outcome is consistent either way.
+  if (__IS_SANDBOX__) {
+    const displayName = u.displayName ?? email.split('@')[0] ?? 'You'
+    await setDoc(ref, {
+      uid: u.uid,
+      email,
+      displayName,
+      displayNameLower: displayName.toLowerCase(),
+      ...(u.photoURL ? { photoURL: u.photoURL } : {}),
+      globalRole: 'super_admin',
+      teamIds: [],
+      createdAt: serverTimestamp(),
+    })
+    const resolved = await getDoc(ref)
+    return resolved.data() as UserProfile
+  }
+
   // Bridge for Google sign-in: an admin-provisioned user has a Firestore doc
   // keyed by their email/password uid. Their Google identity gets a different
   // uid, so look up by email and copy role/team data into a doc keyed by the
@@ -78,7 +110,7 @@ async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
   // by createdBy/teamId fields elsewhere.
   if (email) {
     const matches = await getDocs(
-      query(collection(db, 'users'), where('email', '==', email)),
+      query(tenantCol('users'), where('email', '==', email)),
     )
     const existing = matches.docs[0]?.data() as UserProfile | undefined
     if (existing) {
@@ -117,6 +149,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [signInError, setSignInError] = useState<string | null>(null)
+  const [actAsUid, setActAsState] = useState<string | null>(null)
+  const [personaProfile, setPersonaProfile] = useState<UserProfile | null>(null)
+
+  // Sandbox persona-doc subscription. When actAsUid is set, stream the
+  // persona's user doc so `effectiveProfile` reflects their role + team
+  // membership. usePermissions reads from effectiveProfile, so this is how
+  // switching personas actually flips what the UI shows.
+  useEffect(() => {
+    if (!__IS_SANDBOX__) return
+    if (!actAsUid) {
+      setPersonaProfile(null)
+      return
+    }
+    const ref = tenantDoc('users', actAsUid)
+    return onSnapshot(ref, (snap) => {
+      setPersonaProfile(snap.exists() ? (snap.data() as UserProfile) : null)
+    })
+  }, [actAsUid])
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -170,8 +220,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signOut(auth)
       },
       clearSignInError: () => setSignInError(null),
+      actAsUid,
+      effectiveUid: __IS_SANDBOX__ ? (actAsUid ?? user?.uid ?? null) : (user?.uid ?? null),
+      effectiveProfile: __IS_SANDBOX__ && actAsUid ? (personaProfile ?? profile) : profile,
+      setActAs: (uid: string | null) => {
+        // Hard-gated on the build flag so production bundles tree-shake the
+        // state setter call entirely.
+        if (!__IS_SANDBOX__) return
+        setActAsState(uid)
+      },
     }),
-    [user, profile, loading, signInError],
+    [user, profile, loading, signInError, actAsUid, personaProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

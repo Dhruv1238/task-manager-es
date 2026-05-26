@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { doc, onSnapshot } from 'firebase/firestore'
+import {  onSnapshot } from 'firebase/firestore'
 import type { Timestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { tenantDoc } from '../lib/firestore'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useTeamProjectTasks } from '../hooks/useTeamProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
@@ -191,7 +191,7 @@ export default function TeamOnProject() {
       if (projectReady && teamReady) setLoading(false)
     }
     const unsubProject = onSnapshot(
-      doc(db, 'projects', projectId),
+      tenantDoc('projects', projectId),
       (snap) => {
         if (!snap.exists()) setNotFound(true)
         else setProject({ ...(snap.data() as Project), id: snap.id })
@@ -204,7 +204,7 @@ export default function TeamOnProject() {
       },
     )
     const unsubTeam = onSnapshot(
-      doc(db, 'teams', teamId),
+      tenantDoc('teams', teamId),
       (snap) => {
         if (!snap.exists()) setNotFound(true)
         else setTeam({ ...(snap.data() as Team), id: snap.id })

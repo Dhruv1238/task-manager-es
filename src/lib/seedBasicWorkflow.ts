@@ -9,8 +9,8 @@
  * Idempotent: read-modify-write to bump `version`. Run from the super-admin
  * "Seed basic workflow" button under /admin/config.
  */
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
+import {  getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { tenantDoc } from './firestore'
 import type { Workflow } from '../types/workflow'
 
 export const BASIC_WORKFLOW_ID = 'basic'
@@ -76,7 +76,7 @@ export interface SeedBasicResult {
 }
 
 export async function seedBasicWorkflow(adminUid: string): Promise<SeedBasicResult> {
-  const ref = doc(db, 'workflows', BASIC_WORKFLOW_ID)
+  const ref = tenantDoc('workflows', BASIC_WORKFLOW_ID)
   const existing = await getDoc(ref)
   const previousVersion = existing.exists()
     ? ((existing.data() as { version?: number }).version ?? 0)

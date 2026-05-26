@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  collection,
   limit,
   orderBy,
   query,
@@ -10,10 +9,9 @@ import {
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLeadRoleName } from '../contexts/AppConfigContext'
-import { setUserRole } from '../lib/firestore'
+import { setUserRole, tenantCol } from '../lib/firestore'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import type { GlobalRole, User } from '../types/models'
 import AdminActionBar from '../components/admin/AdminActionBar'
@@ -78,7 +76,7 @@ export default function AdminMembers() {
 
   const buildQuery = useCallback(
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
-      const usersRef = collection(db, 'users')
+      const usersRef = tenantCol('users')
       const constraints = []
       if (debouncedSearch) {
         constraints.push(where('displayNameLower', '>=', debouncedSearch))

@@ -35,7 +35,7 @@ function friendlyError(err: unknown): string | null {
 }
 
 // Flip to `true` to re-enable email/password sign-in alongside Google.
-const SHOW_EMAIL_PASSWORD_LOGIN = true
+const SHOW_EMAIL_PASSWORD_LOGIN = false
 
 export default function Login() {
   const { user, signIn, signInWithGoogle, signInError, clearSignInError } = useAuth()

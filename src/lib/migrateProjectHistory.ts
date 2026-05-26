@@ -26,15 +26,14 @@
  * is ~1-2 batch ops).
  */
 import {
-  collection,
   deleteField,
-  doc,
   getDocs,
   serverTimestamp,
   Timestamp,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { tenantCol, tenantDoc } from './firestore'
 import { recordAuditEvent } from './firestore'
 import { NUMERIC_STAGE_TO_ID } from './seedCollabWorkflow'
 import { COLLAB_DEFAULT_WORKFLOW_ID } from '../contexts/AppConfigContext'
@@ -93,7 +92,7 @@ export interface MigrateProjectHistoryResult {
 export async function migrateProjectHistory(
   adminUid: string,
 ): Promise<MigrateProjectHistoryResult> {
-  const snap = await getDocs(collection(db, 'projects'))
+  const snap = await getDocs(tenantCol('projects'))
 
   let totalScanned = 0
   let migrated = 0
@@ -161,7 +160,7 @@ export async function migrateProjectHistory(
     const batch = writeBatch(db)
 
     for (const item of chunk) {
-      const ref = doc(db, 'projects', item.projectId)
+      const ref = tenantDoc('projects', item.projectId)
       batch.update(ref, {
         projectHistory: item.projectHistory,
         // Strip the old fields. deleteField() ensures the keys are removed

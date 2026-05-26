@@ -11,8 +11,8 @@
  * that still bumps `updatedAt` so the audit trail shows when retirement was
  * run.
  */
-import { deleteField, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore'
-import { db } from './firebase'
+import { deleteField, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { tenantDoc } from './firestore'
 
 export interface RetirePipelineToggleResult {
   hadPipeline: boolean
@@ -21,7 +21,7 @@ export interface RetirePipelineToggleResult {
 export async function retirePipelineToggle(
   adminUid: string,
 ): Promise<RetirePipelineToggleResult> {
-  const ref = doc(db, 'config', 'appConfig')
+  const ref = tenantDoc('config', 'appConfig')
   const snap = await getDoc(ref)
   if (!snap.exists()) {
     // Nothing to retire — the doc itself doesn't exist yet. Leave it alone;

@@ -8,8 +8,8 @@
  * missing, it writes the default shape (basic-only) so fresh tenants get a
  * usable system.
  */
-import { doc, getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
-import { db } from './firebase'
+import {  getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
+import { tenantDoc } from './firestore'
 import type { WorkflowRegistry } from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
 import { BASIC_WORKFLOW_ID } from '../contexts/AppConfigContext'
@@ -27,7 +27,7 @@ export interface SeedRegistryResult {
 }
 
 export async function seedWorkflowRegistry(adminUid: string): Promise<SeedRegistryResult> {
-  const ref = doc(db, 'workflows', WORKFLOW_REGISTRY_ID)
+  const ref = tenantDoc('workflows', WORKFLOW_REGISTRY_ID)
   const existing = await getDoc(ref)
 
   let previousVersion = 0

@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  doc,
   serverTimestamp,
   Timestamp,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import { tenantDoc } from '../../lib/firestore'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   getOrgStructureSnapshot,
@@ -130,7 +130,7 @@ export default function OrgSetupWizard() {
 
       setFinishIndex(0) // saving config
       const batch = writeBatch(db)
-      batch.set(doc(db, 'config', 'orgStructure'), nextOrg)
+      batch.set(tenantDoc('config', 'orgStructure'), nextOrg)
 
       // Step 2 of the batch: per-team teamRoleId / workTypes updates.
       setFinishIndex(1)
@@ -138,7 +138,7 @@ export default function OrgSetupWizard() {
         ([, m]) => m.roleId !== null,
       )
       for (const [teamId, mapping] of mappedEntries) {
-        batch.update(doc(db, 'teams', teamId), {
+        batch.update(tenantDoc('teams', teamId), {
           teamRoleId: mapping.roleId,
           workTypes: mapping.workTypes,
         })

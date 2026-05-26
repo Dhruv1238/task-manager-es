@@ -32,13 +32,12 @@
  * Dev Tools section before shipping to production.
  */
 import {
-  collection,
   deleteDoc,
-  doc,
   getDocs,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { tenantCol, tenantDoc } from './firestore'
 
 const BATCH_SIZE = 400
 
@@ -82,7 +81,7 @@ export async function wipeTenant(): Promise<WipeSummary> {
   const configsCleared: string[] = []
   for (const [coll, id] of CONFIG_DOC_PATHS) {
     try {
-      await deleteDoc(doc(db, coll, id))
+      await deleteDoc(tenantDoc(coll, id))
       configsCleared.push(`${coll}/${id}`)
     } catch (e) {
       console.warn(`[wipeTenant] failed to delete ${coll}/${id}`, e)
@@ -114,7 +113,7 @@ export async function wipeTenant(): Promise<WipeSummary> {
 // is re-used. (For a true production migration we'd run a server-side
 // recursive delete — out of scope for a dev-tool reset.)
 async function clearCollection(name: string): Promise<number> {
-  const snap = await getDocs(collection(db, name))
+  const snap = await getDocs(tenantCol(name))
   if (snap.empty) return 0
   let total = 0
   let batch = writeBatch(db)
@@ -134,7 +133,7 @@ async function clearCollection(name: string): Promise<number> {
 }
 
 async function resetUserDocs(): Promise<number> {
-  const snap = await getDocs(collection(db, 'users'))
+  const snap = await getDocs(tenantCol('users'))
   if (snap.empty) return 0
   let count = 0
   let batch = writeBatch(db)

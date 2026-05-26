@@ -5,6 +5,9 @@
     <link rel="icon" type="image/svg+xml" href="/eventstratlogo-white.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#a855f7" />
+    <!-- Sandbox builds add `data-sandbox="true"` to <html> below and inject
+         <meta name="robots" content="noindex,nofollow"> via the boot script
+         so the sandbox subdomain doesn't compete with production SEO. -->
     <title>Eventstrat CLM — Client & Tender Workflow</title>
     <meta
       name="description"
@@ -38,6 +41,19 @@
           var sysLight = window.matchMedia('(prefers-color-scheme: light)').matches;
           var resolved = m === 'system' ? (sysLight ? 'light' : 'dark') : m;
           if (resolved === 'light') document.documentElement.classList.add('light');
+        } catch (e) {}
+        // Sandbox build flag — read from Vite's HTML env replacement. Sets
+        // [data-sandbox] attr on <html> so CSS overrides kick in on first
+        // paint (no FOUC). Also injects the noindex meta in sandbox builds.
+        try {
+          var isSandbox = '%VITE_IS_SANDBOX%' === 'true';
+          if (isSandbox) {
+            document.documentElement.setAttribute('data-sandbox', 'true');
+            var m = document.createElement('meta');
+            m.name = 'robots';
+            m.content = 'noindex,nofollow';
+            document.head.appendChild(m);
+          }
         } catch (e) {}
       })();
     </script>

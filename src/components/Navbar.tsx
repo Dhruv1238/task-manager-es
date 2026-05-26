@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import Logo from './Logo'
+import { lazy, Suspense } from 'react'
 import ThemeToggle from './ThemeToggle'
+
+// Sandbox slots — lazy-loaded so production bundles never fetch them.
+const SandboxMenu = __IS_SANDBOX__
+  ? lazy(() => import('./sandbox/SandboxMenu'))
+  : null
+const SandboxIdentityPill = __IS_SANDBOX__
+  ? lazy(() => import('./sandbox/SandboxIdentityPill'))
+  : null
 import { useAuth } from '../contexts/AuthContext'
 import { isDevConfigUser } from './DevConfigRoute'
 
@@ -111,25 +120,38 @@ export default function Navbar() {
 
         {user && (
           <div className="flex items-center gap-2 sm:gap-3">
+            {SandboxMenu ? (
+              <Suspense fallback={null}>
+                <SandboxMenu />
+              </Suspense>
+            ) : null}
             <ThemeToggle />
 
-            <div className="hidden items-center gap-3 rounded-full border border-line bg-fill-2 py-1.5 pl-1.5 pr-3 sm:flex">
-              <div
-                aria-hidden
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient-br text-[11px] font-semibold text-white"
-              >
-                {initialsFor(user)}
-              </div>
-              <span className="text-sm text-fg-muted">{user.email}</span>
-            </div>
+            {SandboxIdentityPill ? (
+              <Suspense fallback={null}>
+                <SandboxIdentityPill />
+              </Suspense>
+            ) : (
+              <>
+                <div className="hidden items-center gap-3 rounded-full border border-line bg-fill-2 py-1.5 pl-1.5 pr-3 sm:flex">
+                  <div
+                    aria-hidden
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient-br text-[11px] font-semibold text-white"
+                  >
+                    {initialsFor(user)}
+                  </div>
+                  <span className="text-sm text-fg-muted">{user.email}</span>
+                </div>
 
-            <div
-              aria-hidden
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gradient-br text-xs font-semibold text-white sm:hidden"
-              title={user.email ?? undefined}
-            >
-              {initialsFor(user)}
-            </div>
+                <div
+                  aria-hidden
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gradient-br text-xs font-semibold text-white sm:hidden"
+                  title={user.email ?? undefined}
+                >
+                  {initialsFor(user)}
+                </div>
+              </>
+            )}
 
             <button
               onClick={() => signOut()}

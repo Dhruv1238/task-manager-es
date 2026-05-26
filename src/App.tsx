@@ -1,3 +1,4 @@
+import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation, type Location } from 'react-router-dom'
 import AdminRoute, { SuperAdminRoute } from './components/AdminRoute'
 import DevConfigRoute from './components/DevConfigRoute'
@@ -22,15 +23,49 @@ import TeamDetail from './pages/TeamDetail'
 import TeamOnProject from './pages/TeamOnProject'
 import Teams from './pages/Teams'
 
+// Sandbox-only surfaces — gated by the build-time literal `__IS_SANDBOX__`
+// so production bundles tree-shake every chunk these would have generated.
+const SandboxLogin = __IS_SANDBOX__ ? lazy(() => import('./pages/SandboxLogin')) : null
+const SandboxShell = __IS_SANDBOX__ ? lazy(() => import('./components/sandbox/SandboxShell')) : null
+const SandboxErrorBoundary = __IS_SANDBOX__
+  ? lazy(() => import('./components/sandbox/SandboxErrorBoundary'))
+  : null
+
 function App() {
   const location = useLocation()
   const state = location.state as { backgroundLocation?: Location } | null
   const backgroundLocation = state?.backgroundLocation ?? null
 
-  return (
+  // Phase B trigger: watch for "wizards complete" once authenticated.
+  useEffect(() => {
+    if (!__IS_SANDBOX__) return
+    let cancelled = false
+    let teardown: (() => void) | null = null
+    void import('./lib/sandboxBoot').then((m) => {
+      if (cancelled) return
+      teardown = m.watchForPhaseB()
+    })
+    return () => {
+      cancelled = true
+      teardown?.()
+    }
+  }, [])
+
+  const inner = (
     <>
       <Routes location={backgroundLocation ?? location}>
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/login"
+          element={
+            __IS_SANDBOX__ && SandboxLogin ? (
+              <Suspense fallback={null}>
+                <SandboxLogin />
+              </Suspense>
+            ) : (
+              <Login />
+            )
+          }
+        />
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Home />} />
           <Route path="/me" element={<Me />} />
@@ -69,6 +104,17 @@ function App() {
       )}
     </>
   )
+
+  if (__IS_SANDBOX__ && SandboxShell && SandboxErrorBoundary) {
+    return (
+      <Suspense fallback={null}>
+        <SandboxErrorBoundary>
+          <SandboxShell>{inner}</SandboxShell>
+        </SandboxErrorBoundary>
+      </Suspense>
+    )
+  }
+  return inner
 }
 
 export default App

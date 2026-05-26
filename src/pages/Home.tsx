@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -8,6 +8,20 @@ import {
 } from '../contexts/AppConfigContext'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import ProjectPicker from '../components/ui/ProjectPicker'
+
+// Sandbox-only roam-mode strip. Lazy-loaded; tree-shaken out of production
+// bundles via the __IS_SANDBOX__ guard at the call site.
+const SandboxTryThisLazy = __IS_SANDBOX__
+  ? lazy(() => import('../components/sandbox/TryThisStrip'))
+  : null
+function SandboxTryThis() {
+  if (!SandboxTryThisLazy) return null
+  return (
+    <Suspense fallback={null}>
+      <SandboxTryThisLazy />
+    </Suspense>
+  )
+}
 
 interface CardProps {
   to: string
@@ -97,7 +111,12 @@ function BoardViewCard() {
 }
 
 export default function Home() {
-  const { profile } = useAuth()
+  const { profile, effectiveProfile } = useAuth()
+  // In sandbox builds, `effectiveProfile` reflects the persona the visitor is
+  // acting as (or themselves when no persona is active). Welcome copy + the
+  // header context should mirror that so persona switching is visible across
+  // the UI, not just in the permissions resolver.
+  const display = __IS_SANDBOX__ ? (effectiveProfile ?? profile) : profile
   const bootLoaded = useBootLoaded()
   const setupCompleted = useSetupCompleted()
   const workflowRegistry = useWorkflowRegistry()
@@ -130,11 +149,12 @@ export default function Home() {
   if (isSuperAdmin && noActiveWorkflows) {
     return <Navigate to="/admin/workflows/new?onboarding=1" replace />
   }
-  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
-  const firstName = profile?.displayName?.split(/\s+/)[0] ?? ''
+  const isAdmin = display?.globalRole === 'admin' || display?.globalRole === 'super_admin'
+  const firstName = display?.displayName?.split(/\s+/)[0] ?? ''
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
+    <main className="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 lg:px-8" data-tour-id="home-dashboard">
+      {__IS_SANDBOX__ ? <SandboxTryThis /> : null}
       <div className="mb-10">
         <p className="text-sm text-fg-subtle">
           {isAdmin ? 'Admin workspace' : 'Workspace'}

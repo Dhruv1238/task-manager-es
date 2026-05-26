@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { doc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
+import { tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import {
   DEFAULT_APP_CONFIG,
@@ -115,7 +115,10 @@ export default function AppConfigPage() {
 
       <WorkflowsSection adminUid={user?.uid ?? null} />
 
-      <DevToolsSection adminUid={user?.uid ?? null} />
+      {/* Dev Tools are scaffolding for the team — sandbox visitors don't need
+          (or want) reseed/wipe/migration controls. Build-time gated so the
+          whole section tree-shakes out of the sandbox bundle. */}
+      {!__IS_SANDBOX__ && <DevToolsSection adminUid={user?.uid ?? null} />}
 
       {/* <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Features</h2>
@@ -252,7 +255,7 @@ function WorkflowsSection({ adminUid }: { adminUid: string | null }) {
   async function commitRegistry(next: WorkflowRegistry) {
     if (!adminUid) return
     setActionError(null)
-    const ref = doc(db, 'workflows', WORKFLOW_REGISTRY_ID)
+    const ref = tenantDoc('workflows', WORKFLOW_REGISTRY_ID)
     const payload: WorkflowRegistry = {
       ...next,
       version: workflowRegistry.version + 1,
@@ -638,7 +641,7 @@ function ManageRecommendedLeadsModal({
     setSaving(true)
     setError(null)
     try {
-      const ref = doc(db, 'workflows', workflowId)
+      const ref = tenantDoc('workflows', workflowId)
       const next: Workflow = {
         ...workflow,
         recommendedLeads: recommended,

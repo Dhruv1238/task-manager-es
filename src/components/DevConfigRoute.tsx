@@ -9,6 +9,11 @@ export const DEV_CONFIG_EMAILS = ['dhruv.sharma1@eventstrat.ai','sarvesh@eventst
 export function isDevConfigUser(profile: { globalRole?: string; email?: string } | null | undefined): boolean {
   if (!profile) return false
   if (profile.globalRole !== 'super_admin') return false
+  // Sandbox: any super_admin (i.e. the visitor in their own tenant) can reach
+  // /admin/config — they need org + workflow editors to explore the platform.
+  // Dev Tools are hidden inside the page itself via __IS_SANDBOX__. Production
+  // keeps the email allowlist.
+  if (__IS_SANDBOX__) return true
   return DEV_CONFIG_EMAILS.includes((profile.email ?? '').toLowerCase())
 }
 

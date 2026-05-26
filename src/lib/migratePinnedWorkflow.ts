@@ -14,14 +14,13 @@
  * visibility during the run.
  */
 import {
-  collection,
-  doc,
   getDoc,
   getDocs,
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { tenantCol, tenantDoc } from './firestore'
 import type { Workflow } from '../types/workflow'
 
 export interface MigrationSummary {
@@ -47,7 +46,7 @@ export async function migratePinnedWorkflow(
   }
   const workflowCache = new Map<string, Workflow | null>()
 
-  const snap = await getDocs(collection(db, 'projects'))
+  const snap = await getDocs(tenantCol('projects'))
   let batch = writeBatch(db)
   let inBatch = 0
 
@@ -74,7 +73,7 @@ export async function migratePinnedWorkflow(
     let workflow = workflowCache.get(project.workflowId)
     if (workflow === undefined) {
       try {
-        const wfSnap = await getDoc(doc(db, 'workflows', project.workflowId))
+        const wfSnap = await getDoc(tenantDoc('workflows', project.workflowId))
         workflow = wfSnap.exists() ? (wfSnap.data() as Workflow) : null
         workflowCache.set(project.workflowId, workflow)
       } catch (e) {
@@ -100,7 +99,7 @@ export async function migratePinnedWorkflow(
     )
 
     if (!dryRun) {
-      batch.update(doc(db, 'projects', projectSnap.id), {
+      batch.update(tenantDoc('projects', projectSnap.id), {
         pinnedWorkflow: pinned,
         updatedAt: serverTimestamp(),
       })

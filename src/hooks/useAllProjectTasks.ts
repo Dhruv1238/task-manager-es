@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, query, where } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Live subscription to every task on a given project, including subtasks.
@@ -17,7 +17,7 @@ export function useAllProjectTasks(projectId: string | undefined) {
       return
     }
     setLoading(true)
-    const q = query(collection(db, 'tasks'), where('projectId', '==', projectId))
+    const q = query(tenantCol('tasks'), where('projectId', '==', projectId))
     return onSnapshot(
       q,
       (snap) => {

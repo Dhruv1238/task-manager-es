@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot } from 'firebase/firestore'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllProjects } from '../hooks/useAllProjects'
 import { useTeamTasks } from '../hooks/useTeamTasks'
@@ -9,7 +8,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import AddTeamMemberModal from '../components/admin/AddTeamMemberModal'
 import RemoveMemberConfirmModal from '../components/admin/RemoveMemberConfirmModal'
 import { useAuth } from '../contexts/AuthContext'
-import { setTeamLead } from '../lib/firestore'
+import { setTeamLead, tenantDoc } from '../lib/firestore'
 import { isProjectLive } from '../lib/projectStatus'
 import MemberWorkload from '../components/charts/MemberWorkload'
 import WeeklyCompletionLine from '../components/charts/WeeklyCompletionLine'
@@ -83,7 +82,7 @@ export default function TeamDetail() {
   useEffect(() => {
     if (!teamId) return
     return onSnapshot(
-      doc(db, 'teams', teamId),
+      tenantDoc('teams', teamId),
       (snap) => {
         if (!snap.exists()) {
           setNotFound(true)

@@ -1,0 +1,51 @@
+rules_version = '2';
+// Sandbox Firebase project rules. Deploy these ONLY to the sandbox Firebase
+// project (e.g. via `firebase deploy --only firestore:rules --project sandbox`).
+// Production Firebases keep using the rules in firestore.rules.
+//
+// Model:
+//   /sandbox/{visitorUid}/{path=**}   — visitor's tenant subtree (their own
+//                                       uid only; default-deny otherwise).
+//   /leads/{leadId}                   — top-level lead doc, key == visitor uid.
+//   /sandboxConfig/main               — public read-only beacon doc.
+//   *anything else*                   — default deny.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validLeadShape() {
+      return request.resource.data.email is string
+          && request.resource.data.email.size() > 3
+          && request.resource.data.email.size() < 254
+          && request.resource.data.source == 'sandbox'
+          && request.resource.data.visitorUid == request.auth.uid;
+    }
+
+    // Visitor's own sandbox subtree
+    match /sandbox/{visitorUid}/{document=**} {
+      allow read, write: if request.auth != null
+                          && request.auth.uid == visitorUid;
+    }
+
+    // Lead doc — one per visitor, keyed by uid. Client creates + updates own;
+    // sales reads via the admin SDK / Firebase console.
+    match /leads/{leadId} {
+      allow create, update: if request.auth != null
+                             && leadId == request.auth.uid
+                             && validLeadShape();
+      allow read: if false;
+      allow delete: if false;
+    }
+
+    // Public sandbox-config beacon (paranoia check + Calendly URL). Read-only
+    // for everyone; writes via admin SDK only.
+    match /sandboxConfig/main {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Default deny — every other path. If a developer ships a feature that
+    // writes to a top-level path in sandbox mode, the write fails loud rather
+    // than silently leaking out of a visitor's subtree.
+    match /{path=**} { allow read, write: if false; }
+  }
+}

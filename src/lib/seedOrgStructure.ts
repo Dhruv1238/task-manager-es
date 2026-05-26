@@ -9,8 +9,8 @@
  * bumps updatedAt/updatedBy. The setupCompleted flag is preserved so the
  * /admin/setup auto-launch redirect doesn't fire for the Client A super_admin.
  */
-import { doc, getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
-import { db } from './firebase'
+import {  getDoc, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
+import { tenantDoc } from './firestore'
 import type { OrgStructure } from '../types/models'
 
 export interface SeedOrgResult {
@@ -26,7 +26,7 @@ export interface SeedOrgResult {
  * @returns whether the doc was created (vs overwritten) and version delta
  */
 export async function seedClientAOrgStructure(adminUid: string): Promise<SeedOrgResult> {
-  const ref = doc(db, 'config', 'orgStructure')
+  const ref = tenantDoc('config', 'orgStructure')
   const existing = await getDoc(ref)
   const previousVersion = existing.exists() ? ((existing.data() as OrgStructure).version ?? 0) : 0
   const newVersion = previousVersion + 1
@@ -61,7 +61,7 @@ export async function seedClientAOrgStructure(adminUid: string): Promise<SeedOrg
  * environment somehow ends up without the doc.
  */
 export async function seedEmptyOrgStructure(adminUid: string): Promise<SeedOrgResult> {
-  const ref = doc(db, 'config', 'orgStructure')
+  const ref = tenantDoc('config', 'orgStructure')
   const existing = await getDoc(ref)
   if (existing.exists()) {
     // Don't clobber an existing doc with the empty default.

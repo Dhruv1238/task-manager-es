@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import {
-  collection,
   getDocsFromCache,
   limit,
   onSnapshot,
@@ -10,7 +9,7 @@ import {
   where,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { tenantCol } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import {
   clearProjectSyncState,
@@ -64,7 +63,7 @@ export function useChatListener(projectId: string | undefined): ChatListenerStat
 
     let cancelled = false
     const uid = profile.uid
-    const msgsCol = collection(db, 'projects', projectId, 'chat')
+    const msgsCol = tenantCol('projects', projectId, 'chat')
     const byId = new Map<string, ChatMessage>()
 
     const commit = () => {

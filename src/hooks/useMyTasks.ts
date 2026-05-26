@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
-  collection,
   onSnapshot,
   orderBy,
   query,
   where,
 } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Firestore will prompt (once) for a composite index on: assigneeId, updatedAt.
@@ -23,7 +22,7 @@ export function useMyTasks(uid: string | undefined) {
     }
     setLoading(true)
     const q = query(
-      collection(db, 'tasks'),
+      tenantCol('tasks'),
       where('assigneeId', '==', uid),
       orderBy('updatedAt', 'desc'),
     )

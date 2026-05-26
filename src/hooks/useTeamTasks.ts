@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot, query, where } from 'firebase/firestore'
+import { tenantCol } from '../lib/firestore'
 import type { Task } from '../types/models'
 
 // Every task for a given team, across all projects it's on. Used by the team dashboard.
@@ -17,7 +17,7 @@ export function useTeamTasks(teamId: string | undefined) {
       return
     }
     setLoading(true)
-    const q = query(collection(db, 'tasks'), where('teamId', '==', teamId))
+    const q = query(tenantCol('tasks'), where('teamId', '==', teamId))
     return onSnapshot(
       q,
       (snap) => {

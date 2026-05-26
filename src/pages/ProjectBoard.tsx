@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import {  onSnapshot } from 'firebase/firestore'
+import { tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useAllProjectTasks } from '../hooks/useAllProjectTasks'
 import { useAllTeams } from '../hooks/useAllTeams'
@@ -36,7 +36,7 @@ export default function ProjectBoard() {
     if (!projectId) return
     setLoading(true)
     return onSnapshot(
-      doc(db, 'projects', projectId),
+      tenantDoc('projects', projectId),
       (snap) => {
         if (!snap.exists()) {
           setNotFound(true)
