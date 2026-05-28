@@ -60,7 +60,7 @@ export default function ExitIntentCapture({ onClose }: { onClose: () => void }) 
           <button
             type="button"
             onClick={recapYes}
-            className="rounded-lg bg-[var(--sandbox-accent,#a78bfa)] px-3.5 py-1.5 text-sm font-medium text-white transition hover:opacity-95"
+            className="rounded-lg bg-brand-gradient px-3.5 py-1.5 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient"
           >
             Send me the recap
           </button>

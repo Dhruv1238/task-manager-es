@@ -120,7 +120,7 @@ export default function FirstActionCapture({ onClose }: { onClose: () => void })
           <button
             type="submit"
             disabled={!canSubmit}
-            className="rounded-lg bg-[var(--sandbox-accent,#a78bfa)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-50"
+            className="rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient disabled:opacity-50"
           >
             Continue
           </button>

@@ -403,8 +403,8 @@ function WrapUpModal({
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
-        <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--sandbox-accent,#a78bfa)]/15">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[var(--sandbox-accent,#a78bfa)]" aria-hidden>
+        <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-brand" aria-hidden>
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
@@ -419,7 +419,7 @@ function WrapUpModal({
               onClose()
               navigate('/admin/workflows/new')
             }}
-            className="w-full rounded-lg bg-[var(--sandbox-accent,#a78bfa)] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-95"
+            className="w-full rounded-lg bg-brand-gradient px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient"
           >
             Build your own workflow
           </button>

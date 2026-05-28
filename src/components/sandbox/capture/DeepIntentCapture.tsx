@@ -118,7 +118,7 @@ export default function DeepIntentCapture({ onClose }: { onClose: () => void }) 
             type="checkbox"
             checked={wantsCallback}
             onChange={(e) => setWantsCallback(e.target.checked)}
-            className="h-4 w-4 rounded border-line-strong text-[var(--sandbox-accent,#a78bfa)] focus:ring-brand-ring"
+            className="h-4 w-4 rounded border-line-strong text-brand focus:ring-brand-ring"
           />
           Want a callback in the next 48 hours?
         </label>
@@ -134,7 +134,7 @@ export default function DeepIntentCapture({ onClose }: { onClose: () => void }) 
           <button
             type="button"
             onClick={() => submit(true)}
-            className="rounded-lg bg-[var(--sandbox-accent,#a78bfa)] px-5 py-2 text-sm font-medium text-white transition hover:opacity-95"
+            className="rounded-lg bg-brand-gradient px-5 py-2 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient"
           >
             {calendlyUrl ? 'Book a meeting now' : 'Send my intent'}
           </button>

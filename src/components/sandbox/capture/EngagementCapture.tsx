@@ -61,7 +61,7 @@ export default function EngagementCapture({ onClose }: { onClose: () => void }) 
           <label
             key={r}
             className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition ${
-              role === r ? 'border-[var(--sandbox-accent,#a78bfa)] bg-[var(--sandbox-accent,#a78bfa)]/10' : 'border-line bg-fill-2 hover:bg-fill-3'
+              role === r ? 'border-brand-edge bg-brand-soft' : 'border-line bg-fill-2 hover:bg-fill-3'
             }`}
           >
             <input
@@ -74,7 +74,7 @@ export default function EngagementCapture({ onClose }: { onClose: () => void }) 
             />
             <span
               className={`inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
-                role === r ? 'border-[var(--sandbox-accent,#a78bfa)] bg-[var(--sandbox-accent,#a78bfa)]' : 'border-line-strong'
+                role === r ? 'border-brand bg-brand' : 'border-line-strong'
               }`}
               aria-hidden
             />
@@ -94,7 +94,7 @@ export default function EngagementCapture({ onClose }: { onClose: () => void }) 
           type="button"
           onClick={submit}
           disabled={!role}
-          className="rounded-lg bg-[var(--sandbox-accent,#a78bfa)] px-4 py-2 text-sm font-medium text-white transition hover:opacity-95 disabled:opacity-50"
+          className="rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient disabled:opacity-50"
         >
           Continue
         </button>
