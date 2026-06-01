@@ -16,6 +16,78 @@ export const WORKFLOW_REGISTRY_ID = '_registry'
 
 export type FlowType = 'collaborative' | 'individual' | 'basic'
 
+// ─── Phase 2d authoring types ────────────────────────────────────────────────
+// Shared colour palette token. Maps 1:1 to the `pill-*` utilities and the
+// `--color-*-dot` vars in src/index.css. Stored as the tone NAME (never a hex)
+// so role/field/status chips stay theme-aware in light + dark. Resolve to class
+// strings via the STATIC maps in src/lib/fieldTokens.ts (Tailwind v4 JIT would
+// purge template-interpolated class names).
+export type PillColor =
+  | 'info' | 'success' | 'warn' | 'danger' | 'brandtone'
+  | 'accent' | 'cool' | 'mint' | 'neutral' | 'orange' | 'yellow' | 'pink'
+
+// Author-defined named role slot on a project. id is a stable slug frozen on the
+// first label and NEVER reused — relabelling never moves it.
+export interface ProjectRoleDef {
+  id: string
+  label: string
+  // One holder (false) or a list of holders (true).
+  multiple: boolean
+  // Must be filled at project creation.
+  required: boolean
+  // Pre-fill this slot with the creator on new projects.
+  assignedToCreatorOnNew?: boolean
+  // Optional helper text shown under the picker.
+  description?: string
+  order: number
+}
+
+export type CustomFieldType =
+  | 'text' | 'longText' | 'number' | 'currency'
+  | 'date' | 'select' | 'multiSelect' | 'user' | 'email' | 'phone' | 'url'
+
+// Where a custom field is surfaced. Each field can appear on any subset.
+export type FieldSurface = 'createForm' | 'sidebar' | 'listColumn' | 'filter'
+
+export interface CustomFieldOption {
+  // Stable slug; what project.fields stores (renames never orphan values).
+  id: string
+  label: string
+  color?: PillColor
+}
+
+export interface CustomFieldDef {
+  // Stable slug, frozen on first label, never reused.
+  id: string
+  label: string
+  type: CustomFieldType
+  // Enforced only when 'createForm' is in surfaces.
+  required: boolean
+  surfaces: FieldSurface[]
+  // select / multiSelect only.
+  options?: CustomFieldOption[]
+  placeholder?: string
+  helpText?: string
+  // Shared create-form + sidebar order.
+  order: number
+  // Soft delete: hidden on new projects, retained (greyed) on existing.
+  deprecated?: boolean
+}
+
+export interface ProjectFieldsConfig {
+  customFields?: CustomFieldDef[]
+}
+
+// Author-defined status option. id is the stored value (project.status);
+// label/color drive display. closing marks a terminal/closed status.
+export interface WorkflowStatusOption {
+  id: string
+  label: string
+  color: PillColor
+  order: number
+  closing?: boolean
+}
+
 export interface Workflow {
   id: string
   displayName: string
@@ -33,6 +105,22 @@ export interface Workflow {
   // alphabetically. Managed from /admin/config → Workflows → kebab → Manage
   // recommended leads.
   recommendedLeads?: string[]
+  // ─── Phase 2d additions (all optional → pre-2d docs keep working) ─────────
+  // Author-defined named role slots a project of this workflow fills with
+  // specific users (e.g. "Vertical Head", "Admin Head"). Holders feed accessKeys
+  // and are matchable via ActorRef { kind: 'project_role' }.
+  projectRoles?: ProjectRoleDef[]
+  // Author-defined extra fields captured on a project, each placed on one or
+  // more surfaces (create form / sidebar / list column / filter).
+  projectFields?: ProjectFieldsConfig
+  // Author-defined status options (id/label/color). When present, the status
+  // pill + UpdateProjectStatus modal render these instead of the hardcoded
+  // flow-type defaults. Status ids are stored on project.status.
+  statusOptions?: WorkflowStatusOption[]
+  // Who may change project.status via the direct status-pill path. Resolved
+  // through actorMatches (same engine as actions). Absent → legacy flow-type
+  // rule + createdBy baseline (see canUpdateProjectStatus).
+  canUpdateStatusActors?: ActorRef[]
   // Phase 2c: optional long-form copy shown in the wizard's first step and the
   // template picker description. Falls back to a derived flow-type sentence.
   description?: string
@@ -133,7 +221,12 @@ export type ActorRef =
       member: 'lead' | 'any'
       alsoAllow?: ActorRef[]
     }
-  // The project's owner (project.ownerId).
+  // Phase 2d: a user holding a named project role (project.roleAssignments[roleId]).
+  // Matches if the viewer's uid is the assigned value (single) or appears in the
+  // assigned array (multiple). roleId references workflow.projectRoles[].id.
+  | { kind: 'project_role'; roleId: string }
+  // The project's creator. Resolves to project.createdBy, falling back to the
+  // legacy project.ownerId for pre-2d projects.
   | { kind: 'creator' }
 
 // Discriminated union of side effects an action can produce on a project.
@@ -157,6 +250,11 @@ export type ActionEffect =
   // chosen outcome. Used by basic flow's mark_complete and by reject-paths in
   // the collab flow where the tender is dropped (e.g. eligibility_review reject).
   | { kind: 'mark_complete'; toStage: string; outcomes: ProjectStatus[] }
+  // Phase 2d (RESERVED — not surfaced in EffectPicker): assigns the user(s)
+  // chosen in a user_picker input to the named project role and recomputes
+  // accessKeys. Declared now so a future "VH assigns AH as a gated stage action"
+  // needs no migration. The evaluator treats it as stay-on-current-stage.
+  | { kind: 'assign_project_role'; roleId: string }
 
 export interface ActionInput {
   id: string
@@ -219,10 +317,34 @@ export interface WorkflowChangeEvent {
   reason: string
 }
 
+// Phase 2d: a project role slot was assigned/reassigned/cleared via setProjectRole.
+export interface RoleAssignedEvent {
+  kind: 'role_assigned'
+  // References workflow.projectRoles[].id.
+  roleId: string
+  // Value after the change: a uid (single), uid[] (multiple), or null (cleared).
+  value: string | string[] | null
+  assignedAt: Timestamp
+  assignedBy: string
+}
+
+// Phase 2d: a custom project field was edited via setProjectField.
+export interface FieldUpdatedEvent {
+  kind: 'field_updated'
+  // References workflow.projectFields.customFields[].id.
+  fieldId: string
+  // Raw value written. Renderers resolve the label via the field def.
+  value: unknown
+  updatedAt: Timestamp
+  updatedBy: string
+}
+
 export type ProjectHistoryEvent =
   | StageEvent
   | WorkflowAssignmentEvent
   | WorkflowChangeEvent
+  | RoleAssignedEvent
+  | FieldUpdatedEvent
 
 // Thrown by workflowEvaluator.performAction when inputs fail validation or the
 // caller lacks permission. UI surfaces .message; engine code reads .code.

@@ -11,6 +11,7 @@
  */
 import {  getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { tenantDoc } from './firestore'
+import { SIMPLE_STATUS_OPTIONS, defaultStatusOptions } from './projectStatus'
 import type { Workflow } from '../types/workflow'
 
 export const BASIC_WORKFLOW_ID = 'basic'
@@ -28,6 +29,12 @@ export function buildBasicWorkflow(): Omit<Workflow, 'updatedAt' | 'updatedBy' |
     creationModalDescription:
       "Tracked by status. Add tasks and team members after it's created.",
     recommendedLeads: [],
+    // Phase 2d: basic stays minimal — no roles or custom fields. Statuses are
+    // the simple 3. canUpdateStatusActors omitted: creator + admins (the
+    // evaluator baseline) cover basic-flow status updates.
+    projectRoles: [],
+    projectFields: { customFields: [] },
+    statusOptions: defaultStatusOptions(SIMPLE_STATUS_OPTIONS),
     stages: [
       {
         id: 'in_progress',

@@ -7,7 +7,11 @@ import type { Project } from '../types/models'
 // - super_admins / admins: every project
 // - project leads: projects they're pinned as lead on, even if their teams
 //   aren't attached yet
-// - regular users: projects they own OR where one of their teams is assigned
+// - everyone else: projects whose denormalised `accessKeys` contains their uid
+//   (role-holders ∪ creator) OR one of their team ids. Phase 2d: this mirrors
+//   the server-side `array-contains-any [uid, ...teamIds]` query exactly.
+//   Legacy projects whose accessKeys still encode [ownerId, ...teamIds] keep
+//   working — uid matches the owner entry, so no backfill is needed.
 export function useAccessibleProjects(): { projects: Project[]; loading: boolean } {
   const { profile } = useAuth()
   const { projects, loading } = useAllProjects()
@@ -17,12 +21,14 @@ export function useAccessibleProjects(): { projects: Project[]; loading: boolean
     if (profile.globalRole === 'admin' || profile.globalRole === 'super_admin') {
       return projects
     }
-    const myTeams = new Set(profile.teamIds ?? [])
+    const myKeys = new Set<string>([profile.uid, ...(profile.teamIds ?? [])])
     return projects.filter(
       (p) =>
-        p.ownerId === profile.uid ||
         p.leadUid === profile.uid ||
-        (p.teamIds ?? []).some((tid) => myTeams.has(tid)),
+        (p.accessKeys ?? []).some((k) => myKeys.has(k)) ||
+        // Legacy safety: pre-2d docs that may lack accessKeys entirely.
+        p.ownerId === profile.uid ||
+        (p.teamIds ?? []).some((tid) => myKeys.has(tid)),
     )
   }, [projects, profile])
 

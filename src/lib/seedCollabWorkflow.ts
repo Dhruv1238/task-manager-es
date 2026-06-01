@@ -19,6 +19,7 @@
  */
 import {  getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { tenantDoc } from './firestore'
+import { defaultStatusOptions } from './projectStatus'
 import type { Workflow } from '../types/workflow'
 
 export const COLLAB_DEFAULT_WORKFLOW_ID = 'collab-default'
@@ -38,6 +39,44 @@ export function buildCollabDefaultWorkflow(): Omit<Workflow, 'updatedAt' | 'upda
     creationModalDescription:
       "Lands at the first stage. You'll allocate a lead once it's created.",
     recommendedLeads: [],
+    // Phase 2d: named project roles (distinct from the pinned pipeline lead,
+    // which remains the "Vertical Head" assigned via `allocate`). These are
+    // additive metadata holders that feed accessKeys + permission pills.
+    projectRoles: [
+      { id: 'admin_head', label: 'Admin Head', multiple: false, required: false, order: 0 },
+      { id: 'functional_head', label: 'Functional Head', multiple: true, required: false, order: 1 },
+    ],
+    projectFields: {
+      customFields: [
+        {
+          id: 'lead_poc_name',
+          label: 'Lead POC Name',
+          type: 'text',
+          required: false,
+          surfaces: ['createForm', 'sidebar'],
+          order: 0,
+        },
+        {
+          id: 'lead_category',
+          label: 'Lead Category',
+          type: 'select',
+          required: false,
+          surfaces: ['createForm', 'sidebar', 'listColumn', 'filter'],
+          order: 1,
+          options: [
+            { id: 'international', label: 'International', color: 'info' },
+            { id: 'indian', label: 'Indian', color: 'success' },
+          ],
+        },
+      ],
+    },
+    statusOptions: defaultStatusOptions(),
+    // Mirrors the legacy collab rule (lead / coordinator-lead). super-admin,
+    // admins, and the creator pass via the evaluator baseline.
+    canUpdateStatusActors: [
+      { kind: 'pipeline_role', role: 'lead' },
+      { kind: 'team_role', role: 'coordinator', member: 'lead' },
+    ],
     stages: [
       {
         id: 'created',

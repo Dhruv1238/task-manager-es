@@ -1,10 +1,13 @@
-import type { Stage, StageAction } from '../../../types/workflow'
+import type { ProjectRoleDef, Stage, StageAction } from '../../../types/workflow'
 import ActionCard from './ActionCard'
 
 interface Props {
   stage: Stage
   allStages: Stage[]
   leadRoleName: string
+  // Phase 2d: the workflow's project roles, surfaced as options in the action's
+  // "who can do this" permission pills.
+  projectRoles: ProjectRoleDef[]
   onChange: (next: Stage) => void
   disabled?: boolean
 }
@@ -15,6 +18,7 @@ export default function StageEditorPanel({
   stage,
   allStages,
   leadRoleName,
+  projectRoles,
   onChange,
   disabled,
 }: Props) {
@@ -34,6 +38,9 @@ export default function StageEditorPanel({
       id,
       label: 'New action',
       actor: { kind: 'pipeline_role', role: 'lead' },
+      // Phase 2d: super-admins are the always-on baseline (matches the pills'
+      // locked row). Authors then add the roles who actually do the work.
+      alsoAllow: [{ kind: 'global_role', role: 'super_admin' }],
       effect: { kind: 'transition', toStage: targetStage },
       inputs: [],
       intent: 'primary',
@@ -150,6 +157,7 @@ export default function StageEditorPanel({
                   stage={stage}
                   allStages={allStages}
                   leadRoleName={leadRoleName}
+                  projectRoles={projectRoles}
                   onChange={(next) => updateAction(idx, next)}
                   onDelete={() => deleteAction(idx)}
                   disabled={disabled}

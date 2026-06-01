@@ -1,36 +1,74 @@
 import { useState } from 'react'
-import type { Stage, StageAction } from '../../../types/workflow'
+import type {
+  ActionEffect,
+  ActorRef,
+  ProjectRoleDef,
+  Stage,
+  StageAction,
+} from '../../../types/workflow'
 import ActionExpandedEditor from './ActionExpandedEditor'
+import ActionActorsPopover from './ActionActorsPopover'
 
 interface Props {
   action: StageAction
   stage: Stage
   allStages: Stage[]
   leadRoleName: string
+  projectRoles: ProjectRoleDef[]
   onChange: (next: StageAction) => void
   onDelete: () => void
   disabled?: boolean
 }
 
-// Phase 2c: sentence-template action card. Default state is a read-only sentence
-// summarizing the action ("When the X clicks 'Y', the project moves to 'Z'.").
-// Click Edit to expand into the form.
+// Phase 2c→2d: sentence-template action card. The collapsed state reads as plain
+// English with the "who" rendered as clickable permission pills (never a
+// matrix). Click Edit to tune the label / effect / inputs.
 export default function ActionCard({
   action,
   stage,
   allStages,
   leadRoleName,
+  projectRoles,
   onChange,
   onDelete,
   disabled,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
 
+  // Map the popover's flat allowed-set back to actor (canonical) + alsoAllow.
+  function setActors(next: ActorRef[]) {
+    const [first, ...rest] = next
+    onChange({
+      ...action,
+      actor: first ?? { kind: 'global_role', role: 'super_admin' },
+      alsoAllow: rest.length ? rest : undefined,
+    })
+  }
+
   return (
     <div className="rounded-xl border border-line bg-fill-1 p-3">
       {!expanded ? (
         <>
-          <p className="text-sm text-fg">{renderSentence(action, allStages, leadRoleName)}</p>
+          <div className="flex flex-wrap items-center gap-1.5 text-sm text-fg">
+            <span className="text-fg-subtle">At {stage.displayName},</span>
+            <ActionActorsPopover
+              value={[action.actor, ...(action.alsoAllow ?? [])]}
+              onChange={setActors}
+              projectRoles={projectRoles}
+              leadRoleName={leadRoleName}
+              disabled={disabled}
+            />
+            <span className="text-fg-subtle">can</span>
+            <span className="rounded-md bg-fill-3 px-2 py-0.5 text-xs font-medium text-fg-strong">
+              {action.label || '(untitled action)'}
+            </span>
+            <span className="text-fg-subtle">— {describeEffect(action.effect, allStages)}</span>
+          </div>
+          {action.inputs.length > 0 && (
+            <p className="mt-1.5 text-xs text-fg-subtle">
+              Collects: {action.inputs.map((i) => i.label).join(', ')}.
+            </p>
+          )}
           <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
@@ -56,6 +94,7 @@ export default function ActionCard({
           stage={stage}
           allStages={allStages}
           leadRoleName={leadRoleName}
+          projectRoles={projectRoles}
           onChange={onChange}
           onDone={() => setExpanded(false)}
           disabled={disabled}
@@ -65,57 +104,22 @@ export default function ActionCard({
   )
 }
 
-function renderSentence(
-  action: StageAction,
-  allStages: Stage[],
-  leadRoleName: string,
-): string {
-  const who = describeActor(action.actor, leadRoleName)
-  const label = action.label || '(untitled action)'
-  const what = describeEffect(action.effect, allStages)
-  const inputsClause = action.inputs.length
-    ? ` Collect: ${action.inputs.map((i) => i.label).join(', ')}.`
-    : ' Collect: nothing.'
-  return `When ${who} clicks "${label}", ${what}.${inputsClause}`
-}
-
-function describeActor(actor: import('../../../types/workflow').ActorRef, leadRoleName: string): string {
-  switch (actor.kind) {
-    case 'creator':
-      return 'the project creator'
-    case 'global_role':
-      return actor.role === 'super_admin' ? 'a super-admin' : 'any global admin'
-    case 'pipeline_role':
-      return `the ${leadRoleName || 'project lead'}`
-    case 'team_role': {
-      const role =
-        actor.role === 'validator'
-          ? 'Validator Team'
-          : actor.role === 'coordinator'
-            ? 'Coordinator Team'
-            : 'Specialist Team'
-      return actor.member === 'lead' ? `the ${role} Lead` : `any ${role} member`
-    }
-  }
-}
-
-function describeEffect(
-  effect: import('../../../types/workflow').ActionEffect,
-  stages: Stage[],
-): string {
+function describeEffect(effect: ActionEffect, stages: Stage[]): string {
   const labelFor = (id: string): string => stages.find((s) => s.id === id)?.displayName ?? id
   switch (effect.kind) {
     case 'transition':
-      return `the project moves to "${labelFor(effect.toStage)}"`
+      return `moves the project to "${labelFor(effect.toStage)}"`
     case 'transition_with_counter':
-      return `the project moves to "${labelFor(effect.toStage)}" and the ${effect.counter} count increases`
+      return `moves the project to "${labelFor(effect.toStage)}" and bumps the ${effect.counter} count`
     case 'assign_lead':
-      return `the picked lead is assigned and the project moves to "${labelFor(effect.toStage)}"`
+      return `assigns the picked lead and moves to "${labelFor(effect.toStage)}"`
     case 'clear_lead':
-      return `the lead is cleared and the project moves to "${labelFor(effect.toStage)}"`
+      return `clears the lead and moves to "${labelFor(effect.toStage)}"`
     case 'set_status':
-      return `the project status changes to one of: ${effect.statuses.join(', ')}`
+      return `sets the status to one of: ${effect.statuses.join(', ')}`
     case 'mark_complete':
-      return `the project is marked complete with outcome ${effect.outcomes.join(' or ')}`
+      return `marks the project complete with outcome ${effect.outcomes.join(' or ')}`
+    case 'assign_project_role':
+      return `assigns the picked user to a project role`
   }
 }

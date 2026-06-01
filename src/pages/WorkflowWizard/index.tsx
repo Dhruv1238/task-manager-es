@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAppConfigContext } from '../../contexts/AppConfigContext'
@@ -18,7 +18,23 @@ import Step1Name from './Step1Name'
 import Step2FlowType from './Step2FlowType'
 import Step3Stages from './Step3Stages'
 import SideEditor from './SideEditor'
-import type { FlowType } from '../../types/workflow'
+import ProjectRolesEditor from './SideEditor/ProjectRolesEditor'
+import CustomFieldsEditor from './SideEditor/CustomFieldsEditor'
+import StatusOptionsEditor from './SideEditor/StatusOptionsEditor'
+import { SIMPLE_STATUS_OPTIONS, defaultStatusOptions } from '../../lib/projectStatus'
+import type {
+  CustomFieldDef,
+  FlowType,
+  ProjectRoleDef,
+  WorkflowStatusOption,
+} from '../../types/workflow'
+
+interface WizardExtras {
+  flowType: FlowType
+  name: string
+  description: string
+  stages: string[]
+}
 
 type Phase =
   | { kind: 'picker' }
@@ -31,6 +47,9 @@ type Phase =
       description: string
       stages: string[]
     }
+  | { kind: 'step4'; extras: WizardExtras }
+  | { kind: 'step5'; extras: WizardExtras }
+  | { kind: 'step6'; extras: WizardExtras }
   | { kind: 'editor'; draft: WorkflowDraft }
 
 // Phase 2c: workflow authoring wizard. Sub-route'd via internal state machine
@@ -46,8 +65,12 @@ export default function WorkflowWizard() {
   const [phase, setPhase] = useState<Phase>({ kind: 'picker' })
   const [skipping, setSkipping] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Phase 2d: roles / fields / statuses collected across the new wizard steps.
+  const [wizFields, setWizFields] = useState<CustomFieldDef[]>([])
+  const [wizRoles, setWizRoles] = useState<ProjectRoleDef[]>([])
+  const [wizStatuses, setWizStatuses] = useState<WorkflowStatusOption[]>([])
 
-  const totalSteps = phase.kind === 'editor' ? 4 : 4
+  const totalSteps = 7
   const stepNumber =
     phase.kind === 'picker'
       ? 1
@@ -57,7 +80,28 @@ export default function WorkflowWizard() {
           ? 3
           : phase.kind === 'step3'
             ? 4
-            : 4
+            : phase.kind === 'step4'
+              ? 5
+              : phase.kind === 'step5'
+                ? 6
+                : phase.kind === 'step6'
+                  ? 7
+                  : 7
+
+  function finishToEditor(extras: WizardExtras) {
+    const draft = buildSkeletonFromStageNames(
+      extras.name || 'Untitled Workflow',
+      extras.description,
+      extras.flowType,
+      extras.stages,
+      {
+        projectRoles: wizRoles.length ? wizRoles : undefined,
+        customFields: wizFields.length ? wizFields : undefined,
+        statusOptions: wizStatuses.length ? wizStatuses : undefined,
+      },
+    )
+    setPhase({ kind: 'editor', draft })
+  }
 
   function handlePickerContinue(choice: TemplateChoice) {
     if (choice === 'blank') {
@@ -187,7 +231,10 @@ export default function WorkflowWizard() {
               description: phase.description,
             })
           }
-          onContinue={(flowType) =>
+          onContinue={(flowType) => {
+            // Flow type drives the default status set — clear any seeded
+            // statuses so step6 re-seeds for the (possibly changed) flow type.
+            setWizStatuses([])
             setPhase({
               kind: 'step3',
               flowType,
@@ -195,7 +242,7 @@ export default function WorkflowWizard() {
               description: phase.description,
               stages: [],
             })
-          }
+          }}
         />
       )}
 
@@ -211,15 +258,76 @@ export default function WorkflowWizard() {
             })
           }
           onContinue={(stageNames) => {
-            const draft = buildSkeletonFromStageNames(
-              phase.name || 'Untitled Workflow',
-              phase.description,
-              phase.flowType,
-              stageNames,
-            )
-            setPhase({ kind: 'editor', draft })
+            setPhase({
+              kind: 'step4',
+              extras: {
+                flowType: phase.flowType,
+                name: phase.name,
+                description: phase.description,
+                stages: stageNames,
+              },
+            })
           }}
         />
+      )}
+
+      {phase.kind === 'step4' && (
+        <WizardStep
+          heading="What details should every project capture?"
+          subtitle="Optional. Add custom fields now, or skip and add them later in the editor."
+          onBack={() =>
+            setPhase({
+              kind: 'step3',
+              flowType: phase.extras.flowType,
+              name: phase.extras.name,
+              description: phase.extras.description,
+              stages: phase.extras.stages,
+            })
+          }
+          onContinue={() => setPhase({ kind: 'step5', extras: phase.extras })}
+        >
+          <CustomFieldsEditor fields={wizFields} onChange={setWizFields} />
+        </WizardStep>
+      )}
+
+      {phase.kind === 'step5' && (
+        <WizardStep
+          heading="Who works on a project like this?"
+          subtitle="Optional. Define the named roles people hold — assigned per project."
+          onBack={() => setPhase({ kind: 'step4', extras: phase.extras })}
+          onContinue={() => {
+            if (wizStatuses.length === 0) {
+              setWizStatuses(
+                phase.extras.flowType === 'basic'
+                  ? defaultStatusOptions(SIMPLE_STATUS_OPTIONS)
+                  : defaultStatusOptions(),
+              )
+            }
+            setPhase({ kind: 'step6', extras: phase.extras })
+          }}
+        >
+          <ProjectRolesEditor roles={wizRoles} onChange={setWizRoles} />
+        </WizardStep>
+      )}
+
+      {phase.kind === 'step6' && (
+        <WizardStep
+          heading="What outcomes can a project end in?"
+          subtitle="These statuses appear on the status pill. Tweak the standard set or keep it."
+          onBack={() => setPhase({ kind: 'step5', extras: phase.extras })}
+          onContinue={() => finishToEditor(phase.extras)}
+          continueLabel="Open editor"
+        >
+          <StatusOptionsEditor
+            statusOptions={wizStatuses}
+            canUpdateStatusActors={[]}
+            projectRoles={wizRoles}
+            leadRoleName=""
+            onChangeStatuses={setWizStatuses}
+            onChangeActors={() => {}}
+            hideActorPicker
+          />
+        </WizardStep>
       )}
 
       {skipping && (
@@ -231,5 +339,49 @@ export default function WorkflowWizard() {
         </p>
       )}
     </WizardShell>
+  )
+}
+
+// Phase 2d: shared shell for the new optional wizard steps (fields / roles /
+// statuses). Conversational heading + the editor body + a Back / Continue row.
+function WizardStep({
+  heading,
+  subtitle,
+  children,
+  onBack,
+  onContinue,
+  continueLabel = 'Continue',
+}: {
+  heading: string
+  subtitle?: string
+  children: ReactNode
+  onBack: () => void
+  onContinue: () => void
+  continueLabel?: string
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-semibold text-fg">{heading}</h2>
+        {subtitle && <p className="mt-1 text-sm text-fg-subtle">{subtitle}</p>}
+      </div>
+      {children}
+      <div className="flex items-center justify-between pt-1">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm font-medium text-fg-muted transition hover:bg-fill-4"
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={onContinue}
+          className="rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow hover-brand-gradient"
+        >
+          {continueLabel}
+        </button>
+      </div>
+    </div>
   )
 }

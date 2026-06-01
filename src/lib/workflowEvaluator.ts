@@ -130,8 +130,16 @@ function actorMatches(
       }
       return false
     }
+    case 'project_role': {
+      // Phase 2d: resolves against the project's role assignments. Behaves the
+      // same in permission + inbox modes (it maps to concrete uids).
+      const assigned = project.roleAssignments?.[actor.roleId]
+      if (!assigned) return false
+      return Array.isArray(assigned) ? assigned.includes(user.uid) : assigned === user.uid
+    }
     case 'creator':
-      return project.ownerId === user.uid
+      // Phase 2d owner retirement: prefer createdBy, fall back to legacy ownerId.
+      return (project.createdBy ?? project.ownerId) === user.uid
   }
 }
 
@@ -193,6 +201,46 @@ export function canPerform(
   return getAllowedActions(project, workflow, user, teams, org).some((a) => a.id === actionId)
 }
 
+// Phase 2d: can this user change project.status via the direct status-pill path?
+// Baselines (super-admin/admin, and the creator) always pass. Otherwise prefer
+// the workflow's author-configured `canUpdateStatusActors`; when absent, fall
+// back to the legacy flow-type rule that usePermissions encoded before 2d.
+// Shared by usePermissions so the pill and any banner agree.
+export function canUpdateProjectStatus(
+  project: Project,
+  workflow: Workflow,
+  user: User,
+  teams: Team[],
+  org: OrgStructure,
+): boolean {
+  if (user.globalRole === 'super_admin' || user.globalRole === 'admin') return true
+  if ((project.createdBy ?? project.ownerId) === user.uid) return true
+  const actors = workflow.canUpdateStatusActors
+  if (actors?.length) {
+    return actors.some((a) => actorMatches(a, user, project, teams, org, 'permission'))
+  }
+  // Legacy fallback — mirrors the pre-2d flow-type rule. (super_admin/admin and
+  // creator are already handled above, so only the role-based disjuncts remain.)
+  switch (workflow.flowType) {
+    case 'collaborative':
+      return (
+        actorMatches({ kind: 'pipeline_role', role: 'lead' }, user, project, teams, org) ||
+        actorMatches(
+          { kind: 'team_role', role: 'coordinator', member: 'lead' },
+          user,
+          project,
+          teams,
+          org,
+        )
+      )
+    case 'individual':
+      return actorMatches({ kind: 'pipeline_role', role: 'lead' }, user, project, teams, org)
+    case 'basic':
+    default:
+      return false
+  }
+}
+
 // ─── Inbox helper ────────────────────────────────────────────────────────────
 
 // Resolve every actor on this stage's actions into a set of concrete uids.
@@ -229,9 +277,20 @@ export function getInvolvedUids(
         }
         break
       }
-      case 'creator':
-        if (project.ownerId) out.add(project.ownerId)
+      case 'project_role': {
+        const assigned = project.roleAssignments?.[actor.roleId]
+        if (Array.isArray(assigned)) {
+          for (const uid of assigned) if (uid) out.add(uid)
+        } else if (assigned) {
+          out.add(assigned)
+        }
         break
+      }
+      case 'creator': {
+        const creator = project.createdBy ?? project.ownerId
+        if (creator) out.add(creator)
+        break
+      }
     }
   }
   for (const action of stage.actions) collect(action.actor)
@@ -360,12 +419,14 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
       case 'mark_complete':
         return action!.effect.toStage
       case 'set_status':
+      case 'assign_project_role':
         return project.currentStageId ?? stage.id
     }
   }
 
   const toStage = effectTargetStage()
-  const stayingAtStage = action.effect.kind === 'set_status'
+  const stayingAtStage =
+    action.effect.kind === 'set_status' || action.effect.kind === 'assign_project_role'
 
   // Standard transition (unless we're only changing status).
   if (!stayingAtStage) {
@@ -445,6 +506,11 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
       )
       break
     }
+    case 'assign_project_role':
+      // RESERVED — no stage-action wiring in 2d. Role assignment happens via the
+      // sidebar (setProjectRole). Declared so the switch stays total; stays on
+      // the current stage and writes nothing extra here.
+      break
   }
 
   if (events.length) {
@@ -507,7 +573,12 @@ function actorOnlyMatch(actor: ActorRef, user: User, project: Project): boolean 
     case 'team_role':
       // Cannot verify without teams — trust the modal-side gate.
       return true
+    case 'project_role': {
+      const assigned = project.roleAssignments?.[actor.roleId]
+      if (!assigned) return false
+      return Array.isArray(assigned) ? assigned.includes(user.uid) : assigned === user.uid
+    }
     case 'creator':
-      return project.ownerId === user.uid
+      return (project.createdBy ?? project.ownerId) === user.uid
   }
 }

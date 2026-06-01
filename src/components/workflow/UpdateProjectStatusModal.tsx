@@ -3,7 +3,11 @@ import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
 import { useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { updateProjectStatus } from '../../lib/firestore'
-import { SIMPLE_STATUS_OPTIONS, STATUS_DISPLAY, STATUS_OPTIONS } from '../../lib/projectStatus'
+import {
+  SIMPLE_STATUS_OPTIONS,
+  STATUS_OPTIONS,
+  resolveStatusDisplay,
+} from '../../lib/projectStatus'
 import type { Project, ProjectStatus } from '../../types/models'
 import type { FlowType } from '../../types/workflow'
 
@@ -54,18 +58,28 @@ export default function UpdateProjectStatusModal({
 }: Props) {
   const { user, profile } = useAuth()
   const workflow = useProjectWorkflow(project)
-  const baseOptions = statusOptionsForFlowType(workflow?.flowType)
-  // Filter to the workflow-declared outcomes when provided. We keep the
-  // current status visible even if it isn't in the allowed list — without
-  // it the "CURRENT" indicator disappears and the user can't see what
+  const currentStatus = String(project.status ?? 'in_progress')
+  // Phase 2d: prefer the workflow's author-configured statusOptions; otherwise
+  // fall back to the per-flowType canonical defaults.
+  const authorIds = workflow?.statusOptions?.length
+    ? [...workflow.statusOptions].sort((a, b) => a.order - b.order).map((o) => o.id)
+    : null
+  // When opened from a `set_status` action, allowedStatuses carries canonical
+  // ProjectStatus ids — source from the canonical flow-type set so the
+  // intersection below isn't emptied by author-renamed status ids. The direct
+  // pill-click path (no allowedStatuses) uses the author-configured set.
+  const baseOptions: string[] = allowedStatuses
+    ? statusOptionsForFlowType(workflow?.flowType)
+    : (authorIds ?? statusOptionsForFlowType(workflow?.flowType))
+  // Filter to the workflow-declared outcomes when provided. Keep the current
+  // status visible even if it isn't in the allowed list, so the user sees what
   // they're changing from.
   const options = allowedStatuses
     ? baseOptions.filter(
-        (s) => allowedStatuses.includes(s) || s === (project.status ?? 'in_progress'),
+        (s) => allowedStatuses.includes(s as ProjectStatus) || s === currentStatus,
       )
     : baseOptions
-  const currentStatus = (project.status ?? 'in_progress') as ProjectStatus
-  const [next, setNext] = useState<ProjectStatus>(currentStatus)
+  const [next, setNext] = useState<string>(currentStatus)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -135,7 +149,7 @@ export default function UpdateProjectStatusModal({
           <p className="text-sm font-medium text-fg-muted">Status</p>
           <div className="grid gap-2 sm:grid-cols-2">
             {options.map((opt) => {
-              const meta = STATUS_DISPLAY[opt]
+              const meta = resolveStatusDisplay(opt, workflow)
               const active = next === opt
               const isCurrent = currentStatus === opt
               return (

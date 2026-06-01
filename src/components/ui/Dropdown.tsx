@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 export interface DropdownOption {
   value: string
@@ -21,6 +22,15 @@ interface Props {
   displayValue?: string
 }
 
+const GAP = 6
+
+// Menu is rendered in a portal with fixed positioning so it escapes any
+// ancestor's `overflow`/clipping and flips above the trigger when there isn't
+// room below — mirrors the proven UserPicker pattern.
+type MenuPos =
+  | { mode: 'below'; top: number; left?: number; right?: number; width: number }
+  | { mode: 'above'; bottom: number; left?: number; right?: number; width: number }
+
 export default function Dropdown({
   value,
   onChange,
@@ -34,12 +44,51 @@ export default function Dropdown({
   displayValue,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<MenuPos | null>(null)
+
+  // Estimate menu height for the flip decision (rows are ~36px, capped at the
+  // menu's max-height of 288px) so we flip before the browser clips it.
+  const estHeight = Math.min(options.length * 36 + 8, 288)
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null)
+      return
+    }
+    const measure = () => {
+      const t = triggerRef.current
+      if (!t) return
+      const r = t.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - r.bottom
+      const spaceAbove = r.top
+      const flip = spaceBelow < estHeight + GAP && spaceAbove > spaceBelow
+      const horiz =
+        align === 'right'
+          ? { right: window.innerWidth - r.right }
+          : { left: r.left }
+      setPos(
+        flip
+          ? { mode: 'above', bottom: window.innerHeight - r.top, width: r.width, ...horiz }
+          : { mode: 'below', top: r.bottom, width: r.width, ...horiz },
+      )
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [open, estHeight, align])
 
   useEffect(() => {
     if (!open) return
     const onMouse = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      const t = e.target as Node
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false)
@@ -54,17 +103,29 @@ export default function Dropdown({
 
   const current = options.find((o) => o.value === value)
 
+  const menuStyle: React.CSSProperties = {
+    position: 'fixed',
+    minWidth: pos?.width,
+    zIndex: 60,
+    ...(pos && 'left' in pos && pos.left !== undefined ? { left: pos.left } : {}),
+    ...(pos && 'right' in pos && pos.right !== undefined ? { right: pos.right } : {}),
+    ...(pos?.mode === 'above'
+      ? { bottom: pos.bottom + GAP }
+      : pos?.mode === 'below'
+        ? { top: pos.top + GAP }
+        : {}),
+  }
+
   return (
-    <div ref={wrapRef} className={`relative ${className ?? ''}`}>
+    <div className={`relative ${className ?? ''}`}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         title={disabled ? disabledTooltip : undefined}
         className={`flex w-full items-center gap-2 rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm transition focus:border-brand-edge focus:bg-fill-3 focus:outline-none focus:ring-2 focus:ring-brand-ring ${
-          disabled
-            ? 'cursor-not-allowed text-fg-faint'
-            : 'text-fg-muted hover:bg-fill-3'
+          disabled ? 'cursor-not-allowed text-fg-faint' : 'text-fg-muted hover:bg-fill-3'
         }`}
       >
         {current?.leading}
@@ -86,53 +147,55 @@ export default function Dropdown({
         </svg>
       </button>
 
-      {open && !disabled && (
-        <div
-          role="listbox"
-          className={`absolute top-full z-30 mt-1.5 min-w-full overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl ${
-            align === 'right' ? 'right-0' : 'left-0'
-          } ${menuClassName ?? ''}`}
-        >
-          <div className="max-h-72 overflow-y-auto">
-            {options.map((opt) => {
-              const active = opt.value === value
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => {
-                    onChange(opt.value)
-                    setOpen(false)
-                  }}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${
-                    active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
-                  }`}
-                >
-                  {opt.leading}
-                  <span className="flex-1 truncate">{opt.label}</span>
-                  {active && (
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="text-brand"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {open && !disabled && pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            style={menuStyle}
+            className={`overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl ${menuClassName ?? ''}`}
+          >
+            <div className="max-h-72 overflow-y-auto">
+              {options.map((opt) => {
+                const active = opt.value === value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => {
+                      onChange(opt.value)
+                      setOpen(false)
+                    }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${
+                      active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
+                    }`}
+                  >
+                    {opt.leading}
+                    <span className="flex-1 truncate">{opt.label}</span>
+                    {active && (
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-brand"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

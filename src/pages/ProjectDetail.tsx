@@ -12,6 +12,8 @@ import { addProjectAttachment, tenantDoc } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
+import ProjectRolesSection from '../components/project/ProjectRolesSection'
+import ProjectFieldsSection from '../components/project/ProjectFieldsSection'
 import StageBanner from '../components/workflow/StageBanner'
 import NewTaskModal from '../components/admin/NewTaskModal'
 import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
@@ -157,8 +159,14 @@ export default function ProjectDetail() {
   const { users } = useAllUsers()
   const { teams } = useAllTeams()
   const { tasks: projectTasks } = useProjectTasks(projectId)
-  const { isAdmin, isSuperAdmin, isProjectOwner, isProjectLead, canUpdateStatus } =
-    usePermissions(projectId)
+  const {
+    isAdmin,
+    isSuperAdmin,
+    isProjectOwner,
+    isProjectLead,
+    canUpdateStatus,
+    canEditProjectMeta,
+  } = usePermissions(projectId)
   const orgLeadRoleName = useLeadRoleName()
   const workflow = useProjectWorkflow(project)
   // Per-workflow lead label, falling back to the org-wide one for fresh
@@ -243,7 +251,8 @@ export default function ProjectDetail() {
     )
   }
 
-  const owner = userById.get(project.ownerId)
+  // Phase 2d: owner retired — show the creator (createdBy) as a muted attribution.
+  const creator = userById.get(project.createdBy)
   const projectLeadId = project.leadUid ?? null
   const vh = projectLeadId ? userById.get(projectLeadId) : undefined
   const submissionDeadline = project.submissionDate ?? project.deadline
@@ -320,6 +329,7 @@ export default function ProjectDetail() {
             <h1 className="text-3xl font-semibold tracking-tight text-fg">{project.title}</h1>
             <ProjectStatusPill
               status={project.status}
+              workflow={workflow}
               onClick={canUpdateStatus ? () => setStatusUpdateOpen(true) : undefined}
             />
           </div>
@@ -332,15 +342,6 @@ export default function ProjectDetail() {
             <p className="mt-2 max-w-2xl text-fg-muted">{project.description}</p>
           )}
           <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-fg-subtle">
-            {owner && (
-              <div className="flex items-center gap-2">
-                <Avatar user={owner} size={22} />
-                <span>
-                  <span className="text-fg-muted">{owner.displayName}</span>
-                  <span className="ml-1 text-fg-subtle">· Owner</span>
-                </span>
-              </div>
-            )}
             {vh && (
               <div className="flex items-center gap-2">
                 <Avatar user={vh} size={22} />
@@ -361,6 +362,9 @@ export default function ProjectDetail() {
             <span>
               {project.teamIds?.length ?? 0} team
               {(project.teamIds?.length ?? 0) === 1 ? '' : 's'}
+            </span>
+            <span className="text-fg-faint">
+              Created by {creator?.displayName ?? '—'} · {formatDate(project.createdAt)}
             </span>
           </div>
 
@@ -575,15 +579,21 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        <div>
+        <div className="space-y-6">
+          <ProjectRolesSection
+            project={project}
+            workflow={workflow}
+            userById={userById}
+            canEdit={canEditProjectMeta}
+            actorId={user?.uid ?? ''}
+            actorName={profile?.displayName ?? user?.email ?? 'User'}
+          />
+
+          <div>
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
             Details
           </h2>
           <div className="rounded-2xl border border-line bg-card p-5 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-fg-subtle">Owner</span>
-              <span className="text-fg-strong">{owner?.displayName ?? '—'}</span>
-            </div>
             {/* Lead row: shown for any workflow that has the concept (collab
              * + individual). Basic-flow projects have no lead. */}
             {workflow && workflow.flowType !== 'basic' && (
@@ -626,6 +636,16 @@ export default function ProjectDetail() {
               <span className="text-fg-strong">{formatDate(project.updatedAt)}</span>
             </div>
           </div>
+          </div>
+
+          <ProjectFieldsSection
+            project={project}
+            workflow={workflow}
+            userById={userById}
+            canEdit={canEditProjectMeta}
+            actorId={user?.uid ?? ''}
+            actorName={profile?.displayName ?? user?.email ?? 'User'}
+          />
         </div>
       </div>
       )}
@@ -636,7 +656,8 @@ export default function ProjectDetail() {
           onClose={() => setManageOpen(false)}
           projectId={projectId}
           projectTitle={project.title}
-          projectOwnerId={project.ownerId}
+          roleAssignments={project.roleAssignments}
+          createdBy={project.createdBy ?? project.ownerId}
           currentTeamIds={project.teamIds ?? []}
         />
       )}

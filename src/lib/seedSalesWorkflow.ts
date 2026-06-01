@@ -13,6 +13,7 @@
  */
 import {  getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { tenantDoc } from './firestore'
+import { defaultStatusOptions } from './projectStatus'
 import type { Workflow } from '../types/workflow'
 
 export const SALES_DEFAULT_WORKFLOW_ID = 'sales-default'
@@ -33,6 +34,39 @@ export function buildSalesDefaultWorkflow(): Omit<
     creationModalDescription:
       'Tracked by a single lead. Pick one now to auto-assign, or leave blank to allocate later.',
     recommendedLeads: [],
+    // Phase 2d.
+    projectRoles: [
+      { id: 'account_manager', label: 'Account Manager', multiple: false, required: false, order: 0 },
+    ],
+    projectFields: {
+      customFields: [
+        {
+          id: 'deal_value',
+          label: 'Deal Value',
+          type: 'currency',
+          required: false,
+          surfaces: ['sidebar', 'listColumn', 'filter'],
+          order: 0,
+        },
+        {
+          id: 'region',
+          label: 'Region',
+          type: 'select',
+          required: false,
+          surfaces: ['createForm', 'sidebar', 'filter'],
+          order: 1,
+          options: [
+            { id: 'north', label: 'North', color: 'cool' },
+            { id: 'south', label: 'South', color: 'mint' },
+            { id: 'east', label: 'East', color: 'warn' },
+            { id: 'west', label: 'West', color: 'brandtone' },
+          ],
+        },
+      ],
+    },
+    statusOptions: defaultStatusOptions(),
+    // Mirrors the legacy individual rule (lead). creator + admins pass via baseline.
+    canUpdateStatusActors: [{ kind: 'pipeline_role', role: 'lead' }],
     stages: [
       {
         id: 'new_lead',

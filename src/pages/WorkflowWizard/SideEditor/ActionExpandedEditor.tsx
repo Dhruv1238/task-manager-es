@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import type { Stage, StageAction } from '../../../types/workflow'
-import ActorPicker from './ActorPicker'
+import type { ActorRef, ProjectRoleDef, Stage, StageAction } from '../../../types/workflow'
+import ActionActorsPopover from './ActionActorsPopover'
 import EffectPicker from './EffectPicker'
 import InputsEditor from './InputsEditor'
 
@@ -9,6 +9,7 @@ interface Props {
   stage: Stage
   allStages: Stage[]
   leadRoleName: string
+  projectRoles: ProjectRoleDef[]
   onChange: (next: StageAction) => void
   onDone: () => void
   disabled?: boolean
@@ -23,10 +24,20 @@ export default function ActionExpandedEditor({
   stage,
   allStages,
   leadRoleName,
+  projectRoles,
   onChange,
   onDone,
   disabled,
 }: Props) {
+  // Map the popover's flat allowed-set back to actor (canonical) + alsoAllow.
+  function setActors(next: ActorRef[]) {
+    const [first, ...rest] = next
+    onChange({
+      ...action,
+      actor: first ?? { kind: 'global_role', role: 'super_admin' },
+      alsoAllow: rest.length ? rest : undefined,
+    })
+  }
   // Auto-inject the user_picker input when the effect becomes assign_lead. We
   // do it as an effect so the InputsEditor renders the locked row on the same
   // tick as the dropdown change.
@@ -97,35 +108,18 @@ export default function ActionExpandedEditor({
       </div>
 
       <fieldset disabled={disabled} className="space-y-4">
-        <ActorPicker
-          value={action.actor}
-          onChange={(actor) => onChange({ ...action, actor })}
-          leadRoleName={leadRoleName}
-        />
-
-        <label className="flex items-center gap-2 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            checked={Boolean(
-              action.alsoAllow?.some(
-                (a) => a.kind === 'global_role' && a.role === 'super_admin',
-              ),
-            )}
-            onChange={(e) => {
-              const others =
-                action.alsoAllow?.filter(
-                  (a) => !(a.kind === 'global_role' && a.role === 'super_admin'),
-                ) ?? []
-              onChange({
-                ...action,
-                alsoAllow: e.target.checked
-                  ? [...others, { kind: 'global_role', role: 'super_admin' }]
-                  : others,
-              })
-            }}
+        <div className="space-y-2">
+          <label className="block text-xs font-medium uppercase tracking-wider text-fg-subtle">
+            Who can do this?
+          </label>
+          <ActionActorsPopover
+            value={[action.actor, ...(action.alsoAllow ?? [])]}
+            onChange={setActors}
+            projectRoles={projectRoles}
+            leadRoleName={leadRoleName}
+            disabled={disabled}
           />
-          Also allow super-admin to step in (override).
-        </label>
+        </div>
 
         <EffectPicker
           value={action.effect}

@@ -29,7 +29,9 @@ export default function ProjectsByStatus({
   subtitle,
 }: Props) {
   const data = useMemo(() => {
-    const counts = new Map<ProjectStatus, number>()
+    // Phase 2d: project.status is now a string; this chart groups only over the
+    // canonical STATUS_OPTIONS, so any author-custom status is simply not counted.
+    const counts = new Map<string, number>()
     for (const s of STATUS_OPTIONS) counts.set(s, 0)
     for (const p of projects) counts.set(p.status, (counts.get(p.status) ?? 0) + 1)
     return STATUS_OPTIONS.map((s) => ({

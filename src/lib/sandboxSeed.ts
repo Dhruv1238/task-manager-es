@@ -23,7 +23,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
-import { IS_SANDBOX, tenantCol, tenantDoc } from './firestore'
+import { IS_SANDBOX, computeAccessKeys, tenantCol, tenantDoc } from './firestore'
 import { captureEntry } from './leadCapture'
 import { COLLAB_DEFAULT_WORKFLOW_ID, seedCollabWorkflow } from './seedCollabWorkflow'
 import type { OrgStructure } from '../types/models'
@@ -305,6 +305,10 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
   const adidasId = cryptoRandomId()
   const offsiteId = cryptoRandomId()
 
+  // Phase 2d: per-project demo values for the collab-default roles
+  // (admin_head / functional_head) + custom fields (lead_poc_name /
+  // lead_category) so the new sidebar Roles + Details sections and the list
+  // columns/filters render populated during the tour.
   const projects = [
     {
       id: diageoId,
@@ -313,6 +317,8 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
         'On-trade activation pitch for the Diageo Q4 push. Premium-led creative, two TVC cuts + social, OOH for top-12 metros. Brief in, first-cut due before client review.',
       daysAgo: 9,
       withSpecialistTeam: true,
+      poc: 'Anita Desai',
+      category: 'indian',
     },
     {
       id: adidasId,
@@ -321,6 +327,8 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
         'RFP response for the Adidas footwear launch event. 800-pax flagship night + influencer activation. Looking for venue concept, run-of-show, and brand-aligned production design.',
       daysAgo: 3,
       withSpecialistTeam: true,
+      poc: 'Marcus Lee',
+      category: 'international',
     },
     {
       id: offsiteId,
@@ -329,6 +337,8 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
         "Two-day Q1 offsite for the studio. Half-day strategy session, evening dinner + activity, hotel block of 35. Owned internally — no client review gates, but we're using the same workflow so planning stays tight.",
       daysAgo: 12,
       withSpecialistTeam: false,
+      poc: 'Studio Ops',
+      category: 'indian',
     },
   ] as const
 
@@ -338,7 +348,16 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
     const ref = tenantDoc('projects', p.id)
     const created = Timestamp.fromMillis(Date.now() - p.daysAgo * 86_400_000)
     const teamIds: string[] = p.withSpecialistTeam && specialistTeam ? [specialistTeam.id] : []
-    const accessKeys = [ctx.uid, ...teamIds]
+    // Phase 2d: assign the collab-default roles to personas so the demo shows
+    // real people (and role-based visibility) — admin_head (single) to Aarti,
+    // functional_head (multiple) to Rohan. accessKeys derives from these +
+    // teamIds + the creator so role-holders who aren't on an attached team
+    // still see the project.
+    const roleAssignments: Record<string, string | string[]> = {
+      admin_head: 'persona-vh-primary',
+      functional_head: ['persona-ct-lead'],
+    }
+    const accessKeys = computeAccessKeys(roleAssignments, teamIds, ctx.uid)
     batch.set(ref, {
       title: p.title,
       titleLower: p.title.toLowerCase(),
@@ -348,6 +367,8 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
       status: 'in_progress',
       teamIds,
       accessKeys,
+      roleAssignments,
+      fields: { lead_poc_name: p.poc, lead_category: p.category },
       attachments: [],
       workflowId,
       currentStageId: firstStageId,

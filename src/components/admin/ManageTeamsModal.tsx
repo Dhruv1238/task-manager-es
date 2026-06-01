@@ -13,7 +13,10 @@ interface Props {
   onClose: () => void
   projectId: string
   projectTitle: string
-  projectOwnerId: string
+  // Phase 2d: owner retired. accessKeys recomputes from role holders + creator,
+  // so the modal forwards the project's current roleAssignments + createdBy.
+  roleAssignments?: Record<string, string | string[]>
+  createdBy?: string
   currentTeamIds: string[]
 }
 
@@ -56,7 +59,8 @@ export default function ManageTeamsModal({
   onClose,
   projectId,
   projectTitle,
-  projectOwnerId,
+  roleAssignments,
+  createdBy,
   currentTeamIds,
 }: Props) {
   const { teams } = useAllTeams()
@@ -123,7 +127,8 @@ export default function ManageTeamsModal({
       await setProjectTeams({
         projectId,
         projectTitle,
-        ownerId: projectOwnerId,
+        roleAssignments,
+        createdBy,
         previousTeamIds: currentTeamIds,
         newTeamIds: Array.from(selected),
         actorId: user.uid,

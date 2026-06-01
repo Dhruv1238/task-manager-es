@@ -12,7 +12,13 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { tenantDoc } from './firestore'
-import type { Workflow, WorkflowRegistry } from '../types/workflow'
+import type {
+  CustomFieldDef,
+  ProjectRoleDef,
+  Workflow,
+  WorkflowRegistry,
+  WorkflowStatusOption,
+} from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
 import { buildBasicWorkflow } from './seedBasicWorkflow'
 import { buildCollabDefaultWorkflow } from './seedCollabWorkflow'
@@ -110,6 +116,14 @@ export function cloneTemplate(
     creationModalCardSubtitle: source.creationModalCardSubtitle,
     creationModalDescription: source.creationModalDescription,
     recommendedLeads: source.recommendedLeads ?? [],
+    // Phase 2d: carry the template's roles / fields / statuses into the clone
+    // (deep-copied so editing the clone never mutates the seed builder output).
+    projectRoles: source.projectRoles?.map((r) => ({ ...r })),
+    projectFields: source.projectFields
+      ? { customFields: source.projectFields.customFields?.map((f) => ({ ...f })) }
+      : undefined,
+    statusOptions: source.statusOptions?.map((s) => ({ ...s })),
+    canUpdateStatusActors: source.canUpdateStatusActors?.map((a) => ({ ...a })),
     stages: source.stages.map((s) => ({ ...s, actions: s.actions.map((a) => ({ ...a })) })),
   }
 }
@@ -121,6 +135,13 @@ export function buildSkeletonFromStageNames(
   description: string,
   flowType: Workflow['flowType'],
   stageNames: string[],
+  // Phase 2d: optional roles / custom fields / statuses collected by the
+  // wizard's new steps. Threaded onto the draft so they reach the editor + save.
+  extras?: {
+    projectRoles?: ProjectRoleDef[]
+    customFields?: CustomFieldDef[]
+    statusOptions?: WorkflowStatusOption[]
+  },
 ): Draft {
   const used = new Set<string>()
   const stages = stageNames.map((name, idx) => {
@@ -149,6 +170,9 @@ export function buildSkeletonFromStageNames(
     description: description.trim() || undefined,
     recommendedLeads: [],
     stages,
+    ...(extras?.projectRoles ? { projectRoles: extras.projectRoles } : {}),
+    ...(extras?.customFields ? { projectFields: { customFields: extras.customFields } } : {}),
+    ...(extras?.statusOptions ? { statusOptions: extras.statusOptions } : {}),
   }
 }
 
@@ -233,6 +257,13 @@ export async function saveWorkflowAndMaybeActivate(
       description: input.draft.description,
       creationModalCardSubtitle: input.draft.creationModalCardSubtitle,
       creationModalDescription: input.draft.creationModalDescription,
+      // Phase 2d: persist roles / custom fields / statuses / status-permission.
+      // Default to empty so undefined never reaches Firestore and readers stay
+      // safe; the pinned snapshot on new projects then carries these too.
+      projectRoles: input.draft.projectRoles ?? [],
+      projectFields: input.draft.projectFields ?? { customFields: [] },
+      statusOptions: input.draft.statusOptions ?? [],
+      canUpdateStatusActors: input.draft.canUpdateStatusActors ?? [],
       version: newVersion,
       lastEditedAt: Timestamp.now(),
       lastEditedBy: input.adminUid,
@@ -321,6 +352,13 @@ export async function duplicateSystemWorkflow(
     creationModalCardSubtitle: source.creationModalCardSubtitle,
     creationModalDescription: source.creationModalDescription,
     recommendedLeads: source.recommendedLeads ?? [],
+    // Phase 2d: carry roles / fields / statuses into the duplicate.
+    projectRoles: source.projectRoles?.map((r) => ({ ...r })),
+    projectFields: source.projectFields
+      ? { customFields: source.projectFields.customFields?.map((f) => ({ ...f })) }
+      : undefined,
+    statusOptions: source.statusOptions?.map((s) => ({ ...s })),
+    canUpdateStatusActors: source.canUpdateStatusActors?.map((a) => ({ ...a })),
     stages: source.stages.map((s) => ({ ...s, actions: s.actions.map((a) => ({ ...a })) })),
   }
   return saveWorkflowAndMaybeActivate({

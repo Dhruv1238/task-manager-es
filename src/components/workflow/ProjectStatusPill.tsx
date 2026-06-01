@@ -1,8 +1,13 @@
 import type { ProjectStatus } from '../../types/models'
-import { STATUS_DISPLAY } from '../../lib/projectStatus'
+import type { Workflow } from '../../types/workflow'
+import { resolveStatusDisplay } from '../../lib/projectStatus'
 
 interface Props {
-  status: ProjectStatus
+  // Phase 2d: widened to string for author-configured status ids.
+  status: ProjectStatus | string
+  // Phase 2d: the project's pinned workflow, so author-defined statusOptions
+  // (label + colour) drive the pill. Falls back to the hardcoded set when omitted.
+  workflow?: Workflow | null
   // When clickable, the pill renders as a button and calls onClick. Otherwise
   // it's a passive span (e.g., on the Projects list cards).
   onClick?: () => void
@@ -11,8 +16,8 @@ interface Props {
 
 // Single source of truth for rendering the project status. Clickable variant
 // opens the UpdateProjectStatusModal; non-clickable is a read-only badge.
-export default function ProjectStatusPill({ status, onClick, size = 'md' }: Props) {
-  const meta = STATUS_DISPLAY[status]
+export default function ProjectStatusPill({ status, workflow, onClick, size = 'md' }: Props) {
+  const meta = resolveStatusDisplay(status, workflow)
   const sizeCls =
     size === 'sm'
       ? 'px-2 py-0.5 text-[11px]'

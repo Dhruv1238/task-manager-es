@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import type { Project, User } from '../../types/models'
+import type { CustomFieldDef } from '../../types/workflow'
 import ProjectStatusPill from '../workflow/ProjectStatusPill'
 import UnreadChatBadge from './UnreadChatBadge'
-import Avatar from '../ui/Avatar'
+import FieldValue from '../fields/FieldValue'
 import StagePill from './StagePill'
 import WorkflowBadge from './WorkflowBadge'
 import { useProjectWorkflow } from '../../contexts/AppConfigContext'
@@ -17,6 +18,10 @@ interface Props {
   // single workflow is active (e.g. basic-only tenant), the column is
   // redundant and the table omits it.
   showWorkflowColumn: boolean
+  // Phase 2d: dynamic columns, one per custom field with 'listColumn' in its
+  // surfaces, unioned across the visible projects' pinned workflows by the
+  // parent. Rendered blank where a project's workflow lacks the field.
+  listColumnFields: CustomFieldDef[]
 }
 
 export default function ProjectsTable({
@@ -25,6 +30,7 @@ export default function ProjectsTable({
   chatEnabled,
   chatLastReadAt,
   showWorkflowColumn,
+  listColumnFields,
 }: Props) {
   const navigate = useNavigate()
 
@@ -48,9 +54,11 @@ export default function ProjectsTable({
               <th scope="col" className="px-4 py-3">
                 Stage
               </th>
-              <th scope="col" className="px-4 py-3">
-                Owner
-              </th>
+              {listColumnFields.map((f) => (
+                <th key={f.id} scope="col" className="px-4 py-3 whitespace-nowrap">
+                  {f.label}
+                </th>
+              ))}
               <th scope="col" className="px-4 py-3 whitespace-nowrap">
                 Deadline
               </th>
@@ -67,7 +75,6 @@ export default function ProjectsTable({
           </thead>
           <tbody className="divide-y divide-line-subtle">
             {projects.map((p) => {
-              const owner = userById.get(p.ownerId)
               const overdue = isOverdue(p)
               const teamCount = p.teamIds?.length ?? 0
               const fileCount = p.attachments?.length ?? 0
@@ -135,7 +142,7 @@ export default function ProjectsTable({
                   </td>
 
                   <td className="px-4 py-3 align-middle">
-                    <ProjectStatusPill status={p.status} size="sm" />
+                    <ProjectStatusPill status={p.status} workflow={p.pinnedWorkflow} size="sm" />
                   </td>
 
                   {showWorkflowColumn && (
@@ -147,18 +154,16 @@ export default function ProjectsTable({
                     <StagePill project={p} />
                   </td>
 
-                  <td className="px-4 py-3 align-middle">
-                    {owner ? (
-                      <div className="flex items-center gap-2">
-                        <Avatar user={owner} size={22} />
-                        <span className="max-w-40 truncate text-xs text-fg-muted">
-                          {owner.displayName || owner.email}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-fg-faint">No owner</span>
-                    )}
-                  </td>
+                  {listColumnFields.map((f) => (
+                    <td key={f.id} className="px-4 py-3 align-middle text-xs">
+                      <FieldValue
+                        field={f}
+                        value={p.fields?.[f.id]}
+                        density="cell"
+                        resolveUser={(uid) => userById.get(uid)}
+                      />
+                    </td>
+                  ))}
 
                   <td className="px-4 py-3 align-middle whitespace-nowrap">
                     <span

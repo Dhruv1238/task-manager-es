@@ -25,6 +25,12 @@ import Dropdown, { type DropdownOption } from '../components/ui/Dropdown'
 import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
 import UnreadChatBadge from '../components/projects/UnreadChatBadge'
 import ProjectsTable from '../components/projects/ProjectsTable'
+import ProjectFilterBar from '../components/projects/ProjectFilterBar'
+import {
+  hasActiveFilters,
+  matchesCustomFilters,
+  type FieldFilters,
+} from '../components/projects/projectFilterUtils'
 import StagePill from '../components/projects/StagePill'
 import WorkflowBadge from '../components/projects/WorkflowBadge'
 import {
@@ -35,6 +41,7 @@ import {
 import { useChatEnabled } from '../contexts/AppConfigContext'
 import { STATUS_DISPLAY, STATUS_OPTIONS } from '../lib/projectStatus'
 import type { Project, ProjectStatus, User } from '../types/models'
+import type { CustomFieldDef } from '../types/workflow'
 
 const PAGE_SIZE = 24
 
@@ -333,6 +340,41 @@ export default function Projects() {
     return m
   }, [users])
 
+  // Phase 2d: custom-field filters (client-side over the loaded page) + dynamic
+  // list columns. filterFields come from the active workflows (stable controls);
+  // listColumnFields union over the loaded projects' pinned snapshots.
+  const [fieldFilters, setFieldFilters] = useState<FieldFilters>({})
+  const filterFields = useMemo(() => {
+    const seen = new Map<string, CustomFieldDef>()
+    for (const wf of activeWorkflows) {
+      for (const f of wf.projectFields?.customFields ?? []) {
+        if (!f.deprecated && f.surfaces.includes('filter') && !seen.has(f.id)) seen.set(f.id, f)
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.order - b.order)
+  }, [activeWorkflows])
+  const listColumnFields = useMemo(() => {
+    const seen = new Map<string, CustomFieldDef>()
+    for (const p of items) {
+      for (const f of p.pinnedWorkflow?.projectFields?.customFields ?? []) {
+        if (!f.deprecated && f.surfaces.includes('listColumn') && !seen.has(f.id)) seen.set(f.id, f)
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.order - b.order)
+  }, [items])
+  const displayedItems = useMemo(
+    () => items.filter((p) => matchesCustomFilters(p, filterFields, fieldFilters)),
+    [items, filterFields, fieldFilters],
+  )
+  const filtersActive = hasActiveFilters(filterFields, fieldFilters)
+  useEffect(() => {
+    if (filtersActive && hasMore) {
+      console.warn(
+        '[Projects] Custom-field filters are applied within the loaded page only; more results exist — load more to widen the filter.',
+      )
+    }
+  }, [filtersActive, hasMore])
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -407,6 +449,8 @@ export default function Projects() {
         </div>
       </div>
 
+      <ProjectFilterBar fields={filterFields} filters={fieldFilters} onChange={setFieldFilters} />
+
       {loading && items.length === 0 ? (
         <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
           Loading projects…
@@ -436,20 +480,46 @@ export default function Projects() {
             </p>
           </div>
         )
+      ) : displayedItems.length === 0 ? (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
+            No projects match the current filters
+            {hasMore ? ' on the loaded page' : ''}.
+          </div>
+          {hasMore && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading…' : 'Load more to widen the filter'}
+              </button>
+            </div>
+          )}
+        </div>
       ) : (
         <>
+          {filtersActive && hasMore && (
+            <div className="mb-4 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-4 py-2.5 text-xs text-tone-warn-fg">
+              Filtered within the {items.length} loaded project{items.length === 1 ? '' : 's'}.
+              Load more to widen the filter.
+            </div>
+          )}
           {viewMode === 'table' ? (
             <ProjectsTable
-              projects={items}
+              projects={displayedItems}
               userById={userById}
               showWorkflowColumn={activeWorkflows.length > 1}
               chatEnabled={chatEnabled}
               chatLastReadAt={profile?.chatLastReadAt}
+              listColumnFields={listColumnFields}
             />
           ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((p) => {
-              const owner = userById.get(p.ownerId)
+            {displayedItems.map((p) => {
+              const creator = userById.get(p.createdBy)
               const overdue = isOverdue(p)
 
               return (
@@ -467,7 +537,7 @@ export default function Projects() {
                           lastReadAt={profile?.chatLastReadAt?.[p.id]}
                         />
                       )}
-                      <ProjectStatusPill status={p.status} size="sm" />
+                      <ProjectStatusPill status={p.status} workflow={p.pinnedWorkflow} size="sm" />
                     </div>
                   </div>
 
@@ -486,16 +556,16 @@ export default function Projects() {
                   )}
 
                   <div className="mt-4 flex items-center gap-2 text-xs text-fg-muted">
-                    {owner ? (
+                    {creator ? (
                       <>
-                        <Avatar user={owner} size={22} />
+                        <Avatar user={creator} size={22} />
                         <span className="truncate">
-                          <span className="text-fg-muted">{owner.displayName}</span>
-                          <span className="ml-1 text-fg-subtle">· Owner</span>
+                          <span className="text-fg-muted">{creator.displayName}</span>
+                          <span className="ml-1 text-fg-subtle">· Created by</span>
                         </span>
                       </>
                     ) : (
-                      <span className="text-fg-subtle">No owner</span>
+                      <span className="text-fg-subtle">—</span>
                     )}
                   </div>
 

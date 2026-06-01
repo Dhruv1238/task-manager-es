@@ -55,6 +55,12 @@ export default function WorkflowEdit() {
     creationModalCardSubtitle: workflow.creationModalCardSubtitle,
     creationModalDescription: workflow.creationModalDescription,
     recommendedLeads: workflow.recommendedLeads ?? [],
+    // Phase 2d: carry roles / fields / statuses into the editable draft so
+    // edits don't silently drop them on save.
+    projectRoles: workflow.projectRoles,
+    projectFields: workflow.projectFields,
+    statusOptions: workflow.statusOptions,
+    canUpdateStatusActors: workflow.canUpdateStatusActors,
     stages: workflow.stages.map((s) => ({ ...s, actions: s.actions.map((a) => ({ ...a })) })),
   }
 

@@ -28,6 +28,10 @@ export interface ValidationIssue {
     | { kind: 'stage'; stageId: string }
     | { kind: 'action'; stageId: string; actionId: string }
     | { kind: 'input'; stageId: string; actionId: string; inputId: string }
+    // Phase 2d: the People & Roles / Project Fields / Statuses tabs.
+    | { kind: 'role'; roleId: string }
+    | { kind: 'field'; fieldId: string }
+    | { kind: 'status' }
 }
 
 export interface ValidationResult {
@@ -95,6 +99,8 @@ export function validateWorkflow(
   for (const stage of workflow.stages) {
     validateStage(stage, workflow, org, errors, warnings)
   }
+  // Phase 2d: roles / custom fields / statuses (the new authoring tabs).
+  validateExtras(workflow, errors, warnings)
   // `warnings` is captured as an alias for the same array so validateStage
   // can push into it via the parameter — kept named explicitly for clarity at
   // call site.
@@ -157,7 +163,7 @@ function validateStage(
       })
     }
     actionIds.add(action.id)
-    validateAction(action, stage, workflow, org, errors)
+    validateAction(action, stage, workflow, org, errors, warnings)
   }
 }
 
@@ -167,6 +173,7 @@ function validateAction(
   workflow: Workflow,
   org: OrgStructure,
   errors: ValidationIssue[],
+  warnings: ValidationIssue[],
 ): void {
   if (!action.label.trim()) {
     errors.push({
@@ -177,9 +184,21 @@ function validateAction(
     })
   }
 
-  validateActor(action.actor, action, stage, org, errors)
+  validateActor(action.actor, action, stage, workflow, org, errors)
   for (const allow of action.alsoAllow ?? []) {
-    validateActor(allow, action, stage, org, errors)
+    validateActor(allow, action, stage, workflow, org, errors)
+  }
+
+  // Phase 2d: warn when only super-admins can perform an action (the author
+  // likely unticked everyone). Not an error — a super-admin-only action is valid.
+  const actorSet = [action.actor, ...(action.alsoAllow ?? [])]
+  if (actorSet.every((a) => a.kind === 'global_role' && a.role === 'super_admin')) {
+    warnings.push({
+      severity: 'warning',
+      code: 'only_super_admin_can_act',
+      message: `Only super-admins can do "${action.label}". Add at least one role or person so the work isn't stuck.`,
+      scope: { kind: 'action', stageId: stage.id, actionId: action.id },
+    })
   }
 
   const stageIds = new Set(workflow.stages.map((s) => s.id))
@@ -263,6 +282,7 @@ function validateActor(
   actor: ActorRef,
   action: StageAction,
   stage: Stage,
+  workflow: Workflow,
   org: OrgStructure,
   errors: ValidationIssue[],
 ): void {
@@ -274,6 +294,80 @@ function validateActor(
         code: 'team_role_not_configured',
         message: `"${action.label}" references the ${humanizeTeamRole(actor.role)} role, but your org doesn't have that role configured. Update your org structure or pick a different actor.`,
         scope: { kind: 'action', stageId: stage.id, actionId: action.id },
+      })
+    }
+  }
+  // Phase 2d: a project_role actor must reference a role that still exists.
+  if (actor.kind === 'project_role') {
+    const exists = (workflow.projectRoles ?? []).some((r) => r.id === actor.roleId)
+    if (!exists) {
+      errors.push({
+        severity: 'error',
+        code: 'unknown_project_role',
+        message: `"${action.label}" allows a project role that no longer exists. Re-pick who can do it.`,
+        scope: { kind: 'action', stageId: stage.id, actionId: action.id },
+      })
+    }
+  }
+}
+
+// Phase 2d: validate the People & Roles / Project Fields / Statuses tabs.
+function validateExtras(
+  workflow: Workflow,
+  errors: ValidationIssue[],
+  warnings: ValidationIssue[],
+): void {
+  for (const role of workflow.projectRoles ?? []) {
+    if (!role.label.trim()) {
+      warnings.push({
+        severity: 'warning',
+        code: 'missing_role_label',
+        message: 'A project role has no name yet.',
+        scope: { kind: 'role', roleId: role.id },
+      })
+    }
+  }
+
+  for (const field of workflow.projectFields?.customFields ?? []) {
+    if (field.deprecated) continue
+    if (!field.label.trim()) {
+      warnings.push({
+        severity: 'warning',
+        code: 'missing_field_label',
+        message: 'A project field has no name yet.',
+        scope: { kind: 'field', fieldId: field.id },
+      })
+    }
+    if (
+      (field.type === 'select' || field.type === 'multiSelect') &&
+      (field.options?.length ?? 0) === 0
+    ) {
+      errors.push({
+        severity: 'error',
+        code: 'select_field_no_options',
+        message: `"${field.label || 'A dropdown field'}" needs at least one option.`,
+        scope: { kind: 'field', fieldId: field.id },
+      })
+    }
+  }
+
+  const statusIds = new Set<string>()
+  for (const status of workflow.statusOptions ?? []) {
+    if (statusIds.has(status.id)) {
+      errors.push({
+        severity: 'error',
+        code: 'duplicate_status_id',
+        message: `Two statuses share the id "${status.id}".`,
+        scope: { kind: 'status' },
+      })
+    }
+    statusIds.add(status.id)
+    if (!status.label.trim()) {
+      warnings.push({
+        severity: 'warning',
+        code: 'missing_status_label',
+        message: 'A status has no name yet.',
+        scope: { kind: 'status' },
       })
     }
   }
@@ -354,6 +448,7 @@ function computeReachableStages(workflow: Workflow): Set<string> {
           target = action.effect.toStage
           break
         case 'set_status':
+        case 'assign_project_role':
           target = null
           break
       }

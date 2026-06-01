@@ -5,6 +5,8 @@ import { Timestamp } from 'firebase/firestore'
 import Modal from '../ui/Modal'
 import UserPicker from '../ui/UserPicker'
 import FileBadge, { formatFileSize } from '../ui/FileBadge'
+import FieldInput from '../fields/FieldInput'
+import { useFieldValidation } from '../fields/useFieldValidation'
 import WorkflowPicker from './WorkflowPicker'
 import LeadPickerWithRecommendations from './LeadPickerWithRecommendations'
 import { useAuth } from '../../contexts/AuthContext'
@@ -58,7 +60,11 @@ export default function NewProjectModal({ open, onClose }: Props) {
   const [submissionDate, setSubmissionDate] = useState('')
   const [presentationDate, setPresentationDate] = useState('')
   const [deadline, setDeadline] = useState('')
-  const [ownerId, setOwnerId] = useState<string | null>(null)
+  // Phase 2d: per-role assignments (owner retired) + custom-field values.
+  const [roleAssignments, setRoleAssignments] = useState<
+    Record<string, string | string[] | null>
+  >({})
+  const [fieldValues, setFieldValues] = useState<Record<string, unknown>>({})
   const [leadUid, setLeadUid] = useState<string | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -69,7 +75,6 @@ export default function NewProjectModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (open) {
-      setOwnerId((prev) => prev ?? user?.uid ?? null)
       setWorkflowId((prev) => prev ?? defaultWorkflow?.id ?? activeWorkflows[0]?.id ?? null)
     } else {
       setWorkflowId(null)
@@ -78,14 +83,37 @@ export default function NewProjectModal({ open, onClose }: Props) {
       setSubmissionDate('')
       setPresentationDate('')
       setDeadline('')
-      setOwnerId(null)
+      setRoleAssignments({})
+      setFieldValues({})
       setLeadUid(null)
       setFiles([])
       setError(null)
       setSubmitting(false)
       setUploadStatus(null)
     }
-  }, [open, user?.uid, defaultWorkflow?.id, activeWorkflows])
+  }, [open, defaultWorkflow?.id, activeWorkflows])
+
+  // Phase 2d: (re)seed role assignments + clear field values whenever the picked
+  // workflow changes. Honours assignedToCreatorOnNew by pre-filling the creator.
+  useEffect(() => {
+    if (!open || !pickedWorkflow) return
+    const init: Record<string, string | string[] | null> = {}
+    for (const role of pickedWorkflow.projectRoles ?? []) {
+      init[role.id] =
+        role.assignedToCreatorOnNew && user?.uid
+          ? role.multiple
+            ? [user.uid]
+            : user.uid
+          : role.multiple
+            ? []
+            : null
+    }
+    setRoleAssignments(init)
+    setFieldValues({})
+    // Re-seed only when the modal opens or the workflow changes — NOT on
+    // user?.uid resolving, which would wipe values the admin already typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pickedWorkflow?.id])
 
   // The first action on the first stage — drives the lead-picker UI and the
   // auto-allocation path. When this action's effect is `assign_lead`, the
@@ -116,6 +144,28 @@ export default function NewProjectModal({ open, onClose }: Props) {
     return undefined
   }, [leadInput, users])
 
+  // Phase 2d: roles + create-form custom fields, ordered.
+  const roles = useMemo(
+    () => [...(pickedWorkflow?.projectRoles ?? [])].sort((a, b) => a.order - b.order),
+    [pickedWorkflow],
+  )
+  const createFormFields = useMemo(
+    () =>
+      [...(pickedWorkflow?.projectFields?.customFields ?? [])]
+        .filter((f) => !f.deprecated && f.surfaces.includes('createForm'))
+        .sort((a, b) => a.order - b.order),
+    [pickedWorkflow],
+  )
+  const { errors: fieldErrors, isValid: fieldsValid } = useFieldValidation(
+    createFormFields,
+    fieldValues,
+  )
+  const requiredRolesFilled = roles.every((r) => {
+    if (!r.required) return true
+    const v = roleAssignments[r.id]
+    return Array.isArray(v) ? v.length > 0 : Boolean(v)
+  })
+
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? [])
     const accepted: File[] = []
@@ -145,8 +195,18 @@ export default function NewProjectModal({ open, onClose }: Props) {
       setError('Project title is required.')
       return
     }
-    if (!ownerId) {
-      setError('Pick a project owner.')
+    if (!requiredRolesFilled) {
+      const missing = roles.find((r) => {
+        if (!r.required) return false
+        const v = roleAssignments[r.id]
+        return Array.isArray(v) ? v.length === 0 : !v
+      })
+      setError(`Assign a ${missing?.label ?? 'required role'}.`)
+      return
+    }
+    if (!fieldsValid) {
+      const firstErr = createFormFields.map((f) => fieldErrors[f.id]).find(Boolean)
+      setError(firstErr ?? 'Please correct the highlighted fields.')
       return
     }
     if (pickedWorkflow.flowType === 'basic' && !description.trim()) {
@@ -183,12 +243,30 @@ export default function NewProjectModal({ open, onClose }: Props) {
             }
           : undefined
 
+      // Phase 2d: normalise role assignments (strip empty/null) + field values.
+      const normalizedRoles: Record<string, string | string[]> = {}
+      for (const [k, v] of Object.entries(roleAssignments)) {
+        if (v === null) continue
+        if (Array.isArray(v)) {
+          if (v.length) normalizedRoles[k] = v
+        } else {
+          normalizedRoles[k] = v
+        }
+      }
+      const normalizedFields: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(fieldValues)) {
+        const empty =
+          v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
+        if (!empty) normalizedFields[k] = v
+      }
+
       const projectId = await addProject({
         title: trimmedTitle,
         description: description.trim(),
-        ownerId,
         createdBy: user.uid,
         actorName: profile?.displayName ?? user.email ?? 'User',
+        ...(Object.keys(normalizedRoles).length ? { roleAssignments: normalizedRoles } : {}),
+        ...(Object.keys(normalizedFields).length ? { fields: normalizedFields } : {}),
         // Pass the real role + team ids so addProject's auto-allocation
         // permission check matches the actual creator. Fall back to 'user'
         // only when profile isn't loaded yet (which would also block any
@@ -237,9 +315,10 @@ export default function NewProjectModal({ open, onClose }: Props) {
   // elsewhere.
   const canSubmit =
     !!title.trim() &&
-    !!ownerId &&
     !!pickedWorkflow &&
     !submitting &&
+    requiredRolesFilled &&
+    fieldsValid &&
     (!isBasicFlow || !!description.trim())
 
   // Title + description copy adapts to the picked workflow's displayName so a
@@ -437,19 +516,65 @@ export default function NewProjectModal({ open, onClose }: Props) {
             </div>
           )}
 
-          <div className="space-y-1.5 sm:col-span-2">
-            <label htmlFor="project-owner" className="text-sm font-medium text-fg-muted">
-              Owner
-            </label>
-            <UserPicker
-              id="project-owner"
-              mode="single"
-              value={ownerId}
-              onChange={setOwnerId}
-              placeholder="Pick an owner"
-              allowCreate
-            />
-          </div>
+          {roles.length > 0 && (
+            <div className="space-y-3 sm:col-span-2">
+              <div className="text-sm font-medium text-fg-muted">Roles</div>
+              {roles.map((role) => (
+                <div key={role.id} className="space-y-1.5">
+                  <label className="text-sm text-fg-muted">
+                    {role.label}
+                    {role.required ? (
+                      <span className="text-tone-danger-fg"> *</span>
+                    ) : (
+                      <span className="font-normal text-fg-subtle"> (optional)</span>
+                    )}
+                  </label>
+                  {role.description && (
+                    <p className="text-xs text-fg-subtle">{role.description}</p>
+                  )}
+                  {role.multiple ? (
+                    <UserPicker
+                      mode="multi"
+                      value={(roleAssignments[role.id] as string[] | undefined) ?? []}
+                      onChange={(v) => setRoleAssignments((p) => ({ ...p, [role.id]: v }))}
+                      placeholder={`Assign ${role.label}`}
+                      allowCreate
+                    />
+                  ) : (
+                    <UserPicker
+                      mode="single"
+                      value={(roleAssignments[role.id] as string | null | undefined) ?? null}
+                      onChange={(v) => setRoleAssignments((p) => ({ ...p, [role.id]: v }))}
+                      placeholder={`Assign ${role.label}`}
+                      allowCreate
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {createFormFields.length > 0 && (
+            <div className="space-y-3 sm:col-span-2">
+              <div className="text-sm font-medium text-fg-muted">Details</div>
+              {createFormFields.map((f) => (
+                <div key={f.id} className="space-y-1.5">
+                  <label htmlFor={`field-${f.id}`} className="text-sm text-fg-muted">
+                    {f.label}
+                    {f.required && <span className="text-tone-danger-fg"> *</span>}
+                  </label>
+                  {f.helpText && <p className="text-xs text-fg-subtle">{f.helpText}</p>}
+                  <FieldInput
+                    id={`field-${f.id}`}
+                    field={f}
+                    value={fieldValues[f.id]}
+                    onChange={(v) => setFieldValues((p) => ({ ...p, [f.id]: v }))}
+                    error={fieldErrors[f.id]}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           {leadInput && pickedWorkflow && (
             <div className="space-y-1.5 sm:col-span-2">

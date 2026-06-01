@@ -92,10 +92,28 @@ export interface Project {
   id: string
   title: string
   description: string
-  ownerId: string
-  status: ProjectStatus
+  // ─── Owner retirement (Phase 2d) ─────────────────────────────────────────
+  // Legacy projects carry ownerId; new projects stop writing it. Readers treat
+  // it as optional and prefer `createdBy`. The `creator` workflow actor resolves
+  // to `createdBy ?? ownerId`.
+  ownerId?: string
+  // Always written. The user who created the project. Retains a baseline
+  // capability (edit fields / set status / reassign roles on their own project)
+  // alongside admins and any project-role holder.
+  createdBy: string
+  // Phase 2d: widened from the fixed 8-value union to a string so
+  // author-configured statuses (workflow.statusOptions[].id) are storable.
+  // ProjectStatus stays the canonical-value type for seeds, legacy data, and
+  // isProjectClosed()'s closing set. Resolve display via resolveStatusDisplay().
+  status: ProjectStatus | string
   deadline?: Timestamp
   teamIds: string[]
+  // Denormalized visibility array (Phase 2d redefinition): role-holder uids ∪
+  // teamIds ∪ createdBy. Powers the non-admin `array-contains-any` query on the
+  // projects list and ProjectPicker. Recomputed via computeAccessKeys() on every
+  // role/team change. Legacy docs hold [ownerId, ...teamIds]; both shapes match
+  // the same query.
+  accessKeys?: string[]
   attachments?: Attachment[]
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -131,6 +149,15 @@ export interface Project {
   // them defensively (optional).
   submissionDate?: Timestamp
   presentationDate?: Timestamp
+  // ─── Project roles + custom fields (Phase 2d) ────────────────────────────
+  // Maps workflow.projectRoles[].id → assigned uid (single role) or uid[]
+  // (multiple role). Absent on legacy projects. Canonical source for "who holds
+  // role X"; accessKeys is recomputed from this ∪ teamIds ∪ createdBy.
+  roleAssignments?: Record<string, string | string[]>
+  // Maps workflow.projectFields.customFields[].id → stored value. Untyped at the
+  // Firestore layer; readers coerce per the field's declared CustomFieldType
+  // (select → option id, multiSelect → option id[], user → uid).
+  fields?: Record<string, unknown>
   // Latest status-update note (mirrors the most recent set_status payload on
   // projectHistory). Convenience for rendering pill subtitles without
   // scanning history.
@@ -301,6 +328,9 @@ export type AuditAction =
   | 'project.status_updated'
   | 'project.teams_updated'
   | 'project.attachment_added'
+  // Phase 2d: project-role assignment + custom-field edits.
+  | 'project.role_assigned'
+  | 'project.field_updated'
   // Task lifecycle
   | 'task.created'
   | 'subtask.created'

@@ -1,4 +1,6 @@
 import type { ProjectStatus } from '../types/models'
+import type { PillColor, Workflow, WorkflowStatusOption } from '../types/workflow'
+import { pillClassFor, dotClassFor } from './fieldTokens'
 
 // Visual + label tokens for the project status pill. Uses the semantic pill
 // utilities (pill-info, pill-success, etc.) so each tone resolves correctly
@@ -75,9 +77,41 @@ export const STATUS_OPTIONS: ProjectStatus[] = [
 // Jira mode). The status pill on a project should only flip between these three.
 export const SIMPLE_STATUS_OPTIONS: ProjectStatus[] = ['in_progress', 'completed', 'archived']
 
+// Phase 2d: PillColor for each canonical status — the inverse of STATUS_DISPLAY's
+// `pill-*` strings. Used to seed author-configurable statusOptions (and the
+// StatusOptionsEditor's defaults) so the migration preserves today's colours.
+export const STATUS_COLOR: Record<ProjectStatus, PillColor> = {
+  in_progress: 'brandtone',
+  submitted: 'info',
+  not_submitted: 'neutral',
+  awarded: 'success',
+  completed: 'mint',
+  lost: 'danger',
+  on_hold: 'warn',
+  archived: 'neutral',
+}
+
+// Build default WorkflowStatusOption[] for a flow from the canonical set. Seeds
+// and the StatusOptionsEditor share this so author statuses start from today's
+// labels/colours and reuse the legacy ids (keeping isProjectClosed valid).
+export function defaultStatusOptions(
+  statuses: ProjectStatus[] = STATUS_OPTIONS,
+): WorkflowStatusOption[] {
+  return statuses.map((id, i) => ({
+    id,
+    label: STATUS_DISPLAY[id].label,
+    color: STATUS_COLOR[id],
+    order: i,
+    closing: isProjectClosed(id),
+  }))
+}
+
 // Conclusive outcomes that lock the project for editing. 'awarded' is excluded
 // because delivery work continues after the award until status flips to 'completed'.
-export function isProjectClosed(status: ProjectStatus | undefined): boolean {
+// Phase 2d: param widened to string for author-configured status ids; the
+// canonical closing set is unchanged (author statuses are non-closing unless
+// they reuse a legacy closing id — see resolveStatusDisplay for the override).
+export function isProjectClosed(status: ProjectStatus | string | undefined): boolean {
   return (
     status === 'completed' ||
     status === 'lost' ||
@@ -88,6 +122,45 @@ export function isProjectClosed(status: ProjectStatus | undefined): boolean {
 
 // "Live" projects are anything that isn't a final outcome — used to filter
 // at-risk lists, dashboards, etc.
-export function isProjectLive(status: ProjectStatus | undefined): boolean {
+export function isProjectLive(status: ProjectStatus | string | undefined): boolean {
   return !isProjectClosed(status)
+}
+
+// Phase 2d: resolve the display tokens for a project status. Prefers the pinned
+// workflow's author-configured statusOptions (label + palette colour); falls
+// back to the hardcoded STATUS_DISPLAY for the canonical set; finally a neutral
+// default so an unknown id never crashes the pill. THE safe accessor — never
+// index STATUS_DISPLAY[status] directly once statuses can be arbitrary strings.
+export interface StatusDisplayMeta {
+  label: string
+  pill: string
+  dot: string
+  description: string
+}
+
+export function resolveStatusDisplay(
+  status: ProjectStatus | string | undefined,
+  workflow?: Workflow | null,
+): StatusDisplayMeta {
+  if (status) {
+    const opt = workflow?.statusOptions?.find((o) => o.id === status)
+    if (opt) {
+      return {
+        label: opt.label,
+        pill: pillClassFor(opt.color),
+        dot: dotClassFor(opt.color),
+        // Preserve the canonical helper copy when the author kept a legacy id;
+        // author-added custom statuses simply have no description.
+        description: STATUS_DISPLAY[status as ProjectStatus]?.description ?? '',
+      }
+    }
+    const meta = STATUS_DISPLAY[status as ProjectStatus]
+    if (meta) return meta
+  }
+  return {
+    label: status ? String(status) : '—',
+    pill: 'pill-neutral border',
+    dot: 'bg-neutral-dot',
+    description: '',
+  }
 }

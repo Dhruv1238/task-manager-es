@@ -20,7 +20,13 @@ import type {
   User,
   WorkType,
 } from '../types/models'
-import type { ProjectHistoryEvent, StageEvent, WorkflowAssignmentEvent } from '../types/workflow'
+import type {
+  FieldUpdatedEvent,
+  ProjectHistoryEvent,
+  RoleAssignedEvent,
+  StageEvent,
+  WorkflowAssignmentEvent,
+} from '../types/workflow'
 import { getWorkflowSnapshot } from '../contexts/AppConfigContext'
 import { performAction } from './workflowEvaluator'
 import {
@@ -332,10 +338,31 @@ export async function setTeamLead(input: SetTeamLeadInput): Promise<void> {
 
 // --- Projects (Sprint 3 — Flow 2, Sprint 4 — Flow 3) ---------------------------
 
+// Phase 2d: the single place the denormalised visibility array is built.
+// accessKeys = role-holder uids ∪ teamIds ∪ creator. Team membership stays
+// expressed as teamIds (NOT expanded to uids), so a user joining/leaving a team
+// needs no per-project recompute — the `array-contains-any [uid, ...myTeamIds]`
+// query on the projects list resolves it. Including `createdBy` guarantees the
+// creator baseline keeps list-visibility even on a role-less / team-less project.
+export function computeAccessKeys(
+  roleAssignments: Record<string, string | string[]> | undefined,
+  teamIds: string[],
+  createdBy?: string,
+): string[] {
+  const keys = new Set<string>()
+  for (const v of Object.values(roleAssignments ?? {})) {
+    if (Array.isArray(v)) v.forEach((u) => u && keys.add(u))
+    else if (v) keys.add(v)
+  }
+  for (const t of teamIds) if (t) keys.add(t)
+  if (createdBy) keys.add(createdBy)
+  return [...keys]
+}
+
 export interface AddProjectInput {
   title: string
   description: string
-  ownerId: string
+  // Phase 2d: owner retired. createdBy is the audit + baseline-capability holder.
   createdBy: string
   actorName: string
   // Required for auto-allocation: the creator's global role + team
@@ -352,6 +379,13 @@ export interface AddProjectInput {
   workflowId: string
   deadline?: Timestamp
   attachments?: Attachment[]
+  // Phase 2d: per-role assignments collected on the create form (single → uid,
+  // multiple → uid[]). Keyed by workflow.projectRoles[].id. accessKeys is
+  // derived from these + createdBy.
+  roleAssignments?: Record<string, string | string[]>
+  // Phase 2d: custom-field values collected on the create form (createForm
+  // surface). Keyed by workflow.projectFields.customFields[].id.
+  fields?: Record<string, unknown>
   // Collaborative-flow fields. Only set when picked workflow's flowType is
   // 'collaborative' — the form's CollaborativeFields subcomponent surfaces
   // these inputs and omits them for other flow types.
@@ -410,19 +444,35 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     id: workflow.id,
   }
 
+  // Phase 2d: honour assignedToCreatorOnNew, then merge any creator-supplied
+  // assignments. Owner is retired — no ownerId written; accessKeys derives from
+  // role holders + the creator.
+  const roleAssignments: Record<string, string | string[]> = {}
+  for (const role of workflow.projectRoles ?? []) {
+    if (role.assignedToCreatorOnNew) {
+      roleAssignments[role.id] = role.multiple ? [input.createdBy] : input.createdBy
+    }
+  }
+  for (const [roleId, value] of Object.entries(input.roleAssignments ?? {})) {
+    if (value !== undefined && value !== null) roleAssignments[roleId] = value
+  }
+  const hasRoles = Object.keys(roleAssignments).length > 0
+
   const batch = writeBatch(db)
   const projectRef = doc(tenantCol('projects'))
   batch.set(projectRef, {
     title: input.title,
     titleLower: input.title.trim().toLowerCase(),
     description: input.description,
-    ownerId: input.ownerId,
     createdBy: input.createdBy,
     status: 'in_progress',
     teamIds: [],
-    accessKeys: [input.ownerId],
+    accessKeys: computeAccessKeys(hasRoles ? roleAssignments : undefined, [], input.createdBy),
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),
+    // Phase 2d additions (omitted when empty so docs stay tidy).
+    ...(hasRoles ? { roleAssignments } : {}),
+    ...(input.fields && Object.keys(input.fields).length ? { fields: input.fields } : {}),
     // Workflow pinning — every project carries these post-2b.
     workflowId: input.workflowId,
     pinnedWorkflow,
@@ -465,7 +515,8 @@ export async function addProject(input: AddProjectInput): Promise<string> {
         id: projectRef.id,
         title: input.title,
         description: input.description,
-        ownerId: input.ownerId,
+        createdBy: input.createdBy,
+        ...(hasRoles ? { roleAssignments } : {}),
         status: 'in_progress',
         teamIds: [],
         createdAt: now,
@@ -516,8 +567,9 @@ export async function addProject(input: AddProjectInput): Promise<string> {
 export interface UpdateProjectStatusInput {
   projectId: string
   projectTitle: string
-  fromStatus: ProjectStatus
-  toStatus: ProjectStatus
+  // Phase 2d: widened to string to allow author-configured status ids.
+  fromStatus: ProjectStatus | string
+  toStatus: ProjectStatus | string
   note: string
   enteredBy: string
   actorName: string
@@ -571,9 +623,11 @@ export async function updateProjectStatus(input: UpdateProjectStatusInput): Prom
 export interface SetProjectTeamsInput {
   projectId: string
   projectTitle: string
-  // Needed to keep the denormalized `accessKeys` (= [ownerId, ...teamIds]) in
-  // sync, which powers non-admin visibility queries on the Projects list.
-  ownerId: string
+  // Phase 2d: accessKeys = role-holders ∪ teamIds ∪ creator. The caller passes
+  // the project's current roleAssignments + createdBy so the array stays honest
+  // after a team change (owner retired).
+  roleAssignments?: Record<string, string | string[]>
+  createdBy?: string
   previousTeamIds: string[]
   newTeamIds: string[]
   actorId: string
@@ -591,7 +645,7 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
   const batch = writeBatch(db)
   batch.update(tenantDoc('projects', input.projectId), {
     teamIds: input.newTeamIds,
-    accessKeys: [input.ownerId, ...input.newTeamIds],
+    accessKeys: computeAccessKeys(input.roleAssignments, input.newTeamIds, input.createdBy),
     updatedAt: serverTimestamp(),
   })
   for (const teamId of added) {
@@ -617,6 +671,100 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
       batch,
     })
   }
+  await batch.commit()
+}
+
+// --- Project roles + custom fields (Phase 2d) --------------------------------
+
+export interface SetProjectRoleInput {
+  projectId: string
+  projectTitle: string
+  roleId: string
+  // single role → uid | null (clear); multiple role → full desired uid[].
+  value: string | string[] | null
+  // Current denormalised state so accessKeys recomputes without an extra read.
+  currentRoleAssignments?: Record<string, string | string[]>
+  teamIds: string[]
+  createdBy?: string
+  actorId: string
+  actorName: string
+}
+
+// Assign / reassign / clear one project-role slot. Recomputes accessKeys, appends
+// a role_assigned timeline event, and stamps an audit event — all atomically.
+export async function setProjectRole(input: SetProjectRoleInput): Promise<void> {
+  const merged: Record<string, string | string[]> = { ...(input.currentRoleAssignments ?? {}) }
+  if (input.value === null || (Array.isArray(input.value) && input.value.length === 0)) {
+    delete merged[input.roleId]
+  } else {
+    merged[input.roleId] = input.value
+  }
+  const event: RoleAssignedEvent = {
+    kind: 'role_assigned',
+    roleId: input.roleId,
+    value: input.value,
+    assignedAt: Timestamp.now(), // serverTimestamp() is rejected inside arrays
+    assignedBy: input.actorId,
+  }
+  const batch = writeBatch(db)
+  batch.update(tenantDoc('projects', input.projectId), {
+    roleAssignments: merged,
+    accessKeys: computeAccessKeys(merged, input.teamIds, input.createdBy),
+    projectHistory: arrayUnion(event),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'project.role_assigned',
+    targetType: 'project',
+    targetId: input.projectId,
+    targetTitle: input.projectTitle,
+    projectId: input.projectId,
+    payload: { roleId: input.roleId, value: input.value },
+    batch,
+  })
+  await batch.commit()
+}
+
+export interface SetProjectFieldInput {
+  projectId: string
+  projectTitle: string
+  fieldId: string
+  value: unknown
+  actorId: string
+  actorName: string
+}
+
+// Write one custom field value via a dot-path update (won't clobber the rest of
+// the `fields` map). Appends a field_updated timeline event + audit. No accessKeys
+// recompute — custom fields never affect visibility.
+export async function setProjectField(input: SetProjectFieldInput): Promise<void> {
+  const value = input.value ?? null // Firestore rejects undefined
+  const event: FieldUpdatedEvent = {
+    kind: 'field_updated',
+    fieldId: input.fieldId,
+    value,
+    updatedAt: Timestamp.now(),
+    updatedBy: input.actorId,
+  }
+  const batch = writeBatch(db)
+  batch.update(tenantDoc('projects', input.projectId), {
+    [`fields.${input.fieldId}`]: value,
+    projectHistory: arrayUnion(event),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'project.field_updated',
+    targetType: 'project',
+    targetId: input.projectId,
+    targetTitle: input.projectTitle,
+    projectId: input.projectId,
+    payload: { fieldId: input.fieldId, value },
+    batch,
+  })
   await batch.commit()
 }
 
@@ -655,6 +803,8 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
         workflowId?: string
         pinnedWorkflow?: import('../types/workflow').Workflow
         ownerId?: string
+        createdBy?: string
+        roleAssignments?: Record<string, string | string[]>
         leadUid?: string | null
         title?: string
         status?: string
@@ -730,7 +880,8 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
         id: input.projectId,
         title: projectData.title ?? input.projectTitle,
         description: '',
-        ownerId: projectData.ownerId ?? '',
+        createdBy: projectData.createdBy ?? projectData.ownerId ?? '',
+        ...(projectData.roleAssignments ? { roleAssignments: projectData.roleAssignments } : {}),
         status: (projectData.status as Project['status']) ?? 'in_progress',
         teamIds: existingTeamIds,
         createdAt: Timestamp.now(),

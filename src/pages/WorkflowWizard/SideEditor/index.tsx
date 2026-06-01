@@ -16,6 +16,11 @@ import StageFlow from './StageFlow'
 import StageEditorPanel from './StageEditorPanel'
 import ValidationPanel from './ValidationPanel'
 import WorkflowSettingsDrawer from './WorkflowSettingsDrawer'
+import ProjectRolesEditor from './ProjectRolesEditor'
+import CustomFieldsEditor from './CustomFieldsEditor'
+import StatusOptionsEditor from './StatusOptionsEditor'
+import ActionPreviewRail from './ActionPreviewRail'
+import type { ActorRef, CustomFieldDef, ProjectRoleDef, WorkflowStatusOption } from '../../../types/workflow'
 
 interface Props {
   initialDraft: WorkflowDraft
@@ -52,6 +57,7 @@ export default function SideEditor({
     initialDraft.stages[0]?.id ?? null,
   )
   const [showSettings, setShowSettings] = useState(false)
+  const [tab, setTab] = useState<'stages' | 'roles' | 'fields' | 'statuses'>('stages')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [validation, setValidation] = useState<ValidationResult>({
@@ -152,9 +158,24 @@ export default function SideEditor({
       issue.scope.kind === 'action' ||
       issue.scope.kind === 'input'
     ) {
+      setTab('stages')
       setSelectedStageId(issue.scope.stageId)
+    } else if (issue.scope.kind === 'role') {
+      setTab('roles')
+    } else if (issue.scope.kind === 'field') {
+      setTab('fields')
+    } else if (issue.scope.kind === 'status') {
+      setTab('statuses')
     }
   }
+
+  const updateRoles = (next: ProjectRoleDef[]) => setDraft({ ...draft, projectRoles: next })
+  const updateFields = (next: CustomFieldDef[]) =>
+    setDraft({ ...draft, projectFields: { customFields: next } })
+  const updateStatuses = (next: WorkflowStatusOption[]) =>
+    setDraft({ ...draft, statusOptions: next })
+  const updateStatusActors = (next: ActorRef[]) =>
+    setDraft({ ...draft, canUpdateStatusActors: next })
 
   async function handleSave(activate: boolean) {
     if (!user) return
@@ -248,23 +269,90 @@ export default function SideEditor({
         />
       )}
 
-      <StageFlow
-        stages={draft.stages}
-        selectedStageId={selectedStageId}
-        onSelect={setSelectedStageId}
-        onAddAfter={addStageAfter}
-        onRemove={removeStage}
-        onReorder={reorderStage}
-        issuesByStage={issuesByStage}
-        disabled={readOnly}
-      />
+      {/* Phase 2d: top-level authoring sections. */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-line">
+        {(
+          [
+            ['stages', 'Stages'],
+            ['roles', 'People & Roles'],
+            ['fields', 'Project Fields'],
+            ['statuses', 'Statuses'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+              tab === key
+                ? 'border-brand-edge text-fg'
+                : 'border-transparent text-fg-muted hover:text-fg'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {selectedStage && (
-        <StageEditorPanel
-          stage={selectedStage}
-          allStages={draft.stages}
+      {tab === 'stages' && (
+        <>
+          <StageFlow
+            stages={draft.stages}
+            selectedStageId={selectedStageId}
+            onSelect={setSelectedStageId}
+            onAddAfter={addStageAfter}
+            onRemove={removeStage}
+            onReorder={reorderStage}
+            issuesByStage={issuesByStage}
+            disabled={readOnly}
+          />
+
+          {selectedStage && (
+            <StageEditorPanel
+              stage={selectedStage}
+              allStages={draft.stages}
+              leadRoleName={draft.leadRoleName || org.leadRoleName}
+              projectRoles={draft.projectRoles ?? []}
+              onChange={(next) => updateStage(selectedStage.id, next)}
+              disabled={readOnly}
+            />
+          )}
+
+          {selectedStage && (
+            <ActionPreviewRail
+              stage={selectedStage}
+              projectRoles={draft.projectRoles ?? []}
+              leadRoleName={draft.leadRoleName || org.leadRoleName}
+            />
+          )}
+
+          <p className="rounded-lg border border-dashed border-line bg-fill-2 px-3 py-2 text-xs text-fg-subtle">
+            ⓘ Creating tasks, uploading documents, and editing project info are always available
+            to anyone on the project — you don't need to configure them here.
+          </p>
+        </>
+      )}
+
+      {tab === 'roles' && (
+        <ProjectRolesEditor roles={draft.projectRoles ?? []} onChange={updateRoles} disabled={readOnly} />
+      )}
+
+      {tab === 'fields' && (
+        <CustomFieldsEditor
+          fields={draft.projectFields?.customFields ?? []}
+          onChange={updateFields}
+          disabled={readOnly}
+        />
+      )}
+
+      {tab === 'statuses' && (
+        <StatusOptionsEditor
+          statusOptions={draft.statusOptions ?? []}
+          canUpdateStatusActors={draft.canUpdateStatusActors ?? []}
+          projectRoles={draft.projectRoles ?? []}
           leadRoleName={draft.leadRoleName || org.leadRoleName}
-          onChange={(next) => updateStage(selectedStage.id, next)}
+          onChangeStatuses={updateStatuses}
+          onChangeActors={updateStatusActors}
           disabled={readOnly}
         />
       )}

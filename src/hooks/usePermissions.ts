@@ -5,7 +5,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { useOrgStructure, useProjectWorkflow } from '../contexts/AppConfigContext'
 import { isProjectClosed } from '../lib/projectStatus'
 import { resolveCoordinatorTeam, resolveValidatorTeam } from '../lib/orgResolver'
-import { canPerform as evaluatorCanPerform } from '../lib/workflowEvaluator'
+import {
+  canPerform as evaluatorCanPerform,
+  canUpdateProjectStatus,
+} from '../lib/workflowEvaluator'
 import type { Project, Team } from '../types/models'
 
 export interface Permissions {
@@ -16,7 +19,12 @@ export interface Permissions {
   isHorizontalLead: boolean
 
   // Project contextual flags
+  // Phase 2d: owner retired. isProjectOwner is kept as an alias of
+  // isProjectCreator (createdBy ?? legacy ownerId === uid) for back-compat.
   isProjectOwner: boolean
+  isProjectCreator: boolean
+  // Phase 2d: the user holds at least one project role on this project.
+  isAnyRoleHolder: boolean
   // Phase 2a: the user pinned as project lead (project.leadUid). Renamed from
   // isVerticalHead to match the per-workflow `leadRoleName`. Falls back to the
   // legacy vhId during the dual-write transition.
@@ -38,6 +46,10 @@ export interface Permissions {
 
   canUpdateStatus: boolean
   canEditProject: boolean
+  // Phase 2d: the always-on "operations" capability — edit project fields,
+  // reassign roles, create tasks, upload docs. Granted to admins, any project
+  // role-holder, and the creator (baseline). Gates the new sidebar edit affordances.
+  canEditProjectMeta: boolean
 
   // Chat
   canViewProjectChat: boolean
@@ -120,7 +132,15 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const isAdmin = isSuperAdmin || isAdminOnly
     const isHorizontalLead = role === 'horizontal_lead'
 
-    const isProjectOwner = Boolean(uid && project && project.ownerId === uid)
+    // Phase 2d owner retirement: the creator (createdBy, legacy ownerId fallback)
+    // is the baseline-capability holder. isProjectOwner aliases it for back-compat.
+    const creatorUid = project ? (project.createdBy ?? project.ownerId ?? null) : null
+    const isProjectCreator = Boolean(uid && creatorUid && creatorUid === uid)
+    const isProjectOwner = isProjectCreator
+    const roleValues = project?.roleAssignments ? Object.values(project.roleAssignments) : []
+    const isAnyRoleHolder = Boolean(
+      uid && roleValues.some((v) => (Array.isArray(v) ? v.includes(uid) : v === uid)),
+    )
     const projectLeadUid = project?.leadUid ?? null
     const isProjectLead = Boolean(uid && projectLeadUid && projectLeadUid === uid)
     const isTeamLead = Boolean(uid && team && team.leadId === uid)
@@ -136,31 +156,26 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
 
     const closed = isProjectClosed(project?.status)
 
-    // Status-update is orthogonal to the workflow engine: the status pill
-    // opens a modal that calls updateProjectStatus directly. Who can wield it
-    // depends on the workflow's flow-type:
-    //   - collaborative — lead / coordinator lead / super admin (matches the
-    //     prior "pipeline on" behaviour where the CT lead recorded the
-    //     outcome at stage 10).
-    //   - individual    — the assigned lead, the project owner, and admins.
-    //     Sales rep manages their own pipeline; owner / admin can override.
-    //   - basic         — owner and admins (simple-mode parity).
-    // When the workflow hasn't loaded yet (rare; lazy fetch in flight) we
-    // fall back to the safest superset so the pill isn't gratuitously gated.
-    const flowType = workflow?.flowType
-    const canUpdateStatusByFlow =
-      flowType === 'collaborative'
-        ? isProjectLead || isCoordinatorLead || isSuperAdmin
-        : flowType === 'individual'
-          ? isProjectLead || isProjectOwner || isAdmin
-          : flowType === 'basic'
-            ? isProjectOwner || isAdmin
-            : // Unknown / not yet loaded — allow the admin path through so the
-              // pill remains usable during the lazy fetch.
-              isProjectOwner || isAdmin
-    const canUpdateStatus = Boolean(project && !closed && canUpdateStatusByFlow)
+    // Phase 2d: the always-on operations capability. Admins, any project
+    // role-holder, and the creator (baseline) may edit fields, reassign roles,
+    // create tasks, and upload docs — at any stage, never author-configurable.
+    const canEditProjectMeta = Boolean(
+      project && !closed && (isAdmin || isAnyRoleHolder || isProjectCreator),
+    )
+
+    // Status-update is orthogonal to the workflow engine: the status pill opens
+    // a modal that calls updateProjectStatus directly. Phase 2d routes the gate
+    // through the evaluator's canUpdateProjectStatus, which prefers the
+    // workflow's author-configured canUpdateStatusActors and falls back to the
+    // legacy flow-type rule + the creator baseline. While the workflow is still
+    // lazy-loading, fall back to the safe creator/admin superset.
+    const canUpdateStatusResolved =
+      project && resolvedProfile && workflow
+        ? canUpdateProjectStatus(project, workflow, resolvedProfile, projectTeams, org)
+        : isProjectCreator || isAdmin
+    const canUpdateStatus = Boolean(project && !closed && canUpdateStatusResolved)
     const canEditProject = Boolean(
-      project && (isSuperAdmin || isProjectOwner) && !closed,
+      project && (isSuperAdmin || isAnyRoleHolder || isProjectCreator) && !closed,
     )
 
     const userTeamIds = resolvedProfile?.teamIds ?? []
@@ -168,7 +183,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       uid && project && project.teamIds.some((tid) => userTeamIds.includes(tid)),
     )
     const canViewProjectChat = Boolean(
-      project && (isSuperAdmin || isProjectOwner || isProjectTeamMember),
+      project && (isSuperAdmin || isProjectCreator || isAnyRoleHolder || isProjectTeamMember),
     )
 
     // Generic action gate. Reads the active workflow + evaluator. False when:
@@ -192,6 +207,8 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       isAdminOnly,
       isHorizontalLead,
       isProjectOwner,
+      isProjectCreator,
+      isAnyRoleHolder,
       isProjectLead,
       isTeamLead,
       isTeamMember,
@@ -201,6 +218,7 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       canPerform,
       canUpdateStatus,
       canEditProject,
+      canEditProjectMeta,
       canViewProjectChat,
       project,
       team,

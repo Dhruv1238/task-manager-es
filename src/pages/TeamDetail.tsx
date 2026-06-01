@@ -35,8 +35,8 @@ function Avatar({ user, size = 36 }: { user: User; size?: number }) {
   )
 }
 
-function StatusDot({ status }: { status: ProjectStatus }) {
-  const cls: Record<ProjectStatus, string> = {
+function StatusDot({ status }: { status: ProjectStatus | string }) {
+  const cls: Record<string, string> = {
     in_progress: 'bg-neutral-dot',
     submitted: 'bg-info-dot',
     not_submitted: 'bg-neutral-dot',
@@ -48,7 +48,7 @@ function StatusDot({ status }: { status: ProjectStatus }) {
   }
   return (
     <span
-      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${cls[status]}`}
+      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${cls[status] ?? 'bg-neutral-dot'}`}
       aria-hidden
     />
   )

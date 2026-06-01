@@ -1,10 +1,12 @@
 import { useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Timestamp } from 'firebase/firestore'
-import type { Project } from '../../types/models'
+import type { Project, User } from '../../types/models'
 import type {
   ActionInput,
+  FieldUpdatedEvent,
   ProjectHistoryEvent,
+  RoleAssignedEvent,
   Stage,
   StageEvent,
   Workflow,
@@ -15,6 +17,7 @@ import { useAllUsers } from '../../hooks/useAllUsers'
 import { useAppConfigContext, useOrgStructure, useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { stageTone } from './stageStyle'
 import { STATUS_DISPLAY } from '../../lib/projectStatus'
+import FieldValue from '../fields/FieldValue'
 
 interface Props {
   open: boolean
@@ -349,6 +352,24 @@ export default function ProjectHistorySidePanel({ open, onClose, project }: Prop
                         workflowsById={workflowsById}
                       />
                     )
+                  case 'role_assigned':
+                    return (
+                      <RoleAssignedRow
+                        key={idx}
+                        event={e}
+                        workflow={workflow}
+                        userById={userById}
+                      />
+                    )
+                  case 'field_updated':
+                    return (
+                      <FieldUpdatedRow
+                        key={idx}
+                        event={e}
+                        workflow={workflow}
+                        userById={userById}
+                      />
+                    )
                 }
               })}
             </ul>
@@ -448,6 +469,71 @@ function WorkflowAssignmentRow({ event, userById, workflowsById }: AssignmentRow
       <div className="mt-2 text-sm text-fg">
         Project pinned to{' '}
         <span className="font-medium text-fg-strong">{wf?.displayName ?? event.workflowId}</span>
+      </div>
+      <div className="mt-1 text-xs text-fg-subtle">by {actor?.displayName ?? 'system'}</div>
+    </li>
+  )
+}
+
+// Phase 2d: role assignment + custom-field edit timeline rows.
+function RoleAssignedRow({
+  event,
+  workflow,
+  userById,
+}: {
+  event: RoleAssignedEvent
+  workflow: Workflow | null
+  userById: Map<string, User>
+}) {
+  const role = workflow?.projectRoles?.find((r) => r.id === event.roleId)
+  const actor = userById.get(event.assignedBy)
+  const uids = event.value == null ? [] : Array.isArray(event.value) ? event.value : [event.value]
+  const names = uids.map((u) => userById.get(u)?.displayName ?? u)
+  return (
+    <li className="rounded-xl border border-line bg-fill-1 p-4">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium pill-brandtone border">
+          <span className="h-1.5 w-1.5 rounded-full bg-brandtone-dot" aria-hidden />
+          Role assigned
+        </span>
+        <span className="ml-auto text-[11px] text-fg-subtle">→ {fmtRelative(event.assignedAt)}</span>
+      </div>
+      <div className="mt-2 text-sm text-fg">
+        <span className="font-medium text-fg-strong">{role?.label ?? event.roleId}</span>:{' '}
+        {names.length ? names.join(', ') : 'cleared'}
+      </div>
+      <div className="mt-1 text-xs text-fg-subtle">by {actor?.displayName ?? 'system'}</div>
+    </li>
+  )
+}
+
+function FieldUpdatedRow({
+  event,
+  workflow,
+  userById,
+}: {
+  event: FieldUpdatedEvent
+  workflow: Workflow | null
+  userById: Map<string, User>
+}) {
+  const field = workflow?.projectFields?.customFields?.find((f) => f.id === event.fieldId)
+  const actor = userById.get(event.updatedBy)
+  return (
+    <li className="rounded-xl border border-line bg-fill-1 p-4">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium pill-cool border">
+          <span className="h-1.5 w-1.5 rounded-full bg-cool-dot" aria-hidden />
+          Field updated
+        </span>
+        <span className="ml-auto text-[11px] text-fg-subtle">→ {fmtRelative(event.updatedAt)}</span>
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-sm text-fg">
+        <span className="font-medium text-fg-strong">{field?.label ?? event.fieldId}</span>:{' '}
+        {field ? (
+          <FieldValue field={field} value={event.value} resolveUser={(uid) => userById.get(uid)} />
+        ) : (
+          <span className="text-fg-strong">{formatPayloadValue(event.value)}</span>
+        )}
       </div>
       <div className="mt-1 text-xs text-fg-subtle">by {actor?.displayName ?? 'system'}</div>
     </li>

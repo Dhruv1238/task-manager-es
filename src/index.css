@@ -51,6 +51,9 @@
   --color-cool-dot: #38bdf8;
   --color-mint-dot: #2dd4bf;
   --color-neutral-dot: rgb(255 255 255 / 0.5);
+  --color-orange-dot: #fb923c;
+  --color-yellow-dot: #facc15;
+  --color-pink-dot: #f472b6;
 
   --color-tone-info-bg: rgb(59 130 246 / 0.15);
   --color-tone-info-fg: #bfdbfe;
@@ -164,6 +167,9 @@
   --color-cool-dot: #0284c7;
   --color-mint-dot: #0d9488;
   --color-neutral-dot: rgb(14 11 20 / 0.5);
+  --color-orange-dot: #ea580c;
+  --color-yellow-dot: #ca8a04;
+  --color-pink-dot: #db2777;
 
   --color-tone-info-bg: rgb(59 130 246 / 0.1);
   --color-tone-info-fg: #1d4ed8;

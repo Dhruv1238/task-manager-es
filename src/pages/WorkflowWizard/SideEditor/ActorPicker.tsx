@@ -128,6 +128,8 @@ function serializeOrgRoleActor(actor: ActorRef): string {
       return `team_role:${actor.role}/${actor.member}`
     case 'global_role':
       return `global_role:${actor.role}`
+    case 'project_role':
+      return `project_role:${actor.roleId}`
     case 'creator':
       return 'pipeline_role:lead' // fallback when top-level changes mid-stream
   }
