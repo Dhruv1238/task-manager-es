@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation, type Location } from 'react-router-dom'
-import AdminRoute, { SuperAdminRoute } from './components/AdminRoute'
-import DevConfigRoute from './components/DevConfigRoute'
+import { SuperAdminRoute } from './components/AdminRoute'
+import RequireAccess from './components/RequireAccess'
 import ProtectedRoute from './components/ProtectedRoute'
 import TaskDetailModal from './components/tasks/TaskDetailModal'
 import ProjectLayout from './layouts/ProjectLayout'
@@ -11,8 +11,14 @@ import AppConfigPage from './pages/AppConfigPage'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import OrgSetupWizard from './pages/OrgSetupWizard'
-import WorkflowEdit from './pages/WorkflowEdit'
-import WorkflowWizard from './pages/WorkflowWizard'
+import RolesHierarchy from './pages/RolesHierarchy'
+// Phase 3: the React Flow canvas is now the primary authoring surface — it
+// replaces the old conversational WorkflowWizard + SideEditor at every entry
+// point (new / edit). Lazy so @xyflow/react + dagre + framer-motion land in
+// their own route chunk; neither the main bundle nor the sandbox login/shell
+// (which never visits an authoring route) pays for it. The old wizard/editor
+// modules remain in the repo, just no longer routed.
+const FlowAuthoring = lazy(() => import('./pages/FlowAuthoring'))
 import Me from './pages/Me'
 import NotFound from './pages/NotFound'
 import ProjectBoard from './pages/ProjectBoard'
@@ -78,20 +84,51 @@ function App() {
           </Route>
           <Route path="/teams" element={<Teams />} />
           <Route path="/projects" element={<Projects />} />
-          <Route element={<AdminRoute />}>
+          {/* Admin surfaces gated by the Role-Hierarchy module grid (super_admin
+            * always passes via RequireAccess's hierarchy-independent baseline). */}
+          <Route element={<RequireAccess module="reports" />}>
             <Route path="/admin" element={<AdminDashboard />} />
+          </Route>
+          <Route element={<RequireAccess module="members" />}>
             <Route path="/admin/members" element={<AdminMembers />} />
           </Route>
-          <Route element={<DevConfigRoute />}>
+          <Route element={<RequireAccess module="settings" />}>
             <Route path="/admin/config" element={<AppConfigPage />} />
           </Route>
-          {/* Phase 2c: setup + workflow authoring open to any super_admin so a
-            * fresh tenant's owner can complete onboarding without being on the
-            * dev-config allowlist. */}
+          {/* Setup + Roles EDIT the permission system itself — kept super_admin
+            * only (a settings.update role must not be able to escalate). */}
           <Route element={<SuperAdminRoute />}>
             <Route path="/admin/setup" element={<OrgSetupWizard />} />
-            <Route path="/admin/workflows/new" element={<WorkflowWizard />} />
-            <Route path="/admin/workflows/:id/edit" element={<WorkflowEdit />} />
+            <Route path="/admin/roles" element={<RolesHierarchy />} />
+          </Route>
+          {/* Workflow authoring is config-driven (workflows module). The flow
+            * canvas resolves all three paths (lazy chunk): /admin/workflows/new
+            * (no :id) → new-flow creation; the edit paths → edit/view that flow. */}
+          <Route element={<RequireAccess module="workflows" />}>
+            <Route
+              path="/admin/workflows/new"
+              element={
+                <Suspense fallback={<CanvasLoading />}>
+                  <FlowAuthoring />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/admin/workflows/:id/edit"
+              element={
+                <Suspense fallback={<CanvasLoading />}>
+                  <FlowAuthoring />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/admin/flow/:id"
+              element={
+                <Suspense fallback={<CanvasLoading />}>
+                  <FlowAuthoring />
+                </Suspense>
+              }
+            />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Route>
@@ -115,6 +152,10 @@ function App() {
     )
   }
   return inner
+}
+
+function CanvasLoading() {
+  return <div className="p-16 text-center text-sm text-fg-subtle">Loading canvas…</div>
 }
 
 export default App

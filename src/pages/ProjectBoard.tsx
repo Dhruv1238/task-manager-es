@@ -30,7 +30,15 @@ export default function ProjectBoard() {
   const { users } = useAllUsers()
   const { teams: allTeams } = useAllTeams()
   const { tasks, loading: tasksLoading, error: tasksError } = useAllProjectTasks(projectId)
-  const { isAdmin, isProjectOwner } = usePermissions(projectId)
+  const {
+    isAdmin,
+    isSuperAdmin,
+    isProjectOwner,
+    isProjectCreator,
+    isAnyRoleHolder,
+    isProjectLead,
+    can,
+  } = usePermissions(projectId)
 
   useEffect(() => {
     if (!projectId) return
@@ -112,16 +120,38 @@ export default function ProjectBoard() {
     return m
   }, [tasks])
 
+  // Anyone with access to the project sees its board: admins, owner/creator,
+  // the allocated lead, any assigned project role-holder, members of an added
+  // team, or anyone the Role-Hierarchy grants Projects → View.
   const canView = useMemo(() => {
     if (!project || !profile) return false
-    if (isAdmin || isProjectOwner) return true
+    if (
+      isSuperAdmin ||
+      isAdmin ||
+      isProjectOwner ||
+      isProjectCreator ||
+      isAnyRoleHolder ||
+      isProjectLead ||
+      can('projects', 'view')
+    )
+      return true
     const myTeams = new Set(profile.teamIds ?? [])
     return (project.teamIds ?? []).some((tid) => myTeams.has(tid))
-  }, [project, profile, isAdmin, isProjectOwner])
+  }, [
+    project,
+    profile,
+    isSuperAdmin,
+    isAdmin,
+    isProjectOwner,
+    isProjectCreator,
+    isAnyRoleHolder,
+    isProjectLead,
+    can,
+  ])
 
   const canCreateForTeam = (team: Team): boolean => {
     if (!profile) return false
-    if (isAdmin || isProjectOwner) return true
+    if (isAdmin || isProjectOwner || isProjectLead || can('tasks', 'create')) return true
     return team.leadId === profile.uid
   }
 

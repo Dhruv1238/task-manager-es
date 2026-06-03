@@ -105,6 +105,57 @@ export async function wipeTenant(): Promise<WipeSummary> {
   return summary
 }
 
+// Collections cleared by the "keep people" reset. Note `teams` is absent — and
+// users are not touched at all (see below) — so each member's team memberships
+// survive the reset.
+const COLLECTIONS_TO_WIPE_KEEPING_PEOPLE = [
+  'projects',
+  'tasks',
+  'auditEvents',
+  'workflows',
+] as const
+
+/**
+ * Soft reset used by the legacy-tenant migration flow: clears projects, tasks,
+ * audit events, workflows (incl. the `_registry`) and the /config/* docs, but
+ * PRESERVES `teams` and every user doc (including their `teamIds`). The operator
+ * then runs Config Transfer → Import to lay down the new roles/workflows, then
+ * reloads.
+ *
+ * Unlike wipeTenant() this does NOT reload the page — the import step runs next
+ * while the app is still up, and the import (or the operator) triggers the
+ * reload afterwards.
+ */
+export async function resetTenantPreservingPeople(): Promise<WipeSummary> {
+  const startedAt = Date.now()
+  const collectionsCleared: Record<string, number> = {}
+
+  for (const name of COLLECTIONS_TO_WIPE_KEEPING_PEOPLE) {
+    collectionsCleared[name] = await clearCollection(name)
+  }
+
+  const configsCleared: string[] = []
+  for (const [coll, id] of CONFIG_DOC_PATHS) {
+    try {
+      await deleteDoc(tenantDoc(coll, id))
+      configsCleared.push(`${coll}/${id}`)
+    } catch (e) {
+      console.warn(`[resetTenantPreservingPeople] failed to delete ${coll}/${id}`, e)
+    }
+  }
+
+  clearLocalStorage()
+
+  const summary: WipeSummary = {
+    collectionsCleared,
+    configsCleared,
+    usersReset: 0,
+    durationMs: Date.now() - startedAt,
+  }
+  console.log('[resetTenantPreservingPeople] done (teams + members kept)', summary)
+  return summary
+}
+
 // Delete every doc in a top-level collection in batches of BATCH_SIZE. Does
 // NOT recurse into subcollections — Firestore client SDK has no recursive
 // delete; subcollection docs become orphaned. For our shapes that's fine:
@@ -163,6 +214,9 @@ function clearLocalStorage(): void {
   // Known fixed keys.
   const FIXED_KEYS = [
     'appConfig:v1',
+    // appConfig cache key was bumped to v2 (chat-default flip); clear both so a
+    // stale v2 cache doesn't survive a reset.
+    'appConfig:v2',
     'orgStructure:v1',
     'workflowRegistry:v1',
     'projects:viewMode',

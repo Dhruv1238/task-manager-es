@@ -2,9 +2,8 @@ import { initializeApp, deleteApp } from 'firebase/app'
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth'
 import {  serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db, firebaseConfig } from './firebase'
-import { tenantDoc } from './firestore'
-import type { GlobalRole } from '../types/models'
-import { recordAuditEvent } from './firestore'
+import { tenantDoc, recordAuditEvent, deriveGlobalRole } from './firestore'
+import { getRolesSnapshot } from '../contexts/AppConfigContext'
 
 export interface CreateMemberResult {
   uid: string
@@ -27,8 +26,11 @@ export async function createMember(
   tempPassword: string,
   adminUid: string,
   adminName: string,
-  globalRole: GlobalRole = 'user',
+  // Configured hierarchy roles to assign on creation (the caller defaults this
+  // to the most basic role). The platform tier (globalRole) is derived from them.
+  roleIds: string[] = [],
 ): Promise<CreateMemberResult> {
+  const globalRole = deriveGlobalRole(roleIds, getRolesSnapshot())
   const secondary = initializeApp(firebaseConfig, `Secondary-${Date.now()}`)
   try {
     const secondaryAuth = getAuth(secondary)
@@ -41,6 +43,7 @@ export async function createMember(
       displayName,
       displayNameLower: displayName.trim().toLowerCase(),
       globalRole,
+      roleIds,
       teamIds: [],
       tempPassword,
       createdBy: adminUid,
@@ -53,7 +56,7 @@ export async function createMember(
       targetType: 'user',
       targetId: cred.user.uid,
       targetTitle: displayName,
-      payload: { email, globalRole },
+      payload: { email, globalRole, roleIds },
       batch,
     })
     await batch.commit()

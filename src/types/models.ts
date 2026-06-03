@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase/firestore'
 import type { ProjectHistoryEvent, Workflow } from './workflow'
+import type { HierarchyLevel, OutcomeLogEntry, RoleDef } from './v2'
 
 // Re-exported so legacy consumers of models.ts pick up the new event types
 // from a single import site.
@@ -51,6 +52,11 @@ export interface User {
   photoURL?: string
   globalRole: GlobalRole
   teamIds: string[]
+  // Phase 3.6: explicit hierarchy-role assignment (RoleDef ids from
+  // orgStructure.roleHierarchy), set from the Members / Roles pages. Unioned with
+  // the legacy globalRole bridge in effectivePermissions.heldRoles. Optional →
+  // existing users and sandbox personas (no roleIds) are unaffected.
+  roleIds?: string[]
   tempPassword?: string
   createdBy?: string
   createdAt: Timestamp
@@ -169,6 +175,13 @@ export interface Project {
   // Chat: denormalized "latest activity" timestamp, bumped in the same writeBatch
   // as every chat mutation so the projects-list unread dot needs zero extra reads.
   chatLastMessageAt?: Timestamp
+  // ─── Phase 3 additions (additive; legacy readers ignore) ─────────────────
+  // Append-only log of outcome selections, written by executeOutcome. The v2
+  // analogue of projectHistory stage events for branching rules.
+  outcomeLog?: OutcomeLogEntry[]
+  // Per-stage entry timestamps, stamped on each transition → enables
+  // time-in-stage / funnel analytics without scanning projectHistory.
+  stageEnteredAt?: Record<string, Timestamp>
 }
 
 export interface Attachment {
@@ -287,6 +300,16 @@ export interface OrgStructure {
 
   // First-time setup completion. Drives the /admin/setup auto-launch.
   setupCompleted: boolean
+
+  // ─── Phase 3: N-level role hierarchy (supersede) ─────────────────────────
+  // Canonical role hierarchy authored in onboarding Step 1. The legacy fields
+  // above (leadRoleName, teamRoles, workTypes) are kept in lockstep as a
+  // compatibility shim so seeded team_role/pipeline_role actors keep resolving
+  // through orgResolver. Plain-JSON only (no Timestamp) — see v2.ts note.
+  roleHierarchy?: RoleDef[]
+  // The configurable levels (1..N, 1 = highest authority) the roles sit at.
+  // Display labels for the hierarchy builder; compute only needs RoleDef.level.
+  hierarchyLevels?: HierarchyLevel[]
 }
 
 // Default used when /config/orgStructure is missing AND no localStorage
@@ -344,6 +367,8 @@ export type AuditAction =
   // Admin-sensitive
   | 'user.created'
   | 'user.role_changed'
+  // Phase 3.6: explicit hierarchy-role assignment changed.
+  | 'user.roles_changed'
   | 'team.created'
   | 'team.member_added'
   | 'team.member_removed'

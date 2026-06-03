@@ -15,7 +15,10 @@ import type { Workflow, WorkflowRegistry } from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
 import { useAuth } from './AuthContext'
 
-const STORAGE_KEY = 'appConfig:v1'
+// Bumped v1→v2 when chat became enabled-by-default: invalidates any cached
+// appConfig still holding the old `features.chat: false`, so the new default
+// takes effect on the next load instead of waiting out the 24h cache TTL.
+const STORAGE_KEY = 'appConfig:v2'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const REGISTRY_STORAGE_KEY = 'workflowRegistry:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -27,7 +30,11 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   updatedAt: Timestamp.fromMillis(0),
   updatedBy: '',
   features: {
-    chat: false,
+    // Chat is enabled product-wide. Sandbox rules are path-isolated (no chat
+    // gate), so this default turns it on everywhere in the sandbox. In a prod
+    // tenant the /config/appConfig doc must also carry features.chat: true,
+    // since the Firestore rules' chatEnabled() reads the doc value.
+    chat: true,
   },
 }
 
@@ -163,6 +170,14 @@ function writeOrgCache(org: OrgStructure) {
 export function getOrgStructureSnapshot(): OrgStructure {
   const cached = readOrgCache()
   return cached?.org ?? DEFAULT_ORG_STRUCTURE
+}
+
+// Phase 3: non-React accessor for the tenant's hierarchy roles. They live on the
+// orgStructure doc (roleHierarchy) so they ride the existing org cache — no
+// separate cache/reads. Used by lib/ code (executeOutcome, runWorkflowAction)
+// to resolve `role`-kind actors without prop-threading.
+export function getRolesSnapshot(): import('../types/v2').RoleDef[] {
+  return getOrgStructureSnapshot().roleHierarchy ?? []
 }
 
 // ─── Workflow registry cache ──────────────────────────────────────────────
@@ -390,6 +405,10 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
         setConfig(next)
         writeCache(next)
       } else {
+        // No appConfig doc (sandbox / fresh tenant): apply the in-code defaults
+        // to LIVE state too, not just the cache — otherwise a flipped default
+        // (e.g. features.chat) never reaches the running app on this boot.
+        setConfig(DEFAULT_APP_CONFIG)
         writeCache(DEFAULT_APP_CONFIG)
       }
     } finally {

@@ -67,12 +67,21 @@ export default function WorkflowEdit() {
   return (
     <>
       <div className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6 lg:px-8">
-        <Link
-          to="/admin/config"
-          className="inline-flex items-center gap-1 text-sm text-fg-subtle transition hover:text-fg-muted"
-        >
-          ← Back to /admin/config
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            to="/admin/config"
+            className="inline-flex items-center gap-1 text-sm text-fg-subtle transition hover:text-fg-muted"
+          >
+            ← Back to /admin/config
+          </Link>
+          {/* Phase 3: open this flow on the glassmorphic canvas. */}
+          <Link
+            to={`/admin/flow/${id}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand-edge bg-brand-soft px-3 py-1.5 text-sm font-medium text-brand transition hover:opacity-90"
+          >
+            ✦ Open on canvas
+          </Link>
+        </div>
 
         {isSystem && (
           <div className="mt-4 rounded-2xl border border-tone-warn-bd bg-tone-warn-bg/30 px-4 py-3 text-sm text-fg-muted">

@@ -81,7 +81,7 @@ export default function ProjectFieldsSection({
                   <button
                     type="button"
                     onClick={() => startEdit(f)}
-                    className="text-xs text-brand transition hover:underline"
+                    className="rounded text-xs text-brand outline-none transition hover:underline focus-visible:underline"
                   >
                     Edit
                   </button>

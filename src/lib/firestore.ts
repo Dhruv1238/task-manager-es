@@ -25,15 +25,22 @@ import type {
   ProjectHistoryEvent,
   RoleAssignedEvent,
   StageEvent,
+  Workflow,
   WorkflowAssignmentEvent,
 } from '../types/workflow'
-import { getWorkflowSnapshot } from '../contexts/AppConfigContext'
-import { performAction } from './workflowEvaluator'
+import { getWorkflowSnapshot, getRolesSnapshot, getOrgStructureSnapshot } from '../contexts/AppConfigContext'
+import { getCurrentStage, performAction } from './workflowEvaluator'
+import { executeOutcome } from './rules/executeOutcome'
+import { readActors, readOutcomes } from './rules/outcomeAdapter'
+import { computeEffectivePermissions, resolveRoleHolders } from './permissions/effectivePermissions'
+import type { OrgStructure, Team } from '../types/models'
+import type { RoleDef, EffectivePermissions } from '../types/v2'
 import {
   addDoc,
   arrayRemove,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   increment,
@@ -106,6 +113,18 @@ export interface RunWorkflowActionInput {
   // Optional caller-supplied denormalisations to merge onto the project doc
   // alongside the action's standard patch (e.g. eligibilityNote mirroring).
   extras?: Record<string, unknown>
+  // Phase 3: the named outcome the actor selected (OutcomePicker). Only used for
+  // actions that carry authored v2 `outcomes`; ignored on legacy actions.
+  outcomeId?: string
+  // Phase 3: resolution context for `role`-kind actors + the permission re-check
+  // in executeOutcome. All optional — the UI already gated rendering.
+  teams?: Team[]
+  org?: OrgStructure
+  roles?: RoleDef[]
+  // The tenant user directory, so executeOutcome can recompute accessKeys with
+  // `role`-actor holders + an assignment's target. Optional.
+  users?: User[]
+  effective?: EffectivePermissions | null
 }
 
 export async function runWorkflowAction(input: RunWorkflowActionInput): Promise<void> {
@@ -124,6 +143,40 @@ export async function runWorkflowAction(input: RunWorkflowActionInput): Promise<
       `Workflow "${input.project.workflowId}" not loaded — refresh the page or ask an admin to seed it under /admin/config.`,
     )
   }
+
+  // Phase 3 routing: actions authored with v2 `outcomes` run through the
+  // outcome transaction; everything else (every seed / legacy doc) stays on the
+  // proven performAction path, byte-for-byte unchanged.
+  const stage = getCurrentStage(input.project, workflow)
+  const action = stage.actions.find((a) => a.id === input.actionId)
+  if (action?.outcomes?.length) {
+    const outcomes = readOutcomes(action)
+    const outcomeId = input.outcomeId ?? (outcomes.length === 1 ? outcomes[0].id : undefined)
+    if (!outcomeId) {
+      throw new Error(`Action "${action.label}" needs an outcome selection.`)
+    }
+    // Default the role-resolution context from the cached snapshots so callers
+    // that don't thread it (e.g. ActionModal) still resolve `role`-kind actors.
+    const roles = input.roles ?? getRolesSnapshot()
+    const effective =
+      input.effective ?? computeEffectivePermissions(input.user, roles)
+    await executeOutcome({
+      project: input.project,
+      workflow,
+      user: input.user,
+      actionId: input.actionId,
+      outcomeId,
+      inputs: input.inputs,
+      teams: input.teams,
+      org: input.org ?? getOrgStructureSnapshot(),
+      roles,
+      users: input.users,
+      effective,
+      extras: input.extras,
+    })
+    return
+  }
+
   await performAction({
     project: input.project,
     workflow,
@@ -132,6 +185,46 @@ export async function runWorkflowAction(input: RunWorkflowActionInput): Promise<
     inputs: input.inputs,
     extras: input.extras,
   })
+}
+
+// --- Phase 3: simple project subtasks ----------------------------------------
+// A flat work item under /projects/{id}/subtasks/{sid}. Distinct from the
+// task-level `addSubtask` (which writes /tasks with parentTaskId). No recursion.
+// Every ref goes through tenantCol/tenantDoc so sandbox path-isolation holds.
+
+export interface AddSubtaskItemInput {
+  projectId: string
+  title: string
+  assigneeId?: string
+  dueDate?: string
+  parentStageId?: string
+  createdBy: string
+}
+
+export async function addSubtaskItem(input: AddSubtaskItemInput): Promise<string> {
+  const ref = doc(tenantCol('projects', input.projectId, 'subtasks'))
+  await setDoc(ref, {
+    title: input.title,
+    status: 'todo',
+    ...(input.assigneeId ? { assigneeId: input.assigneeId } : {}),
+    ...(input.dueDate ? { dueDate: input.dueDate } : {}),
+    ...(input.parentStageId ? { parentStageId: input.parentStageId } : {}),
+    createdBy: input.createdBy,
+    createdAt: serverTimestamp(),
+  })
+  return ref.id
+}
+
+export async function updateSubtaskItem(
+  projectId: string,
+  subtaskId: string,
+  patch: Partial<{ title: string; status: string; assigneeId: string | null; dueDate: string | null }>,
+): Promise<void> {
+  await setDoc(tenantDoc('projects', projectId, 'subtasks', subtaskId), patch, { merge: true })
+}
+
+export async function deleteSubtaskItem(projectId: string, subtaskId: string): Promise<void> {
+  await deleteDoc(tenantDoc('projects', projectId, 'subtasks', subtaskId))
 }
 
 // --- Audit trail -------------------------------------------------------------
@@ -344,10 +437,30 @@ export async function setTeamLead(input: SetTeamLeadInput): Promise<void> {
 // needs no per-project recompute — the `array-contains-any [uid, ...myTeamIds]`
 // query on the projects list resolves it. Including `createdBy` guarantees the
 // creator baseline keeps list-visibility even on a role-less / team-less project.
+// The hierarchy-role ids referenced as actors anywhere in a workflow's actions
+// (canonical actor + actors[] + alsoAllow, via the adapter). These are the roles
+// whose holders must be able to SEE a project on this workflow to act on it.
+function roleActorIdsOf(workflow: Workflow): string[] {
+  const ids = new Set<string>()
+  for (const stage of workflow.stages) {
+    for (const action of stage.actions) {
+      for (const actor of readActors(action).all) {
+        if (actor.kind === 'role') ids.add(actor.roleId)
+      }
+    }
+  }
+  return [...ids]
+}
+
 export function computeAccessKeys(
   roleAssignments: Record<string, string | string[]> | undefined,
   teamIds: string[],
   createdBy?: string,
+  // Phase 3.6: when supplied, also enumerate the holders of every `role`-kind
+  // actor referenced by the workflow so hierarchy-role-gated projects are
+  // visible to (and routable for) their holders. Omitted → identical to before,
+  // so every legacy caller + seed is unaffected.
+  opts?: { workflow?: Workflow; users?: User[]; roles?: RoleDef[] },
 ): string[] {
   const keys = new Set<string>()
   for (const v of Object.values(roleAssignments ?? {})) {
@@ -356,6 +469,11 @@ export function computeAccessKeys(
   }
   for (const t of teamIds) if (t) keys.add(t)
   if (createdBy) keys.add(createdBy)
+  if (opts?.workflow && opts.users?.length && opts.roles?.length) {
+    for (const roleId of roleActorIdsOf(opts.workflow)) {
+      for (const uid of resolveRoleHolders(roleId, opts.users, opts.roles)) keys.add(uid)
+    }
+  }
   return [...keys]
 }
 
@@ -386,6 +504,10 @@ export interface AddProjectInput {
   // Phase 2d: custom-field values collected on the create form (createForm
   // surface). Keyed by workflow.projectFields.customFields[].id.
   fields?: Record<string, unknown>
+  // Phase 3.6: the tenant user directory, so accessKeys can enumerate the
+  // holders of any `role`-kind actor on the workflow at creation time. Optional
+  // → when omitted, role-actor holders simply aren't pre-seeded (status quo).
+  users?: User[]
   // Collaborative-flow fields. Only set when picked workflow's flowType is
   // 'collaborative' — the form's CollaborativeFields subcomponent surfaces
   // these inputs and omits them for other flow types.
@@ -408,10 +530,14 @@ export async function addProject(input: AddProjectInput): Promise<string> {
       `Workflow "${input.workflowId}" not loaded — refresh the page or ask an admin to seed it under /admin/config.`,
     )
   }
-  const firstStage = [...workflow.stages].sort((a, b) => a.order - b.order)[0]
-  if (!firstStage) {
+  const orderedFirst = [...workflow.stages].sort((a, b) => a.order - b.order)[0]
+  if (!orderedFirst) {
     throw new Error(`Workflow "${input.workflowId}" has no stages — cannot pin a project.`)
   }
+  // Phase 3: prefer the author-set entry task; fall back to lowest-order stage.
+  const firstStage =
+    (workflow.entryStageId && workflow.stages.find((s) => s.id === workflow.entryStageId)) ||
+    orderedFirst
 
   // Initial timeline events. Always start with the workflow_assignment marker
   // so the side panel renders "pinned to {workflowName} by {creator}". Add the
@@ -467,7 +593,11 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     createdBy: input.createdBy,
     status: 'in_progress',
     teamIds: [],
-    accessKeys: computeAccessKeys(hasRoles ? roleAssignments : undefined, [], input.createdBy),
+    accessKeys: computeAccessKeys(hasRoles ? roleAssignments : undefined, [], input.createdBy, {
+      workflow,
+      users: input.users,
+      roles: getRolesSnapshot(),
+    }),
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),
     // Phase 2d additions (omitted when empty so docs stay tidy).
@@ -632,6 +762,9 @@ export interface SetProjectTeamsInput {
   newTeamIds: string[]
   actorId: string
   actorName: string
+  // Phase 3.6: keep hierarchy-role-actor holders in accessKeys across this write.
+  workflow?: Workflow
+  users?: User[]
 }
 
 // Atomically updates `projects/{id}.teamIds` and mirrors the change into each
@@ -645,7 +778,11 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
   const batch = writeBatch(db)
   batch.update(tenantDoc('projects', input.projectId), {
     teamIds: input.newTeamIds,
-    accessKeys: computeAccessKeys(input.roleAssignments, input.newTeamIds, input.createdBy),
+    accessKeys: computeAccessKeys(input.roleAssignments, input.newTeamIds, input.createdBy, {
+      workflow: input.workflow,
+      users: input.users,
+      roles: getRolesSnapshot(),
+    }),
     updatedAt: serverTimestamp(),
   })
   for (const teamId of added) {
@@ -688,6 +825,9 @@ export interface SetProjectRoleInput {
   createdBy?: string
   actorId: string
   actorName: string
+  // Phase 3.6: keep hierarchy-role-actor holders in accessKeys across this write.
+  workflow?: Workflow
+  users?: User[]
 }
 
 // Assign / reassign / clear one project-role slot. Recomputes accessKeys, appends
@@ -709,7 +849,11 @@ export async function setProjectRole(input: SetProjectRoleInput): Promise<void> 
   const batch = writeBatch(db)
   batch.update(tenantDoc('projects', input.projectId), {
     roleAssignments: merged,
-    accessKeys: computeAccessKeys(merged, input.teamIds, input.createdBy),
+    accessKeys: computeAccessKeys(merged, input.teamIds, input.createdBy, {
+      workflow: input.workflow,
+      users: input.users,
+      roles: getRolesSnapshot(),
+    }),
     projectHistory: arrayUnion(event),
     updatedAt: serverTimestamp(),
   })
@@ -722,6 +866,53 @@ export async function setProjectRole(input: SetProjectRoleInput): Promise<void> 
     targetTitle: input.projectTitle,
     projectId: input.projectId,
     payload: { roleId: input.roleId, value: input.value },
+    batch,
+  })
+  await batch.commit()
+}
+
+// --- User hierarchy-role assignment (Phase 3.6) ------------------------------
+
+export interface SetUserRolesInput {
+  uid: string
+  // Full desired set of hierarchy-role ids (the multi-select source of truth).
+  roleIds: string[]
+  // Previous set, for the audit diff (optional).
+  fromRoleIds?: string[]
+  actorId: string
+  actorName: string
+  targetName: string
+}
+
+// The platform access tier (globalRole) a set of configured roles confers, via
+// their legacy bridge tags. Configured roles are now the source of truth; this
+// keeps globalRole — which Firestore rules + the super-admin bypass still read —
+// in sync. super_admin wins over admin; anything else is a plain user.
+export function deriveGlobalRole(roleIds: string[], roles: RoleDef[]): GlobalRole {
+  const held = roles.filter((r) => roleIds.includes(r.id))
+  if (held.some((r) => r.legacyGlobalRole === 'super_admin')) return 'super_admin'
+  if (held.some((r) => r.legacyGlobalRole === 'admin')) return 'admin'
+  return 'user'
+}
+
+// Assign the full set of hierarchy roles a user holds (overwrites user.roleIds)
+// and re-derive their globalRole tier from those roles. Used by both the Members
+// page (per-user) and the Roles page (per-role) — they edit the same field.
+// Light write (single doc + audit); does NOT retro-rebuild accessKeys of
+// pre-existing role-gated projects (no Cloud Functions — those converge on the
+// next project write; see plan's eventual-consistency note).
+export async function setUserRoles(input: SetUserRolesInput): Promise<void> {
+  const globalRole = deriveGlobalRole(input.roleIds, getRolesSnapshot())
+  const batch = writeBatch(db)
+  batch.update(tenantDoc('users', input.uid), { roleIds: input.roleIds, globalRole })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'user.roles_changed',
+    targetType: 'user',
+    targetId: input.uid,
+    targetTitle: input.targetName,
+    payload: { fromRoleIds: input.fromRoleIds ?? [], toRoleIds: input.roleIds, globalRole },
     batch,
   })
   await batch.commit()

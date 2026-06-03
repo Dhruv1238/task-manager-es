@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import {
   useBootLoaded,
+  useOrgStructure,
   useSetupCompleted,
   useWorkflowRegistry,
 } from '../contexts/AppConfigContext'
@@ -120,6 +121,7 @@ export default function Home() {
   const bootLoaded = useBootLoaded()
   const setupCompleted = useSetupCompleted()
   const workflowRegistry = useWorkflowRegistry()
+  const orgStructure = useOrgStructure()
   // Phase 2c: broadened auto-launch. Any super_admin in a fresh tenant gets
   // routed to the unified onboarding flow (org wizard → workflow wizard).
   // The dev-config allowlist no longer gates the redirect — only super_admins
@@ -146,6 +148,13 @@ export default function Home() {
   if (isSuperAdmin && !setupCompleted) {
     return <Navigate to="/admin/setup" replace />
   }
+  // Phase 3: first-run also routes through Roles & Hierarchy — but ONLY in the
+  // onboarding window (org set up, no flow built yet, no hierarchy defined yet).
+  // Existing tenants (who already have active workflows) are never pulled here.
+  const hasHierarchy = (orgStructure.roleHierarchy ?? []).length > 0
+  if (isSuperAdmin && noActiveWorkflows && !hasHierarchy) {
+    return <Navigate to="/admin/roles?onboarding=1" replace />
+  }
   if (isSuperAdmin && noActiveWorkflows) {
     return <Navigate to="/admin/workflows/new?onboarding=1" replace />
   }
@@ -169,11 +178,11 @@ export default function Home() {
         </p>
       </div>
 
-      {isAdmin && (
-        <div className="mb-12">
-          <AdminActionBar />
-        </div>
-      )}
+      {/* AdminActionBar self-gates on per-module create permissions (admins +
+          hierarchy roles granted create), so it's rendered unconditionally. */}
+      <div className="mb-12">
+        <AdminActionBar />
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <HomeCard

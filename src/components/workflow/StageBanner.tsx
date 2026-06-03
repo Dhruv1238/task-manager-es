@@ -16,6 +16,8 @@ import { stageTone } from './stageStyle'
 import ActionModal from './ActionModal'
 import ProjectHistorySidePanel from './ProjectHistorySidePanel'
 import UpdateProjectStatusModal from './UpdateProjectStatusModal'
+import OutcomePicker from '../project/OutcomePicker'
+import { hasOutcomeChoice } from '../../lib/rules/outcomeAdapter'
 
 interface Props {
   project: Project
@@ -39,6 +41,8 @@ export default function StageBanner({ project }: Props) {
   // UpdateProjectStatusModal instead of the generic ActionModal so the
   // operator gets the card-based status picker.
   const [statusAction, setStatusAction] = useState<StageAction | null>(null)
+  // Phase 3: v2 actions with multiple authored outcomes open the OutcomePicker.
+  const [outcomeAction, setOutcomeAction] = useState<StageAction | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
 
   const stage = useMemo(() => {
@@ -84,7 +88,12 @@ export default function StageBanner({ project }: Props) {
   // action-button loop as every other action.
 
   function handleActionClick(action: StageAction) {
-    if (action.effect.kind === 'set_status') {
+    // Phase 3: a v2-authored action presenting a real choice opens the picker;
+    // single-outcome v2 actions fall through to ActionModal (which routes to
+    // executeOutcome with the lone outcome). Legacy actions are unaffected.
+    if (action.outcomes?.length && hasOutcomeChoice(action)) {
+      setOutcomeAction(action)
+    } else if (action.effect.kind === 'set_status') {
       setStatusAction(action)
     } else {
       setOpenAction(action)
@@ -196,6 +205,12 @@ export default function StageBanner({ project }: Props) {
               )
             : undefined
         }
+      />
+      <OutcomePicker
+        open={Boolean(outcomeAction)}
+        onClose={() => setOutcomeAction(null)}
+        project={project}
+        action={outcomeAction}
       />
       <ProjectHistorySidePanel
         open={historyOpen}

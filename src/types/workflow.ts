@@ -1,5 +1,6 @@
 import type { Timestamp } from 'firebase/firestore'
 import type { ProjectStatus, TeamRoleId } from './models'
+import type { CanvasLayout, FieldCondition, Outcome } from './v2'
 
 // Sentinel doc id for the workflow-registry singleton, sibling of the
 // per-workflow docs under /workflows/. Chosen with a leading underscore so it
@@ -121,6 +122,13 @@ export interface Workflow {
   // through actorMatches (same engine as actions). Absent → legacy flow-type
   // rule + createdBy baseline (see canUpdateProjectStatus).
   canUpdateStatusActors?: ActorRef[]
+  // ─── Phase 3 additions (all optional → pre-3 docs keep working) ───────────
+  // React Flow positions + author-drawn outcome edges. Absent → the canvas
+  // auto-lays-out from stages/outcomes on first open (see autoLayout.ts).
+  canvasLayout?: CanvasLayout
+  // Stable id of the stage new projects start at. Absent → addProject falls
+  // back to the lowest-order stage (legacy behaviour preserved).
+  entryStageId?: string
   // Phase 2c: optional long-form copy shown in the wizard's first step and the
   // template picker description. Falls back to a derived flow-type sentence.
   description?: string
@@ -171,6 +179,9 @@ export interface Stage {
   order: number
   isTerminal: boolean
   actions: StageAction[]
+  // Phase 3: free-form "task description" set in the canvas node inspector.
+  // Falls back to displayName for display.
+  description?: string
 }
 
 export interface StageAction {
@@ -195,6 +206,17 @@ export interface StageAction {
   inputs: ActionInput[]
   // Banner button styling hint. The engine never reads it; only the renderer.
   intent?: 'primary' | 'success' | 'danger' | 'neutral'
+  // ─── Phase 3 additions (all optional → legacy actions keep working) ───────
+  // Layer-2 role↔action mapping. When present, supersedes `actor`/`alsoAllow`
+  // as the allowed-set; the runtime reads it via readActors(action). ≥1 entry
+  // is required at publish time (an action with no mapped role is invalid).
+  actors?: ActorRef[]
+  // Optional single-comparison gate (enabled in v2). Richer logic is coming-soon.
+  availableWhen?: FieldCondition
+  // Author-named outcomes (the "task rules"). When present, supersedes the single
+  // `effect`; the runtime reads it via readOutcomes(action). An action with one
+  // outcome behaves like today's single-effect action; several present a picker.
+  outcomes?: Outcome[]
 }
 
 // Discriminated union — the evaluator dispatches on `kind`. Add a new kind
@@ -228,6 +250,13 @@ export type ActorRef =
   // The project's creator. Resolves to project.createdBy, falling back to the
   // legacy project.ownerId for pre-2d projects.
   | { kind: 'creator' }
+  // Phase 3: a role in the N-level hierarchy (config/roles[].id). Matches when
+  // the viewer holds the role exactly OR sits at an equal/higher authority level
+  // (level inheritance: viewer.topLevel <= referenced.level). Super-admin always
+  // passes. Resolution needs a RoleResolutionCtx (roles + the viewer's cached
+  // effective permissions); legacy callers that omit it simply never match this
+  // kind — every seeded workflow uses only the kinds above, so this is safe.
+  | { kind: 'role'; roleId: string }
 
 // Discriminated union of side effects an action can produce on a project.
 // Every effect carries its target stage id; transition_with_counter additionally

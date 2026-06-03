@@ -2,32 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { FirebaseError } from 'firebase/app'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
-import { useLeadRoleName } from '../../contexts/AppConfigContext'
+import { useOrgStructure } from '../../contexts/AppConfigContext'
 import {
   createMember,
   generateTempPassword,
   type CreateMemberResult,
 } from '../../lib/createMember'
-import type { GlobalRole } from '../../types/models'
-
-function buildRoleOptions(
-  leadRoleName: string,
-): { value: GlobalRole; label: string; hint: string }[] {
-  return [
-    { value: 'user', label: 'User', hint: 'Default — team members and individual contributors' },
-    { value: 'horizontal_lead', label: 'Horizontal Lead', hint: 'Leads a horizontal team' },
-    {
-      value: 'admin',
-      label: `Admin (${leadRoleName} pool)`,
-      hint: `Eligible to be assigned as a ${leadRoleName}`,
-    },
-    {
-      value: 'super_admin',
-      label: 'Super Admin',
-      hint: `Tender team — creates projects, allocates ${leadRoleName}s`,
-    },
-  ]
-}
 
 interface Props {
   open: boolean
@@ -55,31 +35,39 @@ function friendlyError(err: unknown): string {
 
 export default function NewMemberModal({ open, onClose, onCreated }: Props) {
   const { user, profile } = useAuth()
-  const leadRoleName = useLeadRoleName()
-  const roleOptions = useMemo(() => buildRoleOptions(leadRoleName), [leadRoleName])
+  const org = useOrgStructure()
+  const roles = useMemo(() => org.roleHierarchy ?? [], [org.roleHierarchy])
+  // The most basic role = lowest authority (highest level number, then order).
+  const mostBasicId = useMemo(() => {
+    const sorted = [...roles].sort((a, b) => b.level - a.level || b.order - a.order)
+    return sorted[0]?.id
+  }, [roles])
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [globalRole, setGlobalRole] = useState<GlobalRole>('user')
+  const [roleIds, setRoleIds] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CreateMemberResult | null>(null)
   const [copied, setCopied] = useState(false)
 
-  // Only super admins can pick a role at creation time. Admins can still create
-  // 'user'-level members for team rosters (back-compat with v1 flow).
+  // Only super admins can adjust roles at creation; everyone else gets the
+  // default basic role assigned silently.
   const canPickRole = profile?.globalRole === 'super_admin'
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      // Default to the most basic configured role.
+      setRoleIds(mostBasicId ? [mostBasicId] : [])
+    } else {
       setEmail('')
       setDisplayName('')
-      setGlobalRole('user')
+      setRoleIds([])
       setError(null)
       setSubmitting(false)
       setResult(null)
       setCopied(false)
     }
-  }, [open])
+  }, [open, mostBasicId])
 
   async function handleSubmit() {
     if (!user) return
@@ -87,13 +75,14 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
     setSubmitting(true)
     try {
       const tempPassword = generateTempPassword()
+      const finalRoleIds = canPickRole ? roleIds : mostBasicId ? [mostBasicId] : []
       const res = await createMember(
         email.trim(),
         displayName.trim(),
         tempPassword,
         user.uid,
         profile?.displayName ?? user.email ?? 'Admin',
-        canPickRole ? globalRole : 'user',
+        finalRoleIds,
       )
       setResult(res)
       onCreated?.(res)
@@ -200,25 +189,33 @@ export default function NewMemberModal({ open, onClose, onCreated }: Props) {
             />
           </div>
 
-          {canPickRole && (
+          {canPickRole && roles.length > 0 && (
             <div className="space-y-1.5">
-              <label htmlFor="member-role" className="text-sm font-medium text-fg-muted">
-                Role
-              </label>
-              <select
-                id="member-role"
-                value={globalRole}
-                onChange={(e) => setGlobalRole(e.target.value as GlobalRole)}
-                className={inputCls}
-              >
-                {roleOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-overlay">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <label className="text-sm font-medium text-fg-muted">Roles</label>
+              <div className="space-y-0.5 rounded-lg border border-line bg-fill-2 p-2">
+                {[...roles]
+                  .sort((a, b) => a.level - b.level || a.order - b.order)
+                  .map((r) => {
+                    const on = roleIds.includes(r.id)
+                    return (
+                      <label
+                        key={r.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg-muted transition hover:bg-fill-3"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() =>
+                            setRoleIds(on ? roleIds.filter((x) => x !== r.id) : [...roleIds, r.id])
+                          }
+                        />
+                        <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                      </label>
+                    )
+                  })}
+              </div>
               <p className="text-xs text-fg-subtle">
-                {roleOptions.find((r) => r.value === globalRole)?.hint}
+                New members get the most basic role by default. Higher roles grant more access.
               </p>
             </div>
           )}

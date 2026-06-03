@@ -9,7 +9,9 @@ import {
   canPerform as evaluatorCanPerform,
   canUpdateProjectStatus,
 } from '../lib/workflowEvaluator'
+import { computeEffectivePermissions, can as canModuleOp } from '../lib/permissions/effectivePermissions'
 import type { Project, Team } from '../types/models'
+import type { EffectivePermissions, ModuleOp } from '../types/v2'
 
 export interface Permissions {
   // Global role flags
@@ -43,6 +45,12 @@ export interface Permissions {
   // this user to perform the named action at the project's current stage.
   // Replaces the named action flags (canAllocateVh, canAcceptOrEscalate, ...).
   canPerform: (actionId: string) => boolean
+
+  // Phase 3 — Layer 1 (module × CRUD). Reads the viewer's effective hierarchy
+  // grants. Returns false when the viewer holds no hierarchy role (callers fall
+  // back to the coarse isAdmin / isProjectCreator flags).
+  can: (moduleId: string, op: ModuleOp) => boolean
+  effectivePermissions: EffectivePermissions | null
 
   canUpdateStatus: boolean
   canEditProject: boolean
@@ -182,8 +190,18 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     const isProjectTeamMember = Boolean(
       uid && project && project.teamIds.some((tid) => userTeamIds.includes(tid)),
     )
+    // Chat is visible to everyone with access to the project: super-admins and
+    // global admins, the creator (baseline), anyone holding an assigned project
+    // role, members of any team added to the project, and the allocated lead.
+    // This mirrors the Firestore rules' accessKeys-based hasProjectAccess().
     const canViewProjectChat = Boolean(
-      project && (isSuperAdmin || isProjectCreator || isAnyRoleHolder || isProjectTeamMember),
+      project &&
+        (isSuperAdmin ||
+          isAdmin ||
+          isProjectCreator ||
+          isAnyRoleHolder ||
+          isProjectTeamMember ||
+          isProjectLead),
     )
 
     // Generic action gate. Reads the active workflow + evaluator. False when:
@@ -192,13 +210,33 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
     //   - workflow not loaded yet (e.g. fresh tab before cache populates)
     //   - project is closed
     //   - the workflow's permission check rejects this user for this action
+    // Phase 3: the viewer's effective hierarchy permissions (Layer 1) + the
+    // RoleResolutionCtx that lets canPerform resolve `role`-kind actors.
+    const roles = org.roleHierarchy ?? []
+    const effectivePermissions = resolvedProfile
+      ? computeEffectivePermissions(resolvedProfile, roles)
+      : null
+    const roleCtx = { roles, effective: effectivePermissions }
+
     function canPerform(actionId: string): boolean {
       if (!project || !resolvedProfile || !workflow || closed) return false
       try {
-        return evaluatorCanPerform(project, workflow, resolvedProfile, projectTeams, org, actionId)
+        return evaluatorCanPerform(
+          project,
+          workflow,
+          resolvedProfile,
+          projectTeams,
+          org,
+          actionId,
+          roleCtx,
+        )
       } catch {
         return false
       }
+    }
+
+    function can(moduleId: string, op: ModuleOp): boolean {
+      return canModuleOp(effectivePermissions, moduleId, op)
     }
 
     return {
@@ -216,6 +254,8 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       isCoordinatorLead,
       isValidatorMember,
       canPerform,
+      can,
+      effectivePermissions,
       canUpdateStatus,
       canEditProject,
       canEditProjectMeta,

@@ -7,10 +7,18 @@ export interface DropdownOption {
   leading?: ReactNode
 }
 
+export interface DropdownGroup {
+  label: string
+  options: DropdownOption[]
+}
+
 interface Props {
   value: string
   onChange: (v: string) => void
-  options: DropdownOption[]
+  // Either a flat option list, or grouped options (rendered with section
+  // headers). When `groups` is set it takes precedence over `options`.
+  options?: DropdownOption[]
+  groups?: DropdownGroup[]
   placeholder?: string
   disabled?: boolean
   disabledTooltip?: string
@@ -35,6 +43,7 @@ export default function Dropdown({
   value,
   onChange,
   options,
+  groups,
   placeholder,
   disabled,
   disabledTooltip,
@@ -48,9 +57,13 @@ export default function Dropdown({
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<MenuPos | null>(null)
 
+  // Flattened option list — used for the trigger label lookup and height estimate
+  // whether the menu is flat or grouped.
+  const allOptions = groups ? groups.flatMap((g) => g.options) : options ?? []
+
   // Estimate menu height for the flip decision (rows are ~36px, capped at the
   // menu's max-height of 288px) so we flip before the browser clips it.
-  const estHeight = Math.min(options.length * 36 + 8, 288)
+  const estHeight = Math.min(allOptions.length * 36 + (groups ? groups.length * 28 : 0) + 8, 288)
 
   useLayoutEffect(() => {
     if (!open) {
@@ -101,7 +114,7 @@ export default function Dropdown({
     }
   }, [open])
 
-  const current = options.find((o) => o.value === value)
+  const current = allOptions.find((o) => o.value === value)
 
   const menuStyle: React.CSSProperties = {
     position: 'fixed',
@@ -156,42 +169,57 @@ export default function Dropdown({
             className={`overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl ${menuClassName ?? ''}`}
           >
             <div className="max-h-72 overflow-y-auto">
-              {options.map((opt) => {
-                const active = opt.value === value
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onClick={() => {
-                      onChange(opt.value)
-                      setOpen(false)
-                    }}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${
-                      active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
-                    }`}
-                  >
-                    {opt.leading}
-                    <span className="flex-1 truncate">{opt.label}</span>
-                    {active && (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="text-brand"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    )}
-                  </button>
-                )
-              })}
+              {(() => {
+                const renderOption = (opt: DropdownOption) => {
+                  const active = opt.value === value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onClick={() => {
+                        onChange(opt.value)
+                        setOpen(false)
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition ${
+                        active ? 'bg-brand-soft text-fg' : 'text-fg-muted hover:bg-fill-2'
+                      }`}
+                    >
+                      {opt.leading}
+                      <span className="flex-1 truncate">{opt.label}</span>
+                      {active && (
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="text-brand"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  )
+                }
+                if (groups) {
+                  return groups
+                    .filter((g) => g.options.length)
+                    .map((g) => (
+                      <div key={g.label}>
+                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                          {g.label}
+                        </div>
+                        {g.options.map(renderOption)}
+                      </div>
+                    ))
+                }
+                return (options ?? []).map(renderOption)
+              })()}
             </div>
           </div>,
           document.body,

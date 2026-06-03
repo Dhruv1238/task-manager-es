@@ -1,0 +1,58 @@
+/* Phase 3 canvas styles. Imported INSIDE the lazy FlowAuthoring chunk (never in
+   the global index.css) so @xyflow/react's stylesheet + these overrides ship
+   only when the canvas route loads — the sandbox login/shell never pays for it. */
+
+@import '@xyflow/react/dist/style.css';
+
+/* Pane background is owned by our --canvas-bg token (set inline on the wrapper).
+   Strip React Flow's default so the dot-grid + orbs read cleanly. */
+.rf-canvas .react-flow__background {
+  background: transparent;
+}
+
+/* Controls — themed to the glass shell. */
+.rf-canvas .react-flow__controls {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+  border: 1px solid var(--color-line);
+}
+.rf-canvas .react-flow__controls-button {
+  background: var(--rf-controls-bg);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-fg-muted);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+.rf-canvas .react-flow__controls-button:hover {
+  background: var(--color-fill-3);
+  color: var(--color-fg);
+}
+.rf-canvas .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* MiniMap — glass card. */
+.rf-canvas .react-flow__minimap {
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-line);
+  overflow: hidden;
+}
+
+/* Attribution hidden via proOptions, but belt-and-braces. */
+.rf-canvas .react-flow__attribution {
+  display: none;
+}
+
+/* Connection line while dragging an outcome to a target. */
+.rf-canvas .react-flow__connectionline path,
+.rf-canvas .react-flow__connection-path {
+  stroke: var(--color-brand-edge);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+/* Selection box. */
+.rf-canvas .react-flow__selection {
+  background: var(--color-brand-soft);
+  border: 1px solid var(--color-brand-edge);
+}

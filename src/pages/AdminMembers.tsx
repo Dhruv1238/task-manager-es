@@ -10,36 +10,16 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
-import { useLeadRoleName } from '../contexts/AppConfigContext'
-import { setUserRole, tenantCol } from '../lib/firestore'
+import { useOrgStructure } from '../contexts/AppConfigContext'
+import { setUserRoles, tenantCol } from '../lib/firestore'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
-import type { GlobalRole, User } from '../types/models'
+import type { User } from '../types/models'
+import type { RoleDef } from '../types/v2'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import SearchInput from '../components/ui/SearchInput'
+import Modal from '../components/ui/Modal'
 
 const PAGE_SIZE = 25
-
-function buildRoleOptions(leadRoleName: string): { value: GlobalRole; label: string }[] {
-  return [
-    { value: 'super_admin', label: 'Super Admin' },
-    { value: 'admin', label: `Admin (${leadRoleName} pool)` },
-    { value: 'horizontal_lead', label: 'Horizontal Lead' },
-    { value: 'user', label: 'User' },
-  ]
-}
-
-function rolePillClass(role: GlobalRole): string {
-  switch (role) {
-    case 'super_admin':
-      return 'border-tone-warn-bd bg-tone-warn-bg text-tone-warn-fg'
-    case 'admin':
-      return 'border-brand-edge bg-brand-soft text-brand'
-    case 'horizontal_lead':
-      return 'border-tone-cool-bd bg-tone-cool-bg text-tone-cool-fg'
-    default:
-      return 'border-line bg-fill-2 text-fg-muted'
-  }
-}
 
 function initials(u: User): string {
   const src = u.displayName || u.email || '?'
@@ -54,19 +34,114 @@ function formatDate(ts: Timestamp | undefined): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
+// Read-only chips of the configured roles a user holds.
+function RoleChips({ user, roles }: { user: User; roles: RoleDef[] }) {
+  const held = roles.filter((r) => (user.roleIds ?? []).includes(r.id))
+  if (held.length === 0) return <span className="text-fg-faint">— none —</span>
+  return (
+    <span className="flex flex-wrap gap-1">
+      {held.map((r) => (
+        <span
+          key={r.id}
+          className="inline-flex items-center rounded-full border border-brand-edge bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand"
+        >
+          {r.label}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+// Modal checklist for assigning the configured roles a user holds. The platform
+// tier (super-admin / admin) is derived from these — there's no separate role
+// ladder anymore.
+function RoleAssignModal({
+  open,
+  user,
+  roles,
+  saving,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  user: User | null
+  roles: RoleDef[]
+  saving: boolean
+  onClose: () => void
+  onSave: (uid: string, roleIds: string[]) => void
+}) {
+  const [sel, setSel] = useState<string[]>([])
+  useEffect(() => {
+    if (user) setSel(user.roleIds ?? [])
+  }, [user])
+  if (!user) return null
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Roles · ${user.displayName}`}
+      description="Assign the roles this person holds. Their access tier is derived from these roles."
+      closeOnBackdrop={!saving}
+    >
+      <div className="space-y-1">
+        {roles.length === 0 ? (
+          <p className="text-sm text-fg-subtle">
+            No roles defined yet — set them up under Roles &amp; access first.
+          </p>
+        ) : (
+          [...roles]
+            .sort((a, b) => a.level - b.level || a.order - b.order)
+            .map((r) => {
+              const on = sel.includes(r.id)
+              return (
+                <label
+                  key={r.id}
+                  className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-fg-muted transition hover:bg-fill-2"
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => setSel(on ? sel.filter((x) => x !== r.id) : [...sel, r.id])}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-fg">{r.label}</span>
+                  <span className="text-xs text-fg-subtle">Level {r.level}</span>
+                </label>
+              )
+            })
+        )}
+      </div>
+      <div className="flex gap-3 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={saving}
+          className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-2.5 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(user.uid, sel)}
+          disabled={saving}
+          className="flex-1 rounded-lg bg-brand-gradient px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient disabled:opacity-60"
+        >
+          {saving ? 'Saving…' : 'Save roles'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export default function AdminMembers() {
   const { user: firebaseUser, profile } = useAuth()
-  const leadRoleName = useLeadRoleName()
-  const roleOptions = useMemo(() => buildRoleOptions(leadRoleName), [leadRoleName])
-  const roleLabel = useCallback(
-    (role: GlobalRole): string => roleOptions.find((r) => r.value === role)?.label ?? role,
-    [roleOptions],
-  )
+  const org = useOrgStructure()
+  const hierarchyRoles = useMemo(() => org.roleHierarchy ?? [], [org.roleHierarchy])
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [pendingRoleUid, setPendingRoleUid] = useState<string | null>(null)
+  const [editing, setEditing] = useState<User | null>(null)
+  const [savingRoles, setSavingRoles] = useState(false)
   const canEditRoles = profile?.globalRole === 'super_admin'
 
   useEffect(() => {
@@ -80,7 +155,7 @@ export default function AdminMembers() {
       const constraints = []
       if (debouncedSearch) {
         constraints.push(where('displayNameLower', '>=', debouncedSearch))
-        constraints.push(where('displayNameLower', '<=', debouncedSearch + ''))
+        constraints.push(where('displayNameLower', '<=', debouncedSearch + ''))
         constraints.push(orderBy('displayNameLower'))
       } else {
         constraints.push(orderBy('createdAt', 'desc'))
@@ -92,12 +167,8 @@ export default function AdminMembers() {
     [debouncedSearch],
   )
 
-  const { items: users, setItems: setUsers, loading, loadingMore, hasMore, loadMore, error } = usePaginatedQuery<User>(
-    buildQuery,
-    PAGE_SIZE,
-    [debouncedSearch],
-    (snap) => snap.data() as User,
-  )
+  const { items: users, setItems: setUsers, loading, loadingMore, hasMore, loadMore, error } =
+    usePaginatedQuery<User>(buildQuery, PAGE_SIZE, [debouncedSearch], (snap) => snap.data() as User)
 
   function toggleReveal(uid: string) {
     setRevealed((prev) => {
@@ -115,23 +186,24 @@ export default function AdminMembers() {
     setTimeout(() => setCopiedId((id) => (id === u.uid ? null : id)), 2000)
   }
 
-  async function changeRole(u: User, nextRole: GlobalRole) {
-    if (firebaseUser?.uid === u.uid) return // can't change your own role
-    if (u.globalRole === nextRole) return
-    if (!firebaseUser) return
-    setPendingRoleUid(u.uid)
+  async function saveRoles(uid: string, nextRoleIds: string[]) {
+    const target = users.find((u) => u.uid === uid)
+    if (!firebaseUser || !target) return
+    const fromRoleIds = target.roleIds ?? []
+    setSavingRoles(true)
     try {
-      await setUserRole({
-        uid: u.uid,
-        fromRole: u.globalRole,
-        toRole: nextRole,
+      await setUserRoles({
+        uid,
+        roleIds: nextRoleIds,
+        fromRoleIds,
         actorId: firebaseUser.uid,
         actorName: profile?.displayName ?? firebaseUser.email ?? 'Admin',
-        targetName: u.displayName,
+        targetName: target.displayName,
       })
-      setUsers((prev) => prev.map((m) => (m.uid === u.uid ? { ...m, globalRole: nextRole } : m)))
+      setUsers((prev) => prev.map((m) => (m.uid === uid ? { ...m, roleIds: nextRoleIds } : m)))
+      setEditing(null)
     } finally {
-      setPendingRoleUid(null)
+      setSavingRoles(false)
     }
   }
 
@@ -211,7 +283,6 @@ export default function AdminMembers() {
                   const isSelf = firebaseUser?.uid === u.uid
                   const isRevealed = revealed.has(u.uid)
                   const isCopied = copiedId === u.uid
-                  const roleUpdating = pendingRoleUid === u.uid
                   return (
                     <tr key={u.uid} className="transition hover:bg-fill-1">
                       <td className="px-6 py-4">
@@ -231,11 +302,18 @@ export default function AdminMembers() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex min-w-24 items-center justify-center rounded-full border px-2.5 py-1 text-xs font-medium whitespace-nowrap ${rolePillClass(u.globalRole)}`}
-                        >
-                          {roleLabel(u.globalRole)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <RoleChips user={u} roles={hierarchyRoles} />
+                          {canEditRoles && !isSelf && (
+                            <button
+                              type="button"
+                              onClick={() => setEditing(u)}
+                              className="shrink-0 text-xs text-brand transition hover:underline"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-fg-muted">{u.teamIds?.length ?? 0}</td>
                       <td className="px-6 py-4">
@@ -269,56 +347,16 @@ export default function AdminMembers() {
                       </td>
                       <td className="px-6 py-4 text-fg-muted">{formatDate(u.createdAt)}</td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {u.tempPassword && (
-                            <button
-                              type="button"
-                              onClick={() => copyCredentials(u)}
-                              title='Copy User Credentials'
-                              className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4"
-                            >
-                              {isCopied ? 'Copied' : 'Copy'}
-                            </button>
-                          )}
-                          {canEditRoles && !isSelf ? (
-                            <div className="relative">
-                              <select
-                                value={u.globalRole}
-                                onChange={(e) => changeRole(u, e.target.value as GlobalRole)}
-                                disabled={roleUpdating}
-                                title="Change role"
-                                className="appearance-none rounded-md border border-line bg-fill-2 px-2.5 py-1.5 pr-7 text-xs font-medium text-fg-muted outline-none transition hover:bg-fill-4 focus:border-brand-edge focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-40"
-                              >
-                                {roleOptions.map((opt) => (
-                                  <option key={opt.value} value={opt.value} className="bg-overlay">
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <svg
-                                className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-fg-subtle"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <polyline points="6 9 12 15 18 9" />
-                              </svg>
-                              {roleUpdating && (
-                                <span className="ml-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line-strong border-t-fg-strong align-middle" />
-                              )}
-                            </div>
-                          ) : (
-                            <span
-                              className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-xs font-medium text-fg-subtle"
-                              title={isSelf ? "You can't change your own role" : 'Only super admins can change roles'}
-                            >
-                              {isSelf ? 'You' : 'Locked'}
-                            </span>
-                          )}
-                        </div>
+                        {u.tempPassword && (
+                          <button
+                            type="button"
+                            onClick={() => copyCredentials(u)}
+                            title="Copy user credentials"
+                            className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4"
+                          >
+                            {isCopied ? 'Copied' : 'Copy'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -348,6 +386,15 @@ export default function AdminMembers() {
           </button>
         </div>
       )}
+
+      <RoleAssignModal
+        open={Boolean(editing)}
+        user={editing}
+        roles={hierarchyRoles}
+        saving={savingRoles}
+        onClose={() => setEditing(null)}
+        onSave={saveRoles}
+      />
     </div>
   )
 }

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ShieldCheck, ArrowRight } from 'lucide-react'
 import {  serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
 import { tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
+import { isDevConfigUser } from '../components/DevConfigRoute'
 import {
   DEFAULT_APP_CONFIG,
   useAppConfigContext,
@@ -48,7 +50,7 @@ function formatDate(ts: Timestamp | { seconds?: number; nanoseconds?: number } |
 
 
 export default function AppConfigPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { config: cachedConfig } = useAppConfigContext()
   const { config: liveConfig } = useAppConfigLive()
 
@@ -74,6 +76,7 @@ export default function AppConfigPage() {
             already in flight keeps its current settings.
           </p>
         </div>
+        {profile?.globalRole === 'super_admin' && (
         <Link
           to="/admin/setup"
           title="Walk through the setup wizard again — values are pre-filled with what you have now."
@@ -109,16 +112,49 @@ export default function AppConfigPage() {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </Link>
+        )}
       </div>
 
       <OrgStructureSection />
+
+      {/* Roles, hierarchy & module access live on their own page (/admin/roles).
+          super_admin-only — the destination route is guarded by SuperAdminRoute,
+          so we only surface the entry point to users who can actually open it. */}
+      {profile?.globalRole === 'super_admin' && (
+        <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-md shadow-purple-900/30">
+                <ShieldCheck size={18} aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-lg font-semibold text-fg">Roles &amp; access</h2>
+                <p className="mt-1 text-sm text-fg-subtle">
+                  Define your authority levels, what each role can touch, and who sits where.
+                  Drives permissions across the app — higher levels inherit lower levels&rsquo;
+                  access.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/admin/roles"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-gradient px-3 py-1.5 text-sm font-medium text-white shadow hover-brand-gradient"
+            >
+              Open
+              <ArrowRight size={14} aria-hidden />
+            </Link>
+          </div>
+        </section>
+      )}
 
       <WorkflowsSection adminUid={user?.uid ?? null} />
 
       {/* Dev Tools are scaffolding for the team — sandbox visitors don't need
           (or want) reseed/wipe/migration controls. Build-time gated so the
           whole section tree-shakes out of the sandbox bundle. */}
-      {!__IS_SANDBOX__ && <DevToolsSection adminUid={user?.uid ?? null} />}
+      {!__IS_SANDBOX__ && isDevConfigUser(profile) && (
+        <DevToolsSection adminUid={user?.uid ?? null} />
+      )}
 
       {/* <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
         <h2 className="text-lg font-semibold text-fg">Features</h2>
@@ -784,6 +820,7 @@ function DevToolsSection({ adminUid }: { adminUid: string | null }) {
       {open && (
         <div className="mt-5 space-y-6">
           <ResetTenantTool adminUid={adminUid} />
+          <ConfigTransferSection adminUid={adminUid} />
           <SeedsSection adminUid={adminUid} onRegistryRefresh={onRegistryRefresh} />
           <MigrationsSection adminUid={adminUid} />
         </div>
@@ -1103,6 +1140,261 @@ function MigrationsSection({ adminUid }: { adminUid: string | null }) {
           />
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Config transfer (export / import / migrate a legacy tenant) ──────────────
+// Move authored config (roles + hierarchy + workflows + registry + chat flag)
+// between tenants as portable JSON. Migrating a legacy tenant: 1) Reset keeping
+// teams & members → 2) Import config → 3) reload.
+function ConfigTransferSection({ adminUid }: { adminUid: string | null }) {
+  const { refreshOrg, refreshRegistry, discoverWorkflows } = useAppConfigContext()
+  const [exportRow, setExportRow] = useState<OperationRow>({ status: 'idle' })
+  const [importRow, setImportRow] = useState<OperationRow>({ status: 'idle' })
+  const [resetRow, setResetRow] = useState<OperationRow>({ status: 'idle' })
+  const [importText, setImportText] = useState('')
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [resetConfirmText, setResetConfirmText] = useState('')
+
+  const canConfirmReset = resetConfirmText.trim().toUpperCase() === 'RESET'
+
+  async function runExport() {
+    setExportRow({ status: 'running' })
+    try {
+      const { exportTenantConfig, downloadJson } = await import('../lib/configTransfer')
+      const bundle = await exportTenantConfig(Date.now())
+      console.log('[configTransfer] exported bundle', bundle)
+      downloadJson(`tenant-config-${bundle.exportedAt}.json`, bundle)
+      const roleCount = bundle.orgStructure?.roleHierarchy?.length ?? 0
+      setExportRow({
+        status: 'done',
+        message: `Exported ${bundle.workflows.length} workflow(s) · ${roleCount} role(s). Downloaded + logged to console.`,
+      })
+    } catch (e) {
+      setExportRow({ status: 'error', message: e instanceof Error ? e.message : 'Export failed' })
+    }
+  }
+
+  function onPickFile(file: File | null) {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      setImportText(typeof reader.result === 'string' ? reader.result : '')
+      setImportRow({ status: 'idle' })
+    }
+    reader.onerror = () => setImportRow({ status: 'error', message: 'Could not read that file.' })
+    reader.readAsText(file)
+  }
+
+  async function runImport() {
+    if (!adminUid) return
+    if (!importText.trim()) {
+      setImportRow({ status: 'error', message: 'Paste a bundle or choose a .json file first.' })
+      return
+    }
+    setImportRow({ status: 'running' })
+    try {
+      const { parseConfigBundle, importTenantConfig } = await import('../lib/configTransfer')
+      const bundle = parseConfigBundle(importText)
+      const sum = await importTenantConfig(bundle, adminUid)
+      await Promise.all([refreshOrg(), refreshRegistry(), discoverWorkflows()])
+      setImportRow({
+        status: 'done',
+        message: `Imported ${sum.workflows} workflow(s)${sum.orgStructure ? ' + roles' : ''}${
+          sum.registry ? ' + registry' : ''
+        }. Live now — assign people to roles in Roles & access.`,
+      })
+    } catch (e) {
+      setImportRow({ status: 'error', message: e instanceof Error ? e.message : 'Import failed' })
+    }
+  }
+
+  async function runReset() {
+    if (!canConfirmReset) return
+    setResetRow({ status: 'running' })
+    try {
+      const { resetTenantPreservingPeople } = await import('../lib/wipeTenant')
+      const res = await resetTenantPreservingPeople()
+      const parts = Object.entries(res.collectionsCleared).map(([n, c]) => `${n}: ${c}`)
+      parts.push(`config: ${res.configsCleared.length}`)
+      setResetRow({
+        status: 'done',
+        message: `Cleared ${parts.join(' · ')} — teams + members kept. Now Import the bundle, then reload.`,
+      })
+      setResetConfirmOpen(false)
+      setResetConfirmText('')
+    } catch (e) {
+      setResetRow({ status: 'error', message: e instanceof Error ? e.message : 'Reset failed' })
+    }
+  }
+
+  const inputBase =
+    'w-full rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-xs font-medium uppercase tracking-wider text-fg-subtle">Config transfer</h3>
+        <p className="mt-1 text-xs text-fg-subtle">
+          Copy roles, hierarchy, workflows + the chat flag between tenants. To migrate a legacy
+          tenant: <strong className="text-fg-muted">1)</strong> Reset keeping teams &amp; members →{' '}
+          <strong className="text-fg-muted">2)</strong> Import config →{' '}
+          <strong className="text-fg-muted">3)</strong> reload. People and role assignments are never
+          exported — re-assign roles via Roles &amp; access after import.
+        </p>
+      </div>
+
+      {/* Export */}
+      <div className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card p-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-fg">Export config</div>
+          <div className="mt-0.5 text-xs text-fg-subtle">
+            Downloads a <code className="rounded bg-fill-3 px-1 py-0.5">tenant-config-*.json</code>{' '}
+            bundle and logs it to the console. Commit it to the repo or import it elsewhere.
+          </div>
+          {exportRow.message && (
+            <div
+              className={`mt-2 text-xs ${
+                exportRow.status === 'error' ? 'text-tone-danger-fg' : 'text-tone-success-fg'
+              }`}
+            >
+              {exportRow.message}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => void runExport()}
+          disabled={exportRow.status === 'running'}
+          className="shrink-0 rounded-lg border border-line bg-fill-2 px-3 py-2 text-xs font-medium text-fg-muted transition hover:bg-fill-4 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {exportRow.status === 'running' ? 'Exporting…' : 'Export'}
+        </button>
+      </div>
+
+      {/* Import */}
+      <div className="rounded-xl border border-line bg-card p-4">
+        <div className="text-sm font-medium text-fg">Import config</div>
+        <div className="mt-0.5 text-xs text-fg-subtle">
+          Choose a bundle file or paste its JSON, then Import. Writes config docs only — users and
+          teams are untouched.
+        </div>
+        <div className="mt-3 space-y-2">
+          <input
+            type="file"
+            accept=".json,application/json"
+            onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-fg-subtle file:mr-3 file:rounded-md file:border file:border-line file:bg-fill-2 file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-fg-muted hover:file:bg-fill-4"
+          />
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder="…or paste bundle JSON here"
+            rows={3}
+            className={`${inputBase} resize-none font-mono text-xs`}
+          />
+          {importRow.message && (
+            <div
+              className={`text-xs ${
+                importRow.status === 'error' ? 'text-tone-danger-fg' : 'text-tone-success-fg'
+              }`}
+            >
+              {importRow.message}
+            </div>
+          )}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void runImport()}
+              disabled={!adminUid || importRow.status === 'running'}
+              className="rounded-lg border border-line bg-fill-2 px-3 py-2 text-xs font-medium text-fg-muted transition hover:bg-fill-4 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {importRow.status === 'running' ? 'Importing…' : 'Import'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Reset keeping teams & members */}
+      <div className="rounded-xl border border-tone-warn-bd/50 bg-tone-warn-bg/10 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-fg">Reset keeping teams &amp; members</div>
+            <div className="mt-0.5 text-xs text-fg-subtle">
+              Clears projects, tasks, workflows, and config docs — but keeps every team and member
+              (including their team memberships). Use before importing onto a legacy tenant. Does not
+              reload.
+            </div>
+            {resetRow.message && (
+              <div
+                className={`mt-2 text-xs ${
+                  resetRow.status === 'error' ? 'text-tone-danger-fg' : 'text-tone-success-fg'
+                }`}
+              >
+                {resetRow.message}
+              </div>
+            )}
+          </div>
+          {!resetConfirmOpen && (
+            <button
+              type="button"
+              onClick={() => setResetConfirmOpen(true)}
+              disabled={resetRow.status === 'running'}
+              className="shrink-0 rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3 py-2 text-xs font-medium text-tone-warn-fg transition hover:opacity-90 disabled:opacity-50"
+            >
+              Reset…
+            </button>
+          )}
+        </div>
+        {resetConfirmOpen && (
+          <div className="mt-3 space-y-2 rounded-lg border border-tone-warn-bd bg-tone-warn-bg/20 p-3">
+            <p className="text-xs text-fg-strong">
+              Type <code className="rounded bg-fill-3 px-1.5 py-0.5 text-fg">RESET</code> to clear
+              everything except teams &amp; members.
+            </p>
+            <input
+              type="text"
+              value={resetConfirmText}
+              onChange={(e) => setResetConfirmText(e.target.value)}
+              placeholder="RESET"
+              disabled={resetRow.status === 'running'}
+              className={inputBase}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setResetConfirmOpen(false)
+                  setResetConfirmText('')
+                }}
+                disabled={resetRow.status === 'running'}
+                className="rounded-lg border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void runReset()}
+                disabled={resetRow.status === 'running' || !canConfirmReset}
+                className="rounded-lg border border-tone-warn-bd bg-tone-warn-bg px-3 py-1.5 text-xs font-medium text-tone-warn-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {resetRow.status === 'running' ? 'Clearing…' : 'Clear (keep people)'}
+              </button>
+            </div>
+          </div>
+        )}
+        {resetRow.status === 'done' && (
+          <button
+            type="button"
+            onClick={() => window.location.assign('/')}
+            className="mt-3 rounded-lg border border-line bg-fill-2 px-3 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4 hover:text-fg"
+          >
+            Reload now
+          </button>
+        )}
+      </div>
     </div>
   )
 }

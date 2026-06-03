@@ -92,6 +92,45 @@
   --color-tone-pink-bg: rgb(236 72 153 / 0.18);
   --color-tone-pink-fg: #fbcfe8;
   --color-tone-pink-bd: rgb(244 114 182 / 0.45);
+
+  /* ── Phase 3 flow canvas: glassmorphic node surfaces (dark) ───────────── */
+  /* Substantial frosted-dark cards (not a faint white wash) so nodes read as
+     solid surfaces over the canvas; the blur still gives the glass feel. */
+  --color-node-glass: rgb(19 19 28 / 0.78);
+  --color-node-glass-strong: rgb(26 26 38 / 0.88);
+  --color-node-border: rgb(255 255 255 / 0.14);
+  --color-node-header: rgb(255 255 255 / 0.05);
+  --node-blur: 12px;
+
+  /* Validation rings (box-shadow glow so they layer over the glass). */
+  --ring-node-selected: 0 0 0 1.5px var(--color-brand-edge), 0 0 22px 2px rgb(168 85 247 / 0.45);
+  --ring-node-valid: 0 0 0 1px rgb(52 211 153 / 0.30);
+  --ring-node-invalid: 0 0 0 1.5px rgb(248 113 113 / 0.70), 0 0 20px 1px rgb(248 113 113 / 0.40);
+
+  /* Neon outcome-edge palette — keyed to the four OutcomeShapes. */
+  --edge-advance-core: #d946ef;
+  --edge-advance-glow: rgb(217 70 239 / 0.55);
+  --edge-branch-core: #818cf8;
+  --edge-branch-glow: rgb(129 140 248 / 0.50);
+  --edge-hold-core: #fbbf24;
+  --edge-hold-glow: rgb(251 191 36 / 0.45);
+  --edge-close-core: #f87171;
+  --edge-close-glow: rgb(248 113 113 / 0.50);
+  --edge-idle: rgb(255 255 255 / 0.25);
+  --edge-label-bg: rgb(14 14 22 / 0.82);
+  --flow-particle: rgb(255 255 255 / 0.95);
+
+  /* Canvas backdrop: dot-grid + parallax orbs. */
+  --canvas-bg: #06060a;
+  --canvas-dot: rgb(255 255 255 / 0.06);
+  --canvas-orb-a: rgb(124 58 237 / 0.22);
+  --canvas-orb-b: rgb(217 70 239 / 0.16);
+  --canvas-orb-c: rgb(99 102 241 / 0.12);
+
+  /* React Flow chrome (MiniMap / Controls). */
+  --rf-minimap-bg: rgb(11 11 18 / 0.80);
+  --rf-minimap-mask: rgb(7 7 12 / 0.60);
+  --rf-controls-bg: rgb(14 14 22 / 0.85);
 }
 
 /* Slow drifting mesh-gradient orbs for the sign-in screen. */
@@ -114,6 +153,37 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-mesh-a, .animate-mesh-b, .animate-mesh-c { animation: none; }
 }
+
+/* ── Phase 3 canvas motion ──────────────────────────────────────────────── */
+/* Flow particles riding the active/selected edge — animate stroke-dashoffset on
+   an overlay path so it works for any bezier shape React Flow computes. */
+@keyframes flow-dash { to { stroke-dashoffset: -28; } }
+.edge-flow-anim {
+  stroke-dasharray: 3 25;
+  animation: flow-dash 900ms linear infinite;
+}
+/* Parallax orb drift for the canvas backdrop — slower/larger than the sign-in
+   mesh so it reads as ambient depth, not motion noise. */
+@keyframes canvas-orb-a { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(4%,5%,0) scale(1.06)} }
+@keyframes canvas-orb-b { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(-5%,-4%,0) scale(1.10)} }
+@keyframes canvas-orb-c { 0%,100%{transform:translate3d(0,0,0) scale(1)} 50%{transform:translate3d(3%,-6%,0) scale(0.95)} }
+.canvas-orb-a { animation: canvas-orb-a 30s ease-in-out infinite; }
+.canvas-orb-b { animation: canvas-orb-b 38s ease-in-out infinite; }
+.canvas-orb-c { animation: canvas-orb-c 26s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .edge-flow-anim { animation: none; stroke-dasharray: none; }
+  .canvas-orb-a, .canvas-orb-b, .canvas-orb-c { animation: none; }
+}
+
+@utility node-glass {
+  background-color: var(--color-node-glass);
+  backdrop-filter: blur(var(--node-blur));
+  -webkit-backdrop-filter: blur(var(--node-blur));
+  border: 1px solid var(--color-node-border);
+}
+@utility bg-canvas-orb-a { background-color: var(--canvas-orb-a); }
+@utility bg-canvas-orb-b { background-color: var(--canvas-orb-b); }
+@utility bg-canvas-orb-c { background-color: var(--canvas-orb-c); }
 
 .light {
   /* Canvas tinted with the brand violet so white surfaces have something to lift off. */
@@ -208,6 +278,40 @@
   --color-tone-pink-bg: rgb(236 72 153 / 0.1);
   --color-tone-pink-fg: #be185d;
   --color-tone-pink-bd: rgb(236 72 153 / 0.4);
+
+  /* ── Phase 3 flow canvas (light) — anti-washout ───────────────────────────
+     Near-white frost lifts off the violet canvas; edge cores darken toward the
+     brand family and glow alpha is ~halved so neon stays legible, not blown out. */
+  --color-node-glass: rgb(255 255 255 / 0.66);
+  --color-node-glass-strong: rgb(255 255 255 / 0.85);
+  --color-node-border: rgb(67 7 136 / 0.18);
+  --color-node-header: rgb(67 7 136 / 0.05);
+
+  --ring-node-selected: 0 0 0 1.5px var(--color-brand-edge), 0 0 16px 1px rgb(67 7 136 / 0.25);
+  --ring-node-valid: 0 0 0 1px rgb(5 150 105 / 0.40);
+  --ring-node-invalid: 0 0 0 1.5px rgb(220 38 38 / 0.80), 0 0 12px 1px rgb(220 38 38 / 0.25);
+
+  --edge-advance-core: #9333ea;
+  --edge-advance-glow: rgb(147 51 234 / 0.28);
+  --edge-branch-core: #4f46e5;
+  --edge-branch-glow: rgb(79 70 229 / 0.25);
+  --edge-hold-core: #d97706;
+  --edge-hold-glow: rgb(217 119 6 / 0.25);
+  --edge-close-core: #dc2626;
+  --edge-close-glow: rgb(220 38 38 / 0.25);
+  --edge-idle: rgb(67 7 136 / 0.28);
+  --edge-label-bg: rgb(255 255 255 / 0.92);
+  --flow-particle: rgb(67 7 136 / 0.85);
+
+  --canvas-bg: #f3effa;
+  --canvas-dot: rgb(67 7 136 / 0.10);
+  --canvas-orb-a: rgb(67 7 136 / 0.16);
+  --canvas-orb-b: rgb(192 38 211 / 0.10);
+  --canvas-orb-c: rgb(99 102 241 / 0.10);
+
+  --rf-minimap-bg: rgb(255 255 255 / 0.88);
+  --rf-minimap-mask: rgb(243 239 250 / 0.70);
+  --rf-controls-bg: rgb(255 255 255 / 0.92);
 }
 
 html {

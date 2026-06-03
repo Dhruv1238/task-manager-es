@@ -14,6 +14,7 @@ import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
 import ProjectRolesSection from '../components/project/ProjectRolesSection'
 import ProjectFieldsSection from '../components/project/ProjectFieldsSection'
+import SubtasksPanel from '../components/tasks/SubtasksPanel'
 import StageBanner from '../components/workflow/StageBanner'
 import NewTaskModal from '../components/admin/NewTaskModal'
 import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
@@ -166,6 +167,7 @@ export default function ProjectDetail() {
     isProjectLead,
     canUpdateStatus,
     canEditProjectMeta,
+    can,
   } = usePermissions(projectId)
   const orgLeadRoleName = useLeadRoleName()
   const workflow = useProjectWorkflow(project)
@@ -261,9 +263,17 @@ export default function ProjectDetail() {
     submissionDeadline &&
     !isClosed &&
     submissionDeadline.toDate().getTime() < Date.now()
-  // Project owner, admins/super_admins, or the assigned VH can manage teams.
-  // Once the outcome is conclusive, lock down to super_admin / owner only.
-  const canManageTeams = !isClosed && (isAdmin || isProjectOwner || isProjectLead)
+  // Managing teams (assigning global teams to the project) now honors the
+  // Role-Hierarchy "Teams" module access (create/update) in addition to the
+  // admin / owner / lead baseline — so a configured Functional/Admin Head can
+  // manage teams without being the allocated lead.
+  const canManageTeams =
+    !isClosed &&
+    (isAdmin || isProjectOwner || isProjectLead || can('teams', 'create') || can('teams', 'update'))
+  // Creating tasks is an always-on op for anyone on the project (role-holder,
+  // creator, admin, or lead), plus anyone the hierarchy grants Tasks → Create.
+  const canCreateTask =
+    !isClosed && (canEditProjectMeta || isProjectLead || can('tasks', 'create'))
   const canAddAttachments = isSuperAdmin || isProjectLead
   const projectAttachments = project.attachments ?? []
   const assignedTeams = (project.teamIds ?? [])
@@ -395,7 +405,7 @@ export default function ProjectDetail() {
             </svg>
             Board View
           </Link>
-          {canManageTeams && (
+          {canCreateTask && (
             <button
               type="button"
               onClick={() => setNewTaskOpen(true)}
@@ -588,6 +598,9 @@ export default function ProjectDetail() {
             actorId={user?.uid ?? ''}
             actorName={profile?.displayName ?? user?.email ?? 'User'}
           />
+
+          {/* Phase 3: simple subtasks under the project. */}
+          <SubtasksPanel projectId={project.id} />
 
           <div>
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">

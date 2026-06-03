@@ -15,6 +15,7 @@ import type {
   StageAction,
   Workflow,
 } from '../types/workflow'
+import { readActors, readOutcomes } from './rules/outcomeAdapter'
 
 export type ValidationSeverity = 'error' | 'warning'
 
@@ -184,15 +185,17 @@ function validateAction(
     })
   }
 
-  validateActor(action.actor, action, stage, workflow, org, errors)
-  for (const allow of action.alsoAllow ?? []) {
-    validateActor(allow, action, stage, workflow, org, errors)
+  // Validate the EFFECTIVE actor set — v2 actors[] when present, else the legacy
+  // actor + alsoAllow — via the adapter, so a v2-authored action is checked
+  // against what the runtime actually reads.
+  const actorSet = readActors(action).all
+  for (const a of actorSet) {
+    validateActor(a, action, stage, workflow, org, errors)
   }
 
   // Phase 2d: warn when only super-admins can perform an action (the author
   // likely unticked everyone). Not an error — a super-admin-only action is valid.
-  const actorSet = [action.actor, ...(action.alsoAllow ?? [])]
-  if (actorSet.every((a) => a.kind === 'global_role' && a.role === 'super_admin')) {
+  if (actorSet.length && actorSet.every((a) => a.kind === 'global_role' && a.role === 'super_admin')) {
     warnings.push({
       severity: 'warning',
       code: 'only_super_admin_can_act',
@@ -201,52 +204,60 @@ function validateAction(
     })
   }
 
-  const stageIds = new Set(workflow.stages.map((s) => s.id))
-  switch (action.effect.kind) {
-    case 'transition':
-    case 'transition_with_counter':
-    case 'assign_lead':
-    case 'clear_lead':
-    case 'mark_complete': {
-      if (!stageIds.has(action.effect.toStage)) {
-        errors.push({
-          severity: 'error',
-          code: 'unknown_target_stage',
-          message: `"${action.label}" moves to a stage that doesn't exist ("${action.effect.toStage}").`,
-          scope: { kind: 'action', stageId: stage.id, actionId: action.id },
-        })
+  // For v2-authored actions (action.outcomes present) the legacy `effect` is a
+  // dormant placeholder the runtime ignores — routing/targets live in `outcomes`
+  // and are validated by flowValidation. Only validate `effect` for legacy
+  // single-effect actions; otherwise a placeholder effect (e.g. a freshly added
+  // action's empty transition) raises a bogus "moves to a stage that doesn't
+  // exist" error even when the real outcome is a hold/close.
+  if (!(action.outcomes && action.outcomes.length)) {
+    const stageIds = new Set(workflow.stages.map((s) => s.id))
+    switch (action.effect.kind) {
+      case 'transition':
+      case 'transition_with_counter':
+      case 'assign_lead':
+      case 'clear_lead':
+      case 'mark_complete': {
+        if (!stageIds.has(action.effect.toStage)) {
+          errors.push({
+            severity: 'error',
+            code: 'unknown_target_stage',
+            message: `"${action.label}" moves to a stage that doesn't exist ("${action.effect.toStage}").`,
+            scope: { kind: 'action', stageId: stage.id, actionId: action.id },
+          })
+        }
+        break
       }
-      break
+      case 'set_status':
+        if (action.effect.statuses.length === 0) {
+          errors.push({
+            severity: 'error',
+            code: 'no_statuses',
+            message: `"${action.label}" needs at least one status option.`,
+            scope: { kind: 'action', stageId: stage.id, actionId: action.id },
+          })
+        }
+        break
     }
-    case 'set_status':
-      if (action.effect.statuses.length === 0) {
-        errors.push({
-          severity: 'error',
-          code: 'no_statuses',
-          message: `"${action.label}" needs at least one status option.`,
-          scope: { kind: 'action', stageId: stage.id, actionId: action.id },
-        })
-      }
-      break
-  }
-  if (action.effect.kind === 'mark_complete' && action.effect.outcomes.length === 0) {
-    errors.push({
-      severity: 'error',
-      code: 'no_outcomes',
-      message: `"${action.label}" marks complete but lists no outcomes.`,
-      scope: { kind: 'action', stageId: stage.id, actionId: action.id },
-    })
-  }
-
-  if (action.effect.kind === 'assign_lead') {
-    const hasUserPicker = action.inputs.some((i) => i.type === 'user_picker')
-    if (!hasUserPicker) {
+    if (action.effect.kind === 'mark_complete' && action.effect.outcomes.length === 0) {
       errors.push({
         severity: 'error',
-        code: 'assign_lead_missing_user_picker',
-        message: `"${action.label}" assigns a lead but doesn't ask for one — add a user picker input.`,
+        code: 'no_outcomes',
+        message: `"${action.label}" marks complete but lists no outcomes.`,
         scope: { kind: 'action', stageId: stage.id, actionId: action.id },
       })
+    }
+
+    if (action.effect.kind === 'assign_lead') {
+      const hasUserPicker = action.inputs.some((i) => i.type === 'user_picker')
+      if (!hasUserPicker) {
+        errors.push({
+          severity: 'error',
+          code: 'assign_lead_missing_user_picker',
+          message: `"${action.label}" assigns a lead but doesn't ask for one — add a user picker input.`,
+          scope: { kind: 'action', stageId: stage.id, actionId: action.id },
+        })
+      }
     }
   }
 
@@ -413,7 +424,9 @@ function hasFinishPath(workflow: Workflow): boolean {
   if (workflow.stages.some((s) => s.isTerminal)) return true
   for (const stage of workflow.stages) {
     for (const action of stage.actions) {
-      if (action.effect.kind === 'mark_complete') return true
+      // A `close` outcome ends the project — covers both v2-authored close
+      // outcomes and the synthesized mark_complete ones (via the adapter).
+      if (readOutcomes(action).some((o) => o.shape === 'close')) return true
       if (action.effect.kind === 'set_status') {
         if (action.effect.statuses.some((s) => CLOSING_STATUSES.has(s))) {
           return true
@@ -438,23 +451,14 @@ function computeReachableStages(workflow: Workflow): Set<string> {
     const stage = stageMap.get(id)
     if (!stage) continue
     for (const action of stage.actions) {
-      let target: string | null = null
-      switch (action.effect.kind) {
-        case 'transition':
-        case 'transition_with_counter':
-        case 'assign_lead':
-        case 'clear_lead':
-        case 'mark_complete':
-          target = action.effect.toStage
-          break
-        case 'set_status':
-        case 'assign_project_role':
-          target = null
-          break
-      }
-      if (target && !reachable.has(target)) {
-        reachable.add(target)
-        queue.push(target)
+      // Follow outcome targets — the adapter unifies the legacy effect.toStage
+      // and v2 outcomes, so reachability is correct for both authoring models.
+      for (const outcome of readOutcomes(action)) {
+        const target = outcome.toStageId
+        if (target && !reachable.has(target)) {
+          reachable.add(target)
+          queue.push(target)
+        }
       }
     }
   }

@@ -1,5 +1,6 @@
 import type { TeamRoleId } from '../types/models'
 import type { ActorRef, ProjectRoleDef } from '../types/workflow'
+import type { RoleDef } from '../types/v2'
 
 // Phase 2d: one source of truth for serialising, parsing, comparing, and
 // describing ActorRefs. Shared by the permission-pill popover, the live preview
@@ -19,6 +20,8 @@ export function actorRefKey(actor: ActorRef): string {
       return `team_role:${actor.role}/${actor.member}`
     case 'project_role':
       return `project_role:${actor.roleId}`
+    case 'role':
+      return `role:${actor.roleId}`
     case 'creator':
       return 'creator'
   }
@@ -44,6 +47,8 @@ export function parseActorKey(key: string): ActorRef {
     }
     case 'project_role':
       return { kind: 'project_role', roleId: rest }
+    case 'role':
+      return { kind: 'role', roleId: rest }
     default:
       return { kind: 'pipeline_role', role: 'lead' }
   }
@@ -61,6 +66,8 @@ export function actorSetOf(action: { actor: ActorRef; alsoAllow?: ActorRef[] }):
 interface DescribeCtx {
   leadRoleName?: string
   projectRoles?: ProjectRoleDef[]
+  // Phase 3: the tenant's hierarchy roles, for labelling `role`-kind actors.
+  roles?: RoleDef[]
 }
 
 // Human-friendly noun phrase for an actor (used in the action sentence body and
@@ -86,6 +93,10 @@ export function describeActor(actor: ActorRef, ctx: DescribeCtx = {}): string {
       const role = ctx.projectRoles?.find((r) => r.id === actor.roleId)
       return role?.label ?? 'a project role'
     }
+    case 'role': {
+      const role = ctx.roles?.find((r) => r.id === actor.roleId)
+      return role ? `anyone at the ${role.label} level (or higher)` : 'a hierarchy role'
+    }
   }
 }
 
@@ -110,6 +121,10 @@ export function describeActorShort(actor: ActorRef, ctx: DescribeCtx = {}): stri
     case 'project_role': {
       const role = ctx.projectRoles?.find((r) => r.id === actor.roleId)
       return role?.label ?? 'Project role'
+    }
+    case 'role': {
+      const role = ctx.roles?.find((r) => r.id === actor.roleId)
+      return role?.label ?? 'Hierarchy role'
     }
   }
 }

@@ -12,7 +12,7 @@ const SandboxIdentityPill = __IS_SANDBOX__
   ? lazy(() => import('./sandbox/SandboxIdentityPill'))
   : null
 import { useAuth } from '../contexts/AuthContext'
-import { isDevConfigUser } from './DevConfigRoute'
+import { usePermissions } from '../hooks/usePermissions'
 
 const APP_NAME = 'Show Runner'
 
@@ -37,8 +37,12 @@ const mobileLinkCls = ({ isActive }: { isActive: boolean }) =>
 
 export default function Navbar() {
   const { user, profile, signOut } = useAuth()
-  const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
-  const isDevConfig = isDevConfigUser(profile)
+  const { isSuperAdmin, can } = usePermissions()
+  // Nav links mirror the route guards: the Role-Hierarchy module grid governs
+  // access, with super_admin as the always-pass baseline.
+  const canViewMembers = isSuperAdmin || can('members', 'view')
+  const canViewReports = isSuperAdmin || can('reports', 'view')
+  const canViewSettings = isSuperAdmin || can('settings', 'view')
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 
@@ -81,17 +85,17 @@ export default function Navbar() {
               <NavLink to="/teams" className={navLinkCls}>
                 Teams
               </NavLink>
-              {isAdmin && (
-                <>
-                  <NavLink to="/admin/members" className={navLinkCls}>
-                    Members
-                  </NavLink>
-                  <NavLink to="/admin" end className={navLinkCls}>
-                    Admin Analytics
-                  </NavLink>
-                </>
+              {canViewMembers && (
+                <NavLink to="/admin/members" className={navLinkCls}>
+                  Members
+                </NavLink>
               )}
-              {isDevConfig && (
+              {canViewReports && (
+                <NavLink to="/admin" end className={navLinkCls}>
+                  Admin Analytics
+                </NavLink>
+              )}
+              {canViewSettings && (
                 <NavLink
                   to="/admin/config"
                   className={navLinkCls}
@@ -222,17 +226,17 @@ export default function Navbar() {
               <NavLink to="/teams" className={mobileLinkCls}>
                 Teams
               </NavLink>
-              {isAdmin && (
-                <>
-                  <NavLink to="/admin/members" className={mobileLinkCls}>
-                    Members
-                  </NavLink>
-                  <NavLink to="/admin" end className={mobileLinkCls}>
-                    Admin Analytics
-                  </NavLink>
-                </>
+              {canViewMembers && (
+                <NavLink to="/admin/members" className={mobileLinkCls}>
+                  Members
+                </NavLink>
               )}
-              {isDevConfig && (
+              {canViewReports && (
+                <NavLink to="/admin" end className={mobileLinkCls}>
+                  Admin Analytics
+                </NavLink>
+              )}
+              {canViewSettings && (
                 <NavLink
                   to="/admin/config"
                   className={mobileLinkCls}

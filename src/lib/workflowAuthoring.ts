@@ -24,6 +24,37 @@ import { buildBasicWorkflow } from './seedBasicWorkflow'
 import { buildCollabDefaultWorkflow } from './seedCollabWorkflow'
 import { buildSalesDefaultWorkflow } from './seedSalesWorkflow'
 
+// ─── Firestore undefined guard ────────────────────────────────────────────────
+// Firestore's set() throws on ANY `undefined` anywhere in the document
+// ("Unsupported field value: undefined") but never says WHERE. This deep-walks a
+// plain payload and returns a cleaned clone (undefined object keys + array
+// entries dropped) plus the exact dot-paths that were undefined — so we can log
+// the offending field AND still write a doc Firestore accepts.
+// IMPORTANT: only pass plain data. Timestamp instances pass through untouched;
+// never run serverTimestamp()/FieldValue sentinels through here — add those
+// AFTER sanitizing, or they'll be flattened into broken objects.
+export function sanitizeForFirestore(value: unknown): { clean: unknown; undefinedPaths: string[] } {
+  const undefinedPaths: string[] = []
+  function walk(v: unknown, path: string): unknown {
+    if (v === undefined) {
+      undefinedPaths.push(path || '(root)')
+      return undefined
+    }
+    if (v === null || typeof v !== 'object' || v instanceof Timestamp) return v
+    if (Array.isArray(v)) {
+      // Firestore arrays can't hold undefined — drop any undefined entries.
+      return v.map((item, i) => walk(item, `${path}[${i}]`)).filter((item) => item !== undefined)
+    }
+    const out: Record<string, unknown> = {}
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      const cleaned = walk(val, path ? `${path}.${k}` : k)
+      if (cleaned !== undefined) out[k] = cleaned
+    }
+    return out
+  }
+  return { clean: walk(value, ''), undefinedPaths }
+}
+
 // ─── ID derivation ────────────────────────────────────────────────────────────
 
 // Slug-cased lowercase ascii ids. Collisions are resolved with -2, -3, ...
@@ -264,6 +295,11 @@ export async function saveWorkflowAndMaybeActivate(
       projectFields: input.draft.projectFields ?? { customFields: [] },
       statusOptions: input.draft.statusOptions ?? [],
       canUpdateStatusActors: input.draft.canUpdateStatusActors ?? [],
+      // Phase 3: persist canvas positions + entry task so they ride the
+      // snapshot-pin onto new projects. Omitted-when-absent so undefined never
+      // reaches Firestore (legacy flows auto-lay-out on first open instead).
+      ...(input.draft.canvasLayout ? { canvasLayout: input.draft.canvasLayout } : {}),
+      ...(input.draft.entryStageId ? { entryStageId: input.draft.entryStageId } : {}),
       version: newVersion,
       lastEditedAt: Timestamp.now(),
       lastEditedBy: input.adminUid,
@@ -315,8 +351,19 @@ export async function saveWorkflowAndMaybeActivate(
     }
 
     // ─── Writes ─────────────────────────────────────────────────────────
+    // Guard: Firestore rejects ANY `undefined` in the doc and won't say where.
+    // Deep-clean the plain payload (logging the exact path[s]) BEFORE layering
+    // on the serverTimestamp sentinels — those must NOT pass through sanitize.
+    const { clean, undefinedPaths } = sanitizeForFirestore(payload)
+    if (undefinedPaths.length) {
+      console.warn(
+        `[saveWorkflow] workflows/${workflowId}: stripped ${undefinedPaths.length} undefined field(s) →`,
+        undefinedPaths,
+      )
+      console.warn('[saveWorkflow] full payload that contained undefined:', payload)
+    }
     tx.set(workflowRef, {
-      ...payload,
+      ...(clean as Record<string, unknown>),
       updatedAt: serverTimestamp(),
       lastEditedAt: serverTimestamp(),
     })

@@ -17,6 +17,7 @@ import {
 } from '../../contexts/AppConfigContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { addProject } from '../../lib/firestore'
+import { resolveExactRoleHolders } from '../../lib/permissions/effectivePermissions'
 import { uploadAsset } from '../../lib/uploadAsset'
 import type { Attachment, User } from '../../types/models'
 import type { ActionInput, Workflow } from '../../types/workflow'
@@ -131,8 +132,11 @@ export default function NewProjectModal({ open, onClose }: Props) {
   }, [firstAction])
 
   // Resolve the lead-picker candidate pool from the action's pickerScope.
-  // Mirrors ActionModal's resolvePickerScope, scoped to the global-role
-  // case which is what the lead pickers in the shipped workflows use.
+  // Mirrors ActionModal's resolvePickerScope for the scopes a new-project lead
+  // picker can resolve before the project exists: global_role and hierarchy
+  // role (exact holders — no downward inheritance, so "a Vertical Head" never
+  // includes someone who merely sits above that level). project_role/team_role
+  // can't resolve yet (no project/teams), so they fall through to "all users".
   const candidateLeadUids = useMemo<string[] | undefined>(() => {
     if (!leadInput?.pickerScope) return undefined
     const [kind, rest] = leadInput.pickerScope.split(':')
@@ -141,8 +145,11 @@ export default function NewProjectModal({ open, onClose }: Props) {
         .filter((u) => u.globalRole === (rest as User['globalRole']))
         .map((u) => u.uid)
     }
+    if (kind === 'role') {
+      return resolveExactRoleHolders(rest ?? '', users, org.roleHierarchy ?? [])
+    }
     return undefined
-  }, [leadInput, users])
+  }, [leadInput, users, org.roleHierarchy])
 
   // Phase 2d: roles + create-form custom fields, ordered.
   const roles = useMemo(
@@ -274,6 +281,9 @@ export default function NewProjectModal({ open, onClose }: Props) {
         // pick lands at stage 1 awaiting manual allocation).
         creatorRole: profile?.globalRole ?? 'user',
         creatorTeamIds: profile?.teamIds ?? [],
+        // Phase 3.6: lets addProject seed accessKeys with holders of any
+        // `role`-kind actor on the workflow so they can see/act on the project.
+        users,
         workflowId: pickedWorkflow.id,
         ...(pickedWorkflow.flowType === 'collaborative'
           ? {

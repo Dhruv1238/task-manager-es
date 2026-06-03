@@ -75,9 +75,10 @@ export default function TeamDetail() {
   const { users } = useAllUsers()
   const { projects } = useAllProjects()
   const { tasks: teamTasks } = useTeamTasks(teamId)
-  const { isAdmin, isTeamLead } = usePermissions(undefined, teamId)
+  const { isAdmin, isTeamLead, can } = usePermissions(undefined, teamId)
   const { user: authUser, profile } = useAuth()
-  const canManageRoster = isAdmin || isTeamLead
+  // Admins, the team lead, or anyone the Role-Hierarchy grants Teams → Update.
+  const canManageRoster = isAdmin || isTeamLead || can('teams', 'update')
 
   useEffect(() => {
     if (!teamId) return

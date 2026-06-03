@@ -8,6 +8,7 @@ import { useAllUsers } from '../../hooks/useAllUsers'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { runWorkflowAction } from '../../lib/firestore'
 import { resolveTeamOfRoleOn } from '../../lib/orgResolver'
+import { resolveExactRoleHolders } from '../../lib/permissions/effectivePermissions'
 import type { Project, ProjectStatus, User } from '../../types/models'
 import type { StageAction, ActionInput, ActorRef } from '../../types/workflow'
 
@@ -100,6 +101,9 @@ export default function ActionModal({ open, onClose, project, action }: Props) {
         user: profile ?? ({ uid: user.uid, displayName: user.email ?? 'User' } as User),
         actionId: action.id,
         inputs,
+        teams,
+        org,
+        users,
         extras: Object.keys(extras).length ? extras : undefined,
       })
       onClose()
@@ -298,10 +302,12 @@ function coerceInputs(
   return out
 }
 
-// Picker scope is "<scope>:<value>". Phase 2a supports:
+// Picker scope is "<scope>:<value>". Supported:
 //   global_role:<role>             — all users with that role
 //   team_role:<role>/any           — any member of any project-attached team of that role
 //   team_role:<role>/lead          — the team lead only
+//   role:<id>                      — holders of a hierarchy role (with inheritance) [Phase 3.6]
+//   project_role:<id>              — current assignees of a workflow project role [Phase 3.6]
 function resolvePickerScope(
   scope: string,
   project: Project,
@@ -322,6 +328,15 @@ function resolvePickerScope(
     if (!team) return []
     if (member === 'lead') return team.leadId ? [team.leadId] : []
     return team.memberIds
+  }
+  if (kind === 'role') {
+    // Exact holders only — picking "a Vertical Head" must not include people
+    // who merely sit at a higher authority level (downward inheritance).
+    return resolveExactRoleHolders(rest ?? '', users, org.roleHierarchy ?? [])
+  }
+  if (kind === 'project_role') {
+    const assigned = project.roleAssignments?.[rest ?? '']
+    return Array.isArray(assigned) ? assigned.filter(Boolean) : assigned ? [assigned] : []
   }
   return []
 }

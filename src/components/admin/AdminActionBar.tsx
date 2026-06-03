@@ -5,6 +5,7 @@ import { seedTenderWorkspace, type SeedResult } from '../../lib/seedTender'
 import NewMemberModal from './NewMemberModal'
 import NewProjectModal from './NewProjectModal'
 import NewTeamModal from './NewTeamModal'
+import { usePermissions } from '../../hooks/usePermissions'
 
 interface Props {
   className?: string
@@ -20,9 +21,15 @@ export default function AdminActionBar({ className = '' }: Props) {
   const [seedResult, setSeedResult] = useState<SeedResult | null>(null)
   const [seedError, setSeedError] = useState<string | null>(null)
 
+  const { can } = usePermissions()
   const isSuperAdmin = profile?.globalRole === 'super_admin'
   const isAdmin = isSuperAdmin || profile?.globalRole === 'admin'
-  if (!isAdmin) return null
+  // Creation affordances follow the Role-Hierarchy module access (create op),
+  // with admins kept as a baseline so nothing regresses.
+  const canCreateProject = isSuperAdmin || can('projects', 'create')
+  const canCreateTeam = isAdmin || can('teams', 'create')
+  const canCreateMember = isAdmin || can('members', 'create')
+  if (!canCreateProject && !canCreateTeam && !canCreateMember) return null
 
   const secondaryBtn =
     'rounded-lg border border-line bg-fill-2 px-3.5 py-2 text-sm font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg'
@@ -51,18 +58,21 @@ export default function AdminActionBar({ className = '' }: Props) {
   return (
     <>
       <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-        {/* Tender project creation is super-admin only (delta §2.3) */}
-        {isSuperAdmin && (
+        {canCreateProject && (
           <button type="button" onClick={() => setNewProjectOpen(true)} className={primaryBtn}>
             + {createLabel}
           </button>
         )}
-        <button type="button" onClick={() => setNewTeamOpen(true)} className={secondaryBtn}>
-          + New Team
-        </button>
-        <button type="button" onClick={() => setNewMemberOpen(true)} className={secondaryBtn}>
-          + New Member
-        </button>
+        {canCreateTeam && (
+          <button type="button" onClick={() => setNewTeamOpen(true)} className={secondaryBtn}>
+            + New Team
+          </button>
+        )}
+        {canCreateMember && (
+          <button type="button" onClick={() => setNewMemberOpen(true)} className={secondaryBtn}>
+            + New Member
+          </button>
+        )}
         {/* {isSuperAdmin && (
           <button
             type="button"

@@ -7,7 +7,9 @@ import { isProjectClosed } from '../lib/projectStatus'
 import {
   getAllowedActions,
   getCurrentStage,
+  type RoleResolutionCtx,
 } from '../lib/workflowEvaluator'
+import { computeEffectivePermissions } from '../lib/permissions/effectivePermissions'
 import type { Project } from '../types/models'
 import type { Workflow } from '../types/workflow'
 
@@ -39,6 +41,14 @@ export function useProjectsAwaitingMyAction(): {
   const result = useMemo<ActionableProject[]>(() => {
     if (!profile) return []
 
+    // Phase 3.6: resolve `role`-kind actors for the viewer so hierarchy-gated
+    // actions surface in their inbox (same compute usePermissions does).
+    const roles = org.roleHierarchy ?? []
+    const roleCtx: RoleResolutionCtx = {
+      roles,
+      effective: computeEffectivePermissions(profile, roles),
+    }
+
     const out: ActionableProject[] = []
     for (const p of projects) {
       if (isProjectClosed(p.status)) continue
@@ -58,7 +68,7 @@ export function useProjectsAwaitingMyAction(): {
       // `mode: 'inbox'` so override actors (alsoAllow) don't surface when
       // the canonical team is attached — the action belongs to the team
       // lead. Permission is still granted; the inbox just doesn't nag.
-      const allowed = getAllowedActions(p, wf, profile, teams, org, 'inbox')
+      const allowed = getAllowedActions(p, wf, profile, teams, org, 'inbox', roleCtx)
       if (!allowed.length) continue
 
       const action = allowed[0]

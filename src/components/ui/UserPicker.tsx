@@ -209,10 +209,10 @@ export default function UserPicker(props: Props) {
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {props.mode === 'single' ? (
               selectedSingle ? (
-                <span className="inline-flex items-center gap-2">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
                   <Avatar user={selectedSingle} size={22} />
-                  <span className="truncate text-fg-strong">{selectedSingle.displayName}</span>
-                  <span className="truncate text-xs text-fg-subtle">{selectedSingle.email}</span>
+                  <span className="shrink-0 text-fg-strong">{selectedSingle.displayName}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-fg-subtle">{selectedSingle.email}</span>
                 </span>
               ) : (
                 <span className="text-fg-subtle">{placeholder ?? 'Select a user'}</span>

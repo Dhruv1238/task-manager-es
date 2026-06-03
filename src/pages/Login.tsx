@@ -35,7 +35,7 @@ function friendlyError(err: unknown): string | null {
 }
 
 // Flip to `true` to re-enable email/password sign-in alongside Google.
-const SHOW_EMAIL_PASSWORD_LOGIN = false
+const SHOW_EMAIL_PASSWORD_LOGIN = true
 
 export default function Login() {
   const { user, signIn, signInWithGoogle, signInError, clearSignInError } = useAuth()
@@ -151,94 +151,7 @@ export default function Login() {
                 <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-brand">
                   Sign in to your workspace
                 </p>
-                {SHOW_EMAIL_PASSWORD_LOGIN && (
-                  <>
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        void onSubmit()
-                      }}
-                      className="space-y-5"
-                      noValidate
-                    >
-                      <div className="space-y-1.5">
-                        <label htmlFor="email" className="text-sm font-medium text-fg-muted">
-                          Email
-                        </label>
-                        <input
-                          id="email"
-                          type="email"
-                          autoComplete="email"
-                          required
-                          disabled={submitting || googleSubmitting}
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="you@company.com"
-                          className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label htmlFor="password" className="text-sm font-medium text-fg-muted">
-                            Password
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword((v) => !v)}
-                            className="text-xs text-fg-subtle transition hover:text-fg-muted"
-                          >
-                            {showPassword ? 'Hide' : 'Show'}
-                          </button>
-                        </div>
-                        <input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="current-password"
-                          required
-                          disabled={submitting || googleSubmitting}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full rounded-lg border border-line bg-fill-2 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={submitting || googleSubmitting || !email || !password}
-                        className="group relative w-full overflow-hidden rounded-lg bg-brand-gradient px-4 py-3 font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <span className="relative z-10 inline-flex items-center justify-center gap-2">
-                          {submitting ? (
-                            <>
-                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
-                              Signing in…
-                            </>
-                          ) : (
-                            'Sign in'
-                          )}
-                        </span>
-                      </button>
-                    </form>
-
-                    <div className="my-6 flex items-center gap-3">
-                      <div className="h-px flex-1 bg-line" />
-                      <span className="text-xs uppercase tracking-wider text-fg-subtle">or</span>
-                      <div className="h-px flex-1 bg-line" />
-                    </div>
-                  </>
-                )}
-
-                {displayedError && (
-                  <div
-                    role="alert"
-                    className="mt-6 rounded-xl border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg"
-                  >
-                    {displayedError}
-                  </div>
-                )}
-
+                {/* Google — primary CTA on top (mirrors the sandbox layout). */}
                 <button
                   type="button"
                   onClick={onGoogleSignIn}
@@ -272,6 +185,99 @@ export default function Login() {
                     <polyline points="12 5 19 12 12 19" />
                   </svg>
                 </button>
+
+                {SHOW_EMAIL_PASSWORD_LOGIN && (
+                  <>
+                    <div className="my-6 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-line" />
+                      <span className="text-xs uppercase tracking-wider text-fg-subtle">or continue with email</span>
+                      <div className="h-px flex-1 bg-line" />
+                    </div>
+
+                    {/* Email/password path wrapped in its own card — mirrors the
+                        sandbox layout where the inputs read as a cohesive unit
+                        equal in weight to the Google button above. */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        void onSubmit()
+                      }}
+                      className="rounded-2xl border border-line bg-fill-2/60 p-5 backdrop-blur-sm transition focus-within:border-brand-edge"
+                      noValidate
+                    >
+                      <div className="space-y-4">
+                        <div className="space-y-1.5">
+                          <label htmlFor="email" className="text-sm font-medium text-fg-muted">
+                            Email
+                          </label>
+                          <input
+                            id="email"
+                            type="email"
+                            autoComplete="email"
+                            required
+                            disabled={submitting || googleSubmitting}
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@company.com"
+                            className="w-full rounded-lg border border-line bg-canvas/60 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-canvas focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="password" className="text-sm font-medium text-fg-muted">
+                              Password
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((v) => !v)}
+                              className="text-xs text-fg-subtle transition hover:text-fg-muted"
+                            >
+                              {showPassword ? 'Hide' : 'Show'}
+                            </button>
+                          </div>
+                          <input
+                            id="password"
+                            type={showPassword ? 'text' : 'password'}
+                            autoComplete="current-password"
+                            required
+                            disabled={submitting || googleSubmitting}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full rounded-lg border border-line bg-canvas/60 px-4 py-3 text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-canvas focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={submitting || googleSubmitting || !email || !password}
+                        className="group relative mt-4 w-full overflow-hidden rounded-lg bg-brand-gradient px-4 py-3 font-medium text-white shadow-lg shadow-purple-900/40 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span className="relative z-10 inline-flex items-center justify-center gap-2">
+                          {submitting ? (
+                            <>
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-white" />
+                              Signing in…
+                            </>
+                          ) : (
+                            'Sign in'
+                          )}
+                        </span>
+                      </button>
+                    </form>
+                  </>
+                )}
+
+                {displayedError && (
+                  <div
+                    role="alert"
+                    className="mt-6 rounded-xl border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg"
+                  >
+                    {displayedError}
+                  </div>
+                )}
 
                 <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-subtle">
                   <span className="inline-flex items-center gap-1.5">

@@ -14,6 +14,7 @@
 import type { ActorRef, Stage, StageAction, StageEvent, Workflow } from '../types/workflow'
 import { WorkflowValidationError } from '../types/workflow'
 import type { AuditAction, OrgStructure, Project, ProjectStatus, Team, User } from '../types/models'
+import type { EffectivePermissions, RoleDef } from '../types/v2'
 import { resolveTeamOfRoleOn, resolveValidatorTeam } from './orgResolver'
 import {
   arrayUnion,
@@ -26,6 +27,7 @@ import {
 import { db } from './firebase'
 import { tenantDoc } from './firestore'
 import { recordAuditEvent } from './firestore'
+import { bumpStatusTally, stageEnteredPatch } from './rules/analyticsCounters'
 
 // Re-export so callers can import the error class directly from this module.
 export { WorkflowValidationError }
@@ -90,6 +92,16 @@ export function renderStageHeadline(
 //     to the team lead and we shouldn't nag everyone else).
 export type ActorMatchMode = 'permission' | 'inbox'
 
+// Phase 3: optional resolution context for the new `role` actor kind. Legacy
+// callers omit it; a workflow with zero `role` actors (every seed) resolves
+// identically with or without it. `roles` is the tenant's /config/roles list;
+// `effective` is the viewer's cached effective permissions (own + inherited +
+// bridged role ids, plus topLevel).
+export interface RoleResolutionCtx {
+  roles: RoleDef[]
+  effective?: EffectivePermissions | null
+}
+
 function actorMatches(
   actor: ActorRef,
   user: User,
@@ -97,6 +109,7 @@ function actorMatches(
   teams: Team[],
   org: OrgStructure,
   mode: ActorMatchMode = 'permission',
+  roleCtx?: RoleResolutionCtx,
 ): boolean {
   switch (actor.kind) {
     case 'global_role':
@@ -116,7 +129,7 @@ function actorMatches(
         // NOT to inbox routing (the action belongs to the team lead).
         if (mode === 'permission' && actor.alsoAllow?.length) {
           return actor.alsoAllow.some((fb) =>
-            actorMatches(fb, user, project, teams, org, mode),
+            actorMatches(fb, user, project, teams, org, mode, roleCtx),
           )
         }
         return false
@@ -125,7 +138,7 @@ function actorMatches(
       // can unblock the project.
       if (actor.alsoAllow?.length) {
         return actor.alsoAllow.some((fb) =>
-          actorMatches(fb, user, project, teams, org, mode),
+          actorMatches(fb, user, project, teams, org, mode, roleCtx),
         )
       }
       return false
@@ -140,6 +153,19 @@ function actorMatches(
     case 'creator':
       // Phase 2d owner retirement: prefer createdBy, fall back to legacy ownerId.
       return (project.createdBy ?? project.ownerId) === user.uid
+    case 'role': {
+      // Phase 3 hierarchy actor. Super-admin always passes.
+      if (user.globalRole === 'super_admin') return true
+      const eff = roleCtx?.effective
+      if (!roleCtx || !eff) return false
+      // Exact hold.
+      if (eff.effectiveRoleIds.includes(actor.roleId)) return true
+      // Level inheritance: a viewer at level j passes an action mapped to a role
+      // at level k iff j <= k (lower number = higher authority).
+      const referenced = roleCtx.roles.find((r) => r.id === actor.roleId)
+      if (!referenced) return false
+      return eff.topLevel != null && eff.topLevel <= referenced.level
+    }
   }
 }
 
@@ -163,11 +189,12 @@ export function getAllowedActions(
   teams: Team[],
   org: OrgStructure,
   mode: ActorMatchMode = 'permission',
+  roleCtx?: RoleResolutionCtx,
 ): StageAction[] {
   const stage = getCurrentStage(project, workflow)
   if (stage.isTerminal) return []
   return stage.actions.filter((a) =>
-    actionAllowedForUser(a, user, project, teams, org, mode),
+    actionAllowedForUser(a, user, project, teams, org, mode, roleCtx),
   )
 }
 
@@ -178,13 +205,26 @@ function actionAllowedForUser(
   teams: Team[],
   org: OrgStructure,
   mode: ActorMatchMode,
+  roleCtx?: RoleResolutionCtx,
 ): boolean {
-  if (actorMatches(action.actor, user, project, teams, org, mode)) return true
+  // Phase 3: when the action carries an explicit Layer-2 `actors[]` mapping it
+  // supersedes the legacy canonical actor / alsoAllow. The first entry is the
+  // canonical actor (owns inbox routing); the rest contribute in permission
+  // mode only.
+  if (action.actors?.length) {
+    const [canonical, ...rest] = action.actors
+    if (actorMatches(canonical, user, project, teams, org, mode, roleCtx)) return true
+    if (mode === 'permission') {
+      return rest.some((a) => actorMatches(a, user, project, teams, org, mode, roleCtx))
+    }
+    return false
+  }
+  if (actorMatches(action.actor, user, project, teams, org, mode, roleCtx)) return true
   // alsoAllow only contributes in permission mode — inbox routing belongs to
   // the canonical actor.
   if (mode === 'permission' && action.alsoAllow?.length) {
     return action.alsoAllow.some((a) =>
-      actorMatches(a, user, project, teams, org, mode),
+      actorMatches(a, user, project, teams, org, mode, roleCtx),
     )
   }
   return false
@@ -197,8 +237,11 @@ export function canPerform(
   teams: Team[],
   org: OrgStructure,
   actionId: string,
+  roleCtx?: RoleResolutionCtx,
 ): boolean {
-  return getAllowedActions(project, workflow, user, teams, org).some((a) => a.id === actionId)
+  return getAllowedActions(project, workflow, user, teams, org, 'permission', roleCtx).some(
+    (a) => a.id === actionId,
+  )
 }
 
 // Phase 2d: can this user change project.status via the direct status-pill path?
@@ -291,9 +334,18 @@ export function getInvolvedUids(
         if (creator) out.add(creator)
         break
       }
+      case 'role':
+        // Phase 3 hierarchy actor: doesn't resolve to concrete uids without a
+        // user directory. The /me inbox filter checks the viewer's effective
+        // roles separately (same posture as global_role). Skip here.
+        break
     }
   }
-  for (const action of stage.actions) collect(action.actor)
+  for (const action of stage.actions) {
+    // Phase 3: prefer the explicit Layer-2 mapping when present.
+    if (action.actors?.length) for (const a of action.actors) collect(a)
+    else collect(action.actor)
+  }
   return [...out].sort()
 }
 
@@ -432,6 +484,8 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   if (!stayingAtStage) {
     patch.currentStageId = toStage
     events.push(buildEvent(toStage, inputsPayloadOrNull(inputs)))
+    // Phase 3 analytics: stamp the stage-entry time for time-in-stage reporting.
+    Object.assign(patch, stageEnteredPatch(toStage))
   }
 
   // Effect-specific extras.
@@ -528,6 +582,8 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   const ownsBatch = !args.batch
   const batch = args.batch ?? writeBatch(db)
   batch.update(projectRef, patch)
+  // Phase 3 analytics: keep the tenant status tally in lockstep with the write.
+  bumpStatusTally(batch, project.status, typeof patch.status === 'string' ? patch.status : null)
   recordAuditEvent({
     actorId: user.uid,
     actorName: user.displayName,
@@ -562,9 +618,10 @@ function inputsPayloadOrNull(
 }
 
 // Lightweight actor match without org/teams context — defensive fallback in
-// performAction when the full canPerform check can't resolve team roles.
-// Modal-side gates already cover the full picture; this catches obvious gaps.
-function actorOnlyMatch(actor: ActorRef, user: User, project: Project): boolean {
+// performAction (and executeOutcome) when the full canPerform check can't
+// resolve team roles. Modal-side gates already cover the full picture; this
+// catches obvious gaps.
+export function actorOnlyMatch(actor: ActorRef, user: User, project: Project): boolean {
   switch (actor.kind) {
     case 'global_role':
       return user.globalRole === actor.role
@@ -580,5 +637,9 @@ function actorOnlyMatch(actor: ActorRef, user: User, project: Project): boolean 
     }
     case 'creator':
       return (project.createdBy ?? project.ownerId) === user.uid
+    case 'role':
+      // Cannot verify the hierarchy without a RoleResolutionCtx here — trust the
+      // modal-side / executeOutcome gate (same posture as team_role above).
+      return true
   }
 }

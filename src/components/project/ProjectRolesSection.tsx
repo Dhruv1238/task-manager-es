@@ -40,6 +40,9 @@ export default function ProjectRolesSection({
       // Legacy projects have ownerId but no createdBy — fall back so the owner's
       // uid stays in accessKeys (visibility + chat) after a role change.
       createdBy: project.createdBy ?? project.ownerId,
+      // Phase 3.6: keep hierarchy-role-actor holders in accessKeys across this write.
+      workflow: workflow ?? undefined,
+      users: [...userById.values()],
       actorId,
       actorName,
     })
@@ -61,7 +64,7 @@ export default function ProjectRolesSection({
                   <button
                     type="button"
                     onClick={() => setEditing(isEditing ? null : role.id)}
-                    className="text-xs text-brand transition hover:underline"
+                    className="rounded text-xs text-brand outline-none transition hover:underline focus-visible:underline"
                   >
                     {isEditing ? 'Done' : 'Edit'}
                   </button>

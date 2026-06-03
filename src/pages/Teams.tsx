@@ -4,6 +4,7 @@ import {  onSnapshot, orderBy, query } from 'firebase/firestore'
 import { tenantCol } from '../lib/firestore'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAuth } from '../contexts/AuthContext'
+import { usePermissions } from '../hooks/usePermissions'
 import AdminActionBar from '../components/admin/AdminActionBar'
 import type { Team, User } from '../types/models'
 
@@ -32,7 +33,12 @@ export default function Teams() {
   const [search, setSearch] = useState('')
   const { users } = useAllUsers()
   const { profile } = useAuth()
+  const { can } = usePermissions()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
+  // Role-Hierarchy module access (Teams view/create) joins the admin baseline,
+  // so a configured role sees all teams and the create affordance.
+  const canViewAllTeams = isAdmin || can('teams', 'view')
+  const canCreateTeam = isAdmin || can('teams', 'create')
 
   useEffect(() => {
     const q = query(tenantCol('teams'), orderBy('createdAt', 'desc'))
@@ -53,9 +59,9 @@ export default function Teams() {
   }, [users])
 
   const visibleTeams = useMemo(() => {
-    if (isAdmin || !profile) return teams
+    if (canViewAllTeams || !profile) return teams
     return teams.filter((t) => t.memberIds.includes(profile.uid) || t.leadId === profile.uid)
-  }, [teams, profile, isAdmin])
+  }, [teams, profile, canViewAllTeams])
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase()
@@ -112,10 +118,10 @@ export default function Teams() {
       ) : visibleTeams.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-card p-12 text-center">
           <h2 className="text-lg font-medium text-fg">
-            {isAdmin ? 'No teams yet' : "You're not on any teams yet"}
+            {canViewAllTeams ? 'No teams yet' : "You're not on any teams yet"}
           </h2>
           <p className="mt-2 text-sm text-fg-subtle">
-            {isAdmin ? (
+            {canCreateTeam ? (
               <>
                 Click <span className="font-medium text-fg-muted">+ New Team</span> to spin one up.
               </>
