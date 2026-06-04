@@ -155,7 +155,7 @@ export default function AdminMembers() {
       const constraints = []
       if (debouncedSearch) {
         constraints.push(where('displayNameLower', '>=', debouncedSearch))
-        constraints.push(where('displayNameLower', '<=', debouncedSearch + ''))
+        constraints.push(where('displayNameLower', '<=', debouncedSearch + ''))
         constraints.push(orderBy('displayNameLower'))
       } else {
         constraints.push(orderBy('createdAt', 'desc'))
