@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Layers,
@@ -9,12 +10,16 @@ import {
   Lock,
   Flag,
   Users,
+  Inbox,
+  Eye,
+  ChevronDown,
 } from 'lucide-react'
 import type { ActorRef, ProjectRoleDef, Stage, StageAction, Workflow } from '../../../types/workflow'
 import type { EffectKind, Outcome, RoleDef } from '../../../types/v2'
 import type { OrgStructure } from '../../../types/models'
 import { readActors, readOutcomes } from '../../../lib/rules/outcomeAdapter'
 import { actorRefKey, describeActorShort, parseActorKey } from '../../../lib/actorRefs'
+import { previewMatches } from '../../../lib/actorPreview'
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown'
 import { CanvasInputsEditor } from './CanvasInputsEditor'
 import { AssignPersonEditor } from './AssignPersonEditor'
@@ -30,6 +35,29 @@ const COMING_SOON_EFFECTS: { kind: EffectKind; label: string }[] = [
 
 const inputCls =
   'w-full rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring'
+
+// Button-style → classes. Drives both the intent picker's active swatch and the
+// live-preview chips; mirrors StageBanner.buttonClasses + ActionModal's runtime.
+type Intent = NonNullable<StageAction['intent']>
+const INTENT_BTN_CLASS: Record<Intent, string> = {
+  primary: 'bg-brand-gradient text-white',
+  success: 'border border-tone-success-bd bg-tone-success-bg text-tone-success-fg',
+  danger: 'border border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg',
+  neutral: 'border border-line bg-fill-2 text-fg-muted',
+}
+const INTENT_OPTIONS: { value: Intent; label: string }[] = [
+  { value: 'primary', label: 'Primary' },
+  { value: 'success', label: 'Success' },
+  { value: 'danger', label: 'Danger' },
+  { value: 'neutral', label: 'Neutral' },
+]
+
+// Counter bump options for advance/branch outcomes. `null` = no counter.
+const COUNTER_OPTIONS: { value: 'iteration' | 'escalation' | null; label: string }[] = [
+  { value: null, label: 'None' },
+  { value: 'iteration', label: 'Iteration' },
+  { value: 'escalation', label: 'Escalation' },
+]
 
 // New actions default to the project lead (always resolves for any flow) so the
 // action is valid the moment it's created; the author refines "who" from there.
@@ -109,14 +137,34 @@ function ActorEditor({
         <Users size={11} /> Who can do this
       </div>
       <div className="flex flex-wrap gap-1">
-        {actors.map((a) => {
+        {actors.map((a, idx) => {
           const key = actorRefKey(a)
+          // actors[0] is the canonical actor — the runtime surfaces the action in
+          // ONLY this person's My Tasks (inbox); the rest can perform it from the
+          // banner but aren't nagged. "Send to My Tasks" reorders this actor to 0.
+          const isCanonical = idx === 0
           return (
             <span
               key={key}
-              className="inline-flex items-center gap-1 rounded-md border border-line bg-fill-2 px-1.5 py-0.5 text-[10px] text-fg-muted"
+              title={isCanonical ? "Shows in this person's My Tasks inbox" : undefined}
+              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${
+                isCanonical
+                  ? 'border-brand-edge bg-brand-soft text-fg'
+                  : 'border-line bg-fill-2 text-fg-muted'
+              }`}
             >
+              {isCanonical && <Inbox size={9} className="text-brand" />}
               {describeActorShort(a, { roles, projectRoles, leadRoleName })}
+              {!disabled && !isCanonical && (
+                <button
+                  type="button"
+                  title="Send this action to this person's My Tasks"
+                  onClick={() => onChange([a, ...actors.filter((x) => actorRefKey(x) !== key)])}
+                  className="-mr-0.5 rounded p-0.5 text-fg-subtle transition hover:text-brand"
+                >
+                  <Inbox size={10} />
+                </button>
+              )}
               {!disabled && actors.length > 1 && (
                 <button
                   type="button"
@@ -136,6 +184,11 @@ function ActorEditor({
           </span>
         )}
       </div>
+      {actors.length > 1 && (
+        <p className="text-[10px] text-fg-faint">
+          Anyone here can perform it; the highlighted one also gets it in their My Tasks.
+        </p>
+      )}
       {!disabled && groups.length > 0 && (
         <Dropdown
           value=""
@@ -146,6 +199,99 @@ function ActorEditor({
         />
       )}
     </div>
+  )
+}
+
+// Live "who sees what" preview for the selected stage — the canvas counterpart
+// of the old SideEditor ActionPreviewRail, on the v2 actors[] list. Symbolic: it
+// matches actor refs by identity (via previewMatches) and does NOT expand
+// hierarchy downward-inheritance — it's an authoring aid, not the runtime gate
+// (real gating lives in canPerform/actorMatches).
+function ActionPreview({
+  stage,
+  roles,
+  projectRoles,
+  leadRoleName,
+}: {
+  stage: Stage
+  roles: RoleDef[]
+  projectRoles: ProjectRoleDef[]
+  leadRoleName?: string
+}) {
+  const viewers = useMemo(() => {
+    const vs: { key: string; actor: ActorRef; label: string }[] = []
+    for (const r of [...roles].sort((a, b) => a.level - b.level || a.order - b.order)) {
+      vs.push({ key: `role:${r.id}`, actor: { kind: 'role', roleId: r.id }, label: r.label })
+    }
+    for (const pr of [...projectRoles].sort((a, b) => a.order - b.order)) {
+      vs.push({
+        key: `project_role:${pr.id}`,
+        actor: { kind: 'project_role', roleId: pr.id },
+        label: pr.label,
+      })
+    }
+    vs.push({
+      key: 'pipeline_role:lead',
+      actor: { kind: 'pipeline_role', role: 'lead' },
+      label: leadRoleName || 'Project lead',
+    })
+    vs.push({ key: 'creator', actor: { kind: 'creator' }, label: 'Project creator' })
+    return vs
+  }, [roles, projectRoles, leadRoleName])
+
+  const [open, setOpen] = useState(false)
+  const [viewerKey, setViewerKey] = useState('')
+  const viewer = viewers.find((v) => v.key === viewerKey) ?? viewers[0]
+
+  if (!viewers.length) return null
+
+  const visible = viewer
+    ? stage.actions.filter((a) => previewMatches(viewer.actor, readActors(a).all))
+    : []
+
+  return (
+    <section className="border-t border-line-subtle pt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-fg-subtle transition hover:text-fg"
+      >
+        <Eye size={12} /> Preview — who sees what
+        <ChevronDown size={12} className={`ml-auto transition ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <Dropdown
+            value={viewer?.key ?? ''}
+            onChange={setViewerKey}
+            options={viewers.map((v) => ({ value: v.key, label: v.label }))}
+            className="w-full text-[11px]"
+          />
+          {visible.length === 0 ? (
+            <p className="text-[11px] text-fg-subtle">
+              This person sees a read-only banner — no buttons here.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {visible.map((a) => (
+                <span
+                  key={a.id}
+                  className={`inline-flex items-center rounded-md px-2 py-1 text-[11px] font-medium ${
+                    INTENT_BTN_CLASS[(a.intent ?? 'primary') as Intent]
+                  }`}
+                >
+                  {a.label || 'Button'}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[10px] text-fg-faint">
+            Symbolic preview — doesn&apos;t expand role-hierarchy inheritance. Real access is
+            enforced at runtime.
+          </p>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -297,6 +443,49 @@ export function NodeInspector({
                 placeholder="What happens at this task?"
                 className={inputCls}
               />
+
+              {/* End-user banner copy (rendered on StageBanner) + chart label. */}
+              <label className="block pt-1 text-[11px] font-medium uppercase tracking-wider text-fg-subtle">
+                Banner headline
+              </label>
+              <input
+                type="text"
+                value={stage.headline ?? ''}
+                disabled={readOnly}
+                onChange={(e) => onChangeStage({ ...stage, headline: e.target.value })}
+                placeholder={stage.displayName}
+                className={inputCls}
+              />
+              <p className="text-[10px] text-fg-faint">
+                Shown to people on the project. Supports <code>{'{leadRoleName}'}</code> and{' '}
+                <code>{'{validatorTeamName}'}</code>.
+              </p>
+              <label className="block pt-1 text-[11px] font-medium uppercase tracking-wider text-fg-subtle">
+                Banner hint
+              </label>
+              <input
+                type="text"
+                value={stage.hint ?? ''}
+                disabled={readOnly}
+                onChange={(e) => onChangeStage({ ...stage, hint: e.target.value })}
+                placeholder="Secondary line under the headline"
+                className={inputCls}
+              />
+              <label className="block pt-1 text-[11px] font-medium uppercase tracking-wider text-fg-subtle">
+                Short name
+              </label>
+              <input
+                type="text"
+                value={stage.shortDisplayName ?? ''}
+                disabled={readOnly}
+                onChange={(e) => onChangeStage({ ...stage, shortDisplayName: e.target.value })}
+                placeholder={stage.displayName}
+                className={inputCls}
+              />
+              <p className="text-[10px] text-fg-faint">
+                Used where space is tight, e.g. the pipeline funnel axis.
+              </p>
+
               <label className="flex items-center gap-2 text-xs text-fg-muted">
                 <input
                   type="checkbox"
@@ -364,6 +553,34 @@ export function NodeInspector({
                             <Trash2 size={13} />
                           </button>
                         )}
+                      </div>
+
+                      {/* Button style (intent) — drives the action button color
+                          on the project banner + action modal at runtime. */}
+                      <div className="mt-2">
+                        <div className="text-[10px] font-medium uppercase tracking-wider text-fg-subtle">
+                          Button style
+                        </div>
+                        <div className="mt-1 flex gap-1">
+                          {INTENT_OPTIONS.map((opt) => {
+                            const active = (action.intent ?? 'primary') === opt.value
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                disabled={readOnly}
+                                onClick={() => patchAction(action, { intent: opt.value })}
+                                className={`flex-1 rounded border px-1 py-0.5 text-[10px] font-medium transition ${
+                                  active
+                                    ? `${INTENT_BTN_CLASS[opt.value]} border-transparent`
+                                    : 'border-line text-fg-subtle hover:text-fg'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
 
                       {/* Attributes — data collected when someone does this */}
@@ -450,6 +667,39 @@ export function NodeInspector({
                                 />
                               </div>
                             )}
+                            {/* Counter — bump the project's iteration/escalation
+                                tally on this move (self-loop "send back" = iteration,
+                                escalate edge = escalation). Rendered on the banner. */}
+                            {(o.shape === 'advance' || o.shape === 'branch') && (
+                              <div className="mt-1.5 flex items-center gap-1">
+                                <span className="mr-1 text-[9px] font-medium uppercase tracking-wider text-fg-faint">
+                                  Counter
+                                </span>
+                                {COUNTER_OPTIONS.map((opt) => {
+                                  const active = (o.counter ?? o.legacyCounter ?? null) === opt.value
+                                  return (
+                                    <button
+                                      key={opt.label}
+                                      type="button"
+                                      disabled={readOnly}
+                                      onClick={() =>
+                                        setOutcome(action, o.id, {
+                                          counter: opt.value ?? undefined,
+                                          legacyCounter: undefined,
+                                        })
+                                      }
+                                      className={`rounded border px-1.5 py-0.5 text-[9px] font-medium transition ${
+                                        active
+                                          ? 'border-brand-edge bg-brand-soft text-fg'
+                                          : 'border-line text-fg-subtle hover:text-fg'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
                             {o.shape === 'close' && (
                               <div className="mt-1.5">
                                 <Dropdown
@@ -513,6 +763,16 @@ export function NodeInspector({
                   )
                 })}
               </section>
+            )}
+
+            {/* Live preview — what buttons a given viewer sees here. */}
+            {!stage.isTerminal && stage.actions.length > 0 && (
+              <ActionPreview
+                stage={stage}
+                roles={roles}
+                projectRoles={projectRoles}
+                leadRoleName={leadRoleName}
+              />
             )}
 
             {!readOnly && (

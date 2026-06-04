@@ -129,6 +129,12 @@ export interface Outcome {
   // workflow project role (project.roleAssignments[roleId] → shown in
   // ProjectRolesSection). executeOutcome performs it + recomputes accessKeys.
   assign?: { target: 'lead' | { roleId: string }; fromInputId: string }
+  // First-class counter bump (v2). On an advance/branch outcome, performing it
+  // increments the project's iterationCount/escalationCount — the canvas-authored
+  // equivalent of the legacy `transition_with_counter` effect. The runtime
+  // (executeOutcome) bumps on `counter ?? legacyCounter`, so authored + synthesized
+  // outcomes behave identically; StageBanner/history/table already render the tally.
+  counter?: 'escalation' | 'iteration'
   // When this outcome was synthesized from a legacy ActionEffect, these carry
   // the source semantics so executeOutcome can replay lead/counter writes
   // faithfully (see outcomeAdapter.ts).

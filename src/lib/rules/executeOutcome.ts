@@ -178,9 +178,10 @@ export async function executeOutcome(args: ExecuteOutcomeArgs): Promise<void> {
       patch.leadUid = null
       break
   }
-  if (outcome.legacyCounter) {
-    patch[outcome.legacyCounter === 'iteration' ? 'iterationCount' : 'escalationCount'] =
-      increment(1)
+  // Counter bump: a v2-authored `counter` or a legacy-synthesized `legacyCounter`.
+  const counter = outcome.counter ?? outcome.legacyCounter
+  if (counter) {
+    patch[counter === 'iteration' ? 'iterationCount' : 'escalationCount'] = increment(1)
   }
 
   // 5c. First-class assign (Phase 3.6): the picked user becomes the project lead

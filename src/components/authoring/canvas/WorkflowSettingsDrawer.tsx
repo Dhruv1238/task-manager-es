@@ -112,6 +112,22 @@ export function WorkflowSettingsDrawer({
               <p className="text-xs text-fg-subtle">
                 The person who owns and runs each project from start to finish.
               </p>
+
+              <label htmlFor="wf-create-desc" className="block pt-1 text-sm font-medium text-fg">
+                New-project modal description
+              </label>
+              <textarea
+                id="wf-create-desc"
+                value={workflow.creationModalDescription ?? ''}
+                rows={2}
+                onChange={(e) => onChange({ creationModalDescription: e.target.value })}
+                disabled={disabled}
+                placeholder="Falls back to a flow-type sentence when blank"
+                className="w-full rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <p className="text-xs text-fg-subtle">
+                Shown under the title when someone creates a project with this workflow.
+              </p>
             </div>
             {tab === 'fields' && (
               <CustomFieldsEditor
