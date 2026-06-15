@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Timestamp } from 'firebase/firestore'
 import { ReactFlowProvider } from '@xyflow/react'
-import { ArrowLeft, FilePlus2, Layers, ShoppingBag, Upload, Users } from 'lucide-react'
+import { ArrowLeft, FilePlus2, Layers, ShoppingBag, Upload, Users, X } from 'lucide-react'
 import './../components/authoring/canvas/canvas.css'
 import { FlowCanvas } from '../components/authoring/canvas/FlowCanvas'
 import { CanvasToolbar } from '../components/authoring/canvas/CanvasToolbar'
@@ -20,7 +20,12 @@ import {
   type WorkflowDraft,
 } from '../lib/workflowAuthoring'
 import { validateFlowForPublish } from '../lib/flowValidation'
-import { downloadJson, parseWorkflowImport, serializeWorkflow } from '../lib/configTransfer'
+import {
+  downloadJson,
+  mergeWorkflowRolesIntoOrg,
+  parseWorkflowImport,
+  serializeWorkflow,
+} from '../lib/configTransfer'
 import { slugifyWorkflowId } from '../lib/workflowAuthoring'
 import { readOutcomes } from '../lib/rules/outcomeAdapter'
 import type { Stage, Workflow } from '../types/workflow'
@@ -51,7 +56,7 @@ export default function FlowAuthoring() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const org = useOrgStructure()
-  const { setWorkflowOptimistic, setRegistryOptimistic } = useAppConfigContext()
+  const { setWorkflowOptimistic, setRegistryOptimistic, refreshOrg } = useAppConfigContext()
 
   // No :id param (the /admin/workflows/new route) → new-flow creation mode.
   const isNew = !id
@@ -61,6 +66,8 @@ export default function FlowAuthoring() {
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Transient success line (e.g. "imported · added N roles"). Distinct from error.
+  const [notice, setNotice] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   // Bumped whenever the graph is (re)laid-out so the canvas reframes the view.
   const [fitSignal, setFitSignal] = useState(0)
@@ -245,32 +252,65 @@ export default function FlowAuthoring() {
     }
   }, [wf, user, validation.publishable, isNew, setWorkflowOptimistic, setRegistryOptimistic, navigate])
 
-  // Download the current flow as a single-workflow JSON export.
+  // Download the current flow as a single-workflow JSON export. Passing `org`
+  // embeds the hierarchy roles the flow references so it stays portable.
   const handleExport = useCallback(() => {
     if (!wf) return
-    const envelope = serializeWorkflow(wf, Date.now())
+    const envelope = serializeWorkflow(wf, Date.now(), org)
     console.log('[workflowExport]', envelope)
     const slug =
       wf.id && wf.id !== '__draft__' && wf.id !== '__imported__'
         ? wf.id
         : slugifyWorkflowId(wf.displayName || 'workflow')
     downloadJson(`workflow-${slug}.json`, envelope)
-  }, [wf])
+  }, [wf, org])
 
   // Load a workflow JSON onto the canvas (into the draft — review then Publish).
-  // Never writes Firestore directly; publishing runs the normal validated path.
+  // The only Firestore write is additive: any referenced hierarchy roles the
+  // envelope carried that this tenant is missing get merged into the org so the
+  // flow's actors resolve. The workflow itself still publishes via the normal path.
   const handleImport = useCallback(
     (file: File) => {
       const reader = new FileReader()
       reader.onload = () => {
         void (async () => {
           try {
+            setNotice(null)
             const parsed = parseWorkflowImport(typeof reader.result === 'string' ? reader.result : '')
+            // Bring referenced hierarchy roles along (additive; never clobbers).
+            let roleNote = ''
+            if (parsed.roles?.length && user) {
+              const res = await mergeWorkflowRolesIntoOrg(
+                parsed.roles,
+                parsed.hierarchyLevels,
+                org,
+                user.uid,
+              )
+              // refreshOrg whenever the merge actually wrote (roles OR levels) so
+              // the canvas validation/preview sees the new hierarchy.
+              if (res.added.length || res.addedLevels.length) await refreshOrg()
+              const parts: string[] = []
+              if (res.added.length) {
+                parts.push(
+                  `${res.added.length} role${res.added.length === 1 ? '' : 's'}: ${res.added
+                    .map((r) => r.label)
+                    .join(', ')}`,
+                )
+              }
+              if (res.addedLevels.length) {
+                parts.push(`${res.addedLevels.length} level${res.addedLevels.length === 1 ? '' : 's'}`)
+              }
+              if (parts.length) roleNote = ` · added ${parts.join(' + ')}`
+              if (res.levelConflicts.length) {
+                console.warn('[workflowImport] level label mismatches (kept this tenant\'s):', res.levelConflicts)
+                roleNote += ` · ⚠ ${res.levelConflicts.length} level label mismatch (see console)`
+              }
+            }
             const imported: Workflow = {
-              ...parsed,
+              ...parsed.workflow,
               // New-flow route: fresh draft (publish derives an id from the name);
               // edit route: keep the current id so publish updates this flow.
-              id: isNew ? '__draft__' : wf?.id ?? parsed.id,
+              id: isNew ? '__draft__' : wf?.id ?? parsed.workflow.id,
               isSystemDefined: isNew ? false : wf?.isSystemDefined ?? false,
             }
             let layout = imported.canvasLayout
@@ -281,6 +321,7 @@ export default function FlowAuthoring() {
             setWf({ ...imported, canvasLayout: layout })
             setSelectedStageId(null)
             setError(null)
+            setNotice(`Imported "${imported.displayName || 'workflow'}"${roleNote}`)
             setFitSignal((n) => n + 1)
           } catch (e) {
             setError(e instanceof Error ? e.message : 'Could not import that workflow file.')
@@ -290,7 +331,7 @@ export default function FlowAuthoring() {
       reader.onerror = () => setError('Could not read that file.')
       reader.readAsText(file)
     },
-    [isNew, wf],
+    [isNew, wf, org, user, refreshOrg],
   )
 
   // New mode, nothing chosen yet → the template chooser.
@@ -318,6 +359,19 @@ export default function FlowAuthoring() {
         {error && (
           <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-lg pill-danger border px-3 py-1.5 text-xs">
             {error}
+          </div>
+        )}
+        {notice && !error && (
+          <div className="absolute left-1/2 top-20 z-30 flex max-w-[80vw] -translate-x-1/2 items-center gap-2 rounded-lg pill-success border px-3 py-1.5 text-xs">
+            <span className="truncate">{notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="shrink-0 text-fg-subtle transition hover:text-fg"
+              aria-label="Dismiss"
+            >
+              <X size={12} />
+            </button>
           </div>
         )}
         <button

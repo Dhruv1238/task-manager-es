@@ -13,11 +13,8 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRole == 'super_admin';
     }
 
-    function chatEnabled() {
-      // NOTE: confirm this path matches your actual config doc.
-      // If your config lives at platformConfig/main, change the path and field accordingly.
-      return get(/databases/$(database)/documents/config/appConfig).data.features.chat == true;
-    }
+    // Chat is always available to anyone with project access — the legacy
+    // features.chat flag has been retired (no UI toggle, no gate).
 
     function hasProjectAccess(projectId) {
       let p = get(/databases/$(database)/documents/projects/$(projectId)).data;
@@ -47,16 +44,13 @@ service cloud.firestore {
 
     match /projects/{projectId}/chat/{messageId} {
       allow read: if isSignedIn()
-                  && chatEnabled()
                   && hasProjectAccess(projectId);
 
       allow create: if isSignedIn()
-                    && chatEnabled()
                     && hasProjectAccess(projectId)
                     && validNewMessage();
 
       allow update: if isSignedIn()
-                    && chatEnabled()
                     && hasProjectAccess(projectId)
                     && request.auth.uid == resource.data.authorId
                     && validEdit();

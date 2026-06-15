@@ -23,9 +23,12 @@
 import { getDoc, getDocs, serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
 import { IS_SANDBOX, tenantCol, tenantDoc } from './firestore'
 import { sanitizeForFirestore } from './workflowAuthoring'
+import { readActors } from './rules/outcomeAdapter'
+import { saveRoleHierarchy } from './permissions/roleHierarchyAuthoring'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
 import type { Workflow, WorkflowRegistry } from '../types/workflow'
-import type { AppConfig, OrgStructure } from '../types/models'
+import type { OrgStructure } from '../types/models'
+import type { HierarchyLevel, RoleDef } from '../types/v2'
 
 // ─── Bundle shapes ─────────────────────────────────────────────────────────
 
@@ -42,14 +45,12 @@ export interface ConfigBundle {
   orgStructure: OrgStructureConfig | null
   workflows: WorkflowExport[]
   registry: { activeWorkflowIds: string[]; defaultWorkflowId: string | null } | null
-  appFeatures: { chat: boolean }
 }
 
 export interface ImportSummary {
   workflows: number
   orgStructure: boolean
   registry: boolean
-  appConfig: boolean
 }
 
 // ─── Audit-field stripping (clone + delete avoids no-unused-vars on destructure) ─
@@ -79,15 +80,18 @@ function stripOrgAudit(org: OrgStructure): OrgStructureConfig {
  * `exportedAtMs` is passed in by the caller (e.g. `Date.now()`).
  */
 export async function exportTenantConfig(exportedAtMs: number): Promise<ConfigBundle> {
-  const [orgSnap, wfSnap, appSnap] = await Promise.all([
+  const [orgSnap, wfSnap] = await Promise.all([
     getDoc(tenantDoc('config', 'orgStructure')),
     getDocs(tenantCol('workflows')),
-    getDoc(tenantDoc('config', 'appConfig')),
   ])
 
   const orgStructure = orgSnap.exists() ? stripOrgAudit(orgSnap.data() as OrgStructure) : null
 
-  const workflows: WorkflowExport[] = []
+  // Collect every non-registry workflow + capture the registry, then keep only
+  // the ACTIVE ones (ids in registry.activeWorkflowIds). Inactive / seeded-but-
+  // unused workflows are dropped — the target tenant only needs what the registry
+  // surfaces, and every active id still has its doc in the bundle.
+  const allWorkflows: WorkflowExport[] = []
   let registry: ConfigBundle['registry'] = null
   for (const d of wfSnap.docs) {
     if (d.id === WORKFLOW_REGISTRY_ID) {
@@ -98,14 +102,10 @@ export async function exportTenantConfig(exportedAtMs: number): Promise<ConfigBu
       }
       continue
     }
-    // Include system + custom workflows so a freshly-reset target tenant has
-    // everything the registry points at.
-    workflows.push(stripWorkflowAudit({ ...(d.data() as Workflow), id: d.id }))
+    allWorkflows.push(stripWorkflowAudit({ ...(d.data() as Workflow), id: d.id }))
   }
-
-  const appFeatures = {
-    chat: appSnap.exists() ? Boolean((appSnap.data() as AppConfig).features?.chat) : true,
-  }
+  const activeIds = new Set(registry?.activeWorkflowIds ?? [])
+  const workflows = allWorkflows.filter((w) => activeIds.has(w.id))
 
   return {
     schemaVersion: 1,
@@ -114,7 +114,6 @@ export async function exportTenantConfig(exportedAtMs: number): Promise<ConfigBu
     orgStructure,
     workflows,
     registry,
-    appFeatures,
   }
 }
 
@@ -146,7 +145,6 @@ export async function importTenantConfig(
     workflows: 0,
     orgStructure: false,
     registry: false,
-    appConfig: false,
   }
 
   // Org structure (force setupCompleted so the target doesn't bounce to the setup wizard).
@@ -197,19 +195,8 @@ export async function importTenantConfig(
     summary.registry = true
   }
 
-  // App config — only the chat feature flag, merged over whatever's there.
-  if (bundle.appFeatures) {
-    const ref = tenantDoc('config', 'appConfig')
-    const prev = await getDoc(ref)
-    const prevData = prev.exists() ? (prev.data() as AppConfig) : null
-    await setDoc(ref, {
-      version: (prevData?.version ?? 0) + 1,
-      updatedBy: adminUid,
-      updatedAt: serverTimestamp(),
-      features: { ...(prevData?.features ?? {}), chat: Boolean(bundle.appFeatures.chat) },
-    })
-    summary.appConfig = true
-  }
+  // Note: chat is always-on (the features.chat flag is retired), so the bundle
+  // no longer carries or writes any appConfig feature flags.
 
   return summary
 }
@@ -233,15 +220,63 @@ export interface WorkflowExportEnvelope {
   schemaVersion: 1
   exportedAt: number
   workflow: WorkflowExport
+  // Hierarchy roles the workflow's actors / user-pickers reference (by `role:<id>`),
+  // so the flow is portable: importing into another tenant re-creates any that are
+  // missing. Only the *referenced* roles + the levels they occupy travel — never
+  // the whole hierarchy (that's the tenant-scoped Dev Tools bundle's job).
+  roles?: RoleDef[]
+  hierarchyLevels?: HierarchyLevel[]
 }
 
-export function serializeWorkflow(wf: Workflow, exportedAtMs: number): WorkflowExportEnvelope {
-  return {
+// Hierarchy role ids an action references — via a v2 `role` actor or a user_picker
+// input scoped to `role:<id>`. (project_role / pipeline_role / team_role actors
+// don't reference RoleDefs; project roles travel inside the workflow doc already.)
+function referencedRoleIds(wf: Workflow): Set<string> {
+  const ids = new Set<string>()
+  for (const stage of wf.stages ?? []) {
+    for (const action of stage.actions ?? []) {
+      for (const a of readActors(action).all) {
+        if (a && a.kind === 'role' && a.roleId) ids.add(a.roleId)
+      }
+      for (const input of action.inputs ?? []) {
+        const scope = input.pickerScope
+        if (input.type === 'user_picker' && typeof scope === 'string' && scope.startsWith('role:')) {
+          ids.add(scope.slice('role:'.length))
+        }
+      }
+    }
+  }
+  // Status-change permission actors can also reference a hierarchy role.
+  for (const a of wf.canUpdateStatusActors ?? []) {
+    if (a && a.kind === 'role' && a.roleId) ids.add(a.roleId)
+  }
+  return ids
+}
+
+export function serializeWorkflow(
+  wf: Workflow,
+  exportedAtMs: number,
+  org?: { roleHierarchy?: RoleDef[]; hierarchyLevels?: HierarchyLevel[] },
+): WorkflowExportEnvelope {
+  const envelope: WorkflowExportEnvelope = {
     kind: 'workflow',
     schemaVersion: 1,
     exportedAt: exportedAtMs,
     workflow: stripWorkflowAudit(wf),
   }
+  // Embed the referenced hierarchy roles (+ the levels they sit at) so the flow
+  // carries its access wiring to another tenant.
+  if (org?.roleHierarchy?.length) {
+    const refIds = referencedRoleIds(wf)
+    const roles = org.roleHierarchy.filter((r) => refIds.has(r.id))
+    if (roles.length) {
+      envelope.roles = roles
+      const levelsNeeded = new Set(roles.map((r) => r.level))
+      const levels = (org.hierarchyLevels ?? []).filter((l) => levelsNeeded.has(l.level))
+      if (levels.length) envelope.hierarchyLevels = levels
+    }
+  }
+  return envelope
 }
 
 function isWorkflowEnvelope(v: unknown): v is WorkflowExportEnvelope {
@@ -253,19 +288,29 @@ function isWorkflowEnvelope(v: unknown): v is WorkflowExportEnvelope {
   )
 }
 
+export interface ParsedWorkflowImport {
+  workflow: Workflow
+  // Referenced hierarchy roles carried in the envelope (if any). Feed through
+  // mergeWorkflowRolesIntoOrg before relying on the workflow's `role:<id>` actors.
+  roles?: RoleDef[]
+  hierarchyLevels?: HierarchyLevel[]
+}
+
 /**
  * Parse a single-workflow export (envelope OR a raw workflow object) into a
  * Workflow-shaped draft with audit fields defaulted — mirrors draftToWorkflow
- * in FlowAuthoring. Throws a friendly error on a bad shape.
+ * in FlowAuthoring — plus any referenced roles the envelope carried. Throws a
+ * friendly error on a bad shape.
  */
-export function parseWorkflowImport(text: string): Workflow {
+export function parseWorkflowImport(text: string): ParsedWorkflowImport {
   let parsed: unknown
   try {
     parsed = JSON.parse(text)
   } catch {
     throw new Error('That file is not valid JSON.')
   }
-  const raw = isWorkflowEnvelope(parsed) ? parsed.workflow : parsed
+  const envelope = isWorkflowEnvelope(parsed) ? parsed : null
+  const raw = envelope ? envelope.workflow : parsed
   const w = raw as Partial<Workflow> | null
   if (
     !w ||
@@ -279,12 +324,89 @@ export function parseWorkflowImport(text: string): Workflow {
     )
   }
   return {
-    ...(w as Workflow),
-    id: w.id ?? '__imported__',
-    version: 1,
-    updatedAt: Timestamp.now(),
-    updatedBy: '',
+    workflow: {
+      ...(w as Workflow),
+      id: w.id ?? '__imported__',
+      version: 1,
+      updatedAt: Timestamp.now(),
+      updatedBy: '',
+    },
+    roles: envelope?.roles,
+    hierarchyLevels: envelope?.hierarchyLevels,
   }
+}
+
+export interface RoleMergeResult {
+  added: RoleDef[]
+  addedLevels: HierarchyLevel[]
+  // An added role's level NUMBER already exists in the target but with a different
+  // label. `level` is a tenant-relative positional value (unlike the stable role
+  // id), so we keep the target's label (never clobber) and surface the mismatch
+  // rather than silently re-pointing the role's authority.
+  levelConflicts: { level: number; incomingLabel: string; existingLabel: string }[]
+}
+
+/**
+ * Additively merge a workflow's referenced hierarchy roles into the current
+ * tenant's org structure. Roles are matched by stable `id` — existing ones are
+ * NEVER clobbered, only genuinely-new ids are appended.
+ *
+ * `hierarchyLevels` is display-only metadata (permission compute keys off the
+ * numeric RoleDef.level, never the labels), and `level` is tenant-relative — so
+ * for levels we ONLY guarantee each *added* role has a renderable level row:
+ *   - level number already present in the target → keep the target's label (no
+ *     clobber); record a `levelConflict` if the incoming label differs.
+ *   - level number absent → append it (preferring the envelope's label, else a
+ *     `Level N` placeholder).
+ * We never append a level for a role that already existed (no orphan level), and
+ * never overwrite an existing label. Reuses saveRoleHierarchy (merge write); no
+ * write when nothing is new.
+ */
+export async function mergeWorkflowRolesIntoOrg(
+  roles: RoleDef[] | undefined,
+  levels: HierarchyLevel[] | undefined,
+  org: OrgStructure,
+  adminUid: string,
+): Promise<RoleMergeResult> {
+  const existingRoles = org.roleHierarchy ?? []
+  const haveRoleIds = new Set(existingRoles.map((r) => r.id))
+  const added = (roles ?? []).filter((r) => !haveRoleIds.has(r.id))
+
+  const existingLevels = org.hierarchyLevels ?? []
+  const existingLabelByLevel = new Map(existingLevels.map((l) => [l.level, l.label]))
+  const incomingLabelByLevel = new Map((levels ?? []).map((l) => [l.level, l]))
+
+  // Only ensure the levels occupied by *added* roles are renderable.
+  const addedLevels: HierarchyLevel[] = []
+  const levelConflicts: RoleMergeResult['levelConflicts'] = []
+  const seenNewLevels = new Set<number>()
+  for (const role of added) {
+    const num = role.level
+    const existingLabel = existingLabelByLevel.get(num)
+    if (existingLabel !== undefined) {
+      const incoming = incomingLabelByLevel.get(num)
+      if (
+        incoming?.label &&
+        incoming.label !== existingLabel &&
+        !levelConflicts.some((c) => c.level === num)
+      ) {
+        levelConflicts.push({ level: num, incomingLabel: incoming.label, existingLabel })
+      }
+      continue
+    }
+    if (seenNewLevels.has(num)) continue
+    seenNewLevels.add(num)
+    addedLevels.push(incomingLabelByLevel.get(num) ?? { level: num, label: `Level ${num}` })
+  }
+
+  if (!added.length && !addedLevels.length) {
+    return { added: [], addedLevels: [], levelConflicts }
+  }
+
+  const nextRoles = [...existingRoles, ...added]
+  const nextLevels = [...existingLevels, ...addedLevels].sort((a, b) => a.level - b.level)
+  await saveRoleHierarchy(adminUid, nextLevels, nextRoles)
+  return { added, addedLevels, levelConflicts }
 }
 
 // ─── Shared download helper ──────────────────────────────────────────────────

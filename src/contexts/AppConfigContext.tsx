@@ -30,10 +30,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   updatedAt: Timestamp.fromMillis(0),
   updatedBy: '',
   features: {
-    // Chat is enabled product-wide. Sandbox rules are path-isolated (no chat
-    // gate), so this default turns it on everywhere in the sandbox. In a prod
-    // tenant the /config/appConfig doc must also carry features.chat: true,
-    // since the Firestore rules' chatEnabled() reads the doc value.
+    // Retained for back-compat only. The features.chat flag is RETIRED: chat is
+    // always on (useChatEnabled() returns true unconditionally) and the Firestore
+    // rules no longer gate on it. Nothing reads this value anymore.
     chat: true,
   },
 }
@@ -663,7 +662,10 @@ export function useAppConfig(): AppConfig {
 }
 
 export function useChatEnabled(): boolean {
-  return useAppConfigContext().config.features.chat
+  // Chat is always on — the features.chat flag is retired (no UI toggle, no
+  // Firestore gate). Per-project visibility is still enforced via
+  // canViewProjectChat; this just stops gating the whole feature on a flag.
+  return true
 }
 
 // Live-onSnapshot variant for the admin screen ONLY. Mounts a listener while
