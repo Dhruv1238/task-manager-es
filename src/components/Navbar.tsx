@@ -144,7 +144,12 @@ export default function Navbar() {
                   >
                     {initialsFor(user)}
                   </div>
-                  <span className="text-sm text-fg-muted">{user.email}</span>
+                  <span
+                    className="max-w-45 truncate text-sm text-fg-muted"
+                    title={user.email ?? undefined}
+                  >
+                    {user.email}
+                  </span>
                 </div>
 
                 <div
