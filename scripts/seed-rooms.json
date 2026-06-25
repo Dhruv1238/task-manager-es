@@ -1,0 +1,196 @@
+{
+  "property": "Hotel Management — room inventory (demo)",
+  "rooms": [
+    {
+      "key": "r101", "room_number": "101", "room_type": "single", "floor": "1",
+      "title": "Room 101 — Single",
+      "description": "Compact single on the ground floor near the lobby with a queen bed, work nook, and walk-in shower. Quiet courtyard aspect; a reliable pick for solo business stays.",
+      "stage": "available", "status": "active", "daysAgoStart": 2, "tasks": []
+    },
+    {
+      "key": "r112", "room_number": "112", "room_type": "twin", "floor": "1",
+      "title": "Room 112 — Twin",
+      "description": "First-floor twin with garden access, two single beds, and a compact shared workspace. Popular with colleagues travelling together.",
+      "stage": "available", "status": "active", "daysAgoStart": 2, "tasks": []
+    },
+    {
+      "key": "r305", "room_number": "305", "room_type": "double", "floor": "3",
+      "title": "Room 305 — Double",
+      "description": "Standard double on the third floor with a king bed, city view, and a rain shower. Recently re-carpeted and ready for allocation.",
+      "stage": "available", "status": "active", "daysAgoStart": 1, "tasks": []
+    },
+    {
+      "key": "r210", "room_number": "210", "room_type": "accessible", "floor": "2",
+      "title": "Room 210 — Accessible",
+      "description": "Accessible double on the second floor with a roll-in shower, grab rails, lowered fixtures, and wide doorways, located beside the lift lobby for step-free access.",
+      "stage": "available", "status": "active", "daysAgoStart": 1, "tasks": []
+    },
+
+    {
+      "key": "r402", "room_number": "402", "room_type": "suite", "floor": "4",
+      "title": "Room 402 — Suite",
+      "description": "Top-floor junior suite with a separate living area, king bed, soaking tub, and panoramic skyline view — the hotel's signature room for anniversaries and VIP stays.",
+      "current_guest": "Mr. & Mrs. Khanna", "check_in": "2026-06-19", "check_out": "2026-06-23",
+      "stage": "assigned", "status": "active", "daysAgoStart": 2,
+      "tasks": [
+        {"teamKey": "front_desk", "title": "Confirm booking & arrange VIP amenities", "assigneeKey": "ritu", "status": "done", "priority": "high", "dueOffsetDays": -1},
+        {"teamKey": "housekeeping", "title": "Queue suite for priority servicing", "assigneeKey": "lakshmi", "status": "todo", "priority": "high", "dueOffsetDays": 0}
+      ]
+    },
+    {
+      "key": "r208", "room_number": "208", "room_type": "double", "floor": "2",
+      "title": "Room 208 — Double",
+      "description": "Second-floor double with a king bed, blackout curtains, and a quiet pool-facing aspect. A dependable mid-tier room with fast Wi-Fi.",
+      "current_guest": "Ms. Reema Shah", "check_in": "2026-06-19",
+      "stage": "assigned", "status": "active", "daysAgoStart": 2,
+      "tasks": [
+        {"teamKey": "front_desk", "title": "Confirm late arrival & key handover", "assigneeKey": "karan", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0}
+      ]
+    },
+
+    {
+      "key": "r118", "room_number": "118", "room_type": "double", "floor": "1",
+      "title": "Room 118 — Double",
+      "description": "First-floor double opening onto the garden terrace, with a king bed and a spacious bathroom with twin vanities. A favourite for longer stays.",
+      "current_guest": "Mr. Arvind Rao", "check_in": "2026-06-18",
+      "stage": "servicing", "status": "active", "daysAgoStart": 3,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Strip & change linens", "assigneeKey": "ramesh", "status": "done", "priority": "high", "dueOffsetDays": -1},
+        {"teamKey": "housekeeping", "title": "Clean & sanitise bathroom, restock amenities", "assigneeKey": "sunita", "status": "in_progress", "priority": "high", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Vacuum, dust & set up welcome tray", "assigneeKey": "ramesh", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Final inspection & ready-check", "assigneeKey": "sunita", "status": "in_review", "priority": "high", "dueOffsetDays": 0, "reviewerKey": "lakshmi"},
+        {"teamKey": "maintenance", "title": "Fix flickering bedside lamp", "assigneeKey": "imran", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0}
+      ]
+    },
+    {
+      "key": "r506", "room_number": "506", "room_type": "suite", "floor": "5",
+      "title": "Room 506 — Suite",
+      "description": "Executive suite on the fifth floor with a corner balcony, walk-in wardrobe, espresso station, and a curated minibar. Premium business inventory.",
+      "current_guest": "Dr. Mehta", "check_in": "2026-06-18",
+      "stage": "servicing", "status": "active", "daysAgoStart": 2,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Deep clean suite & living area", "assigneeKey": "lakshmi", "status": "in_progress", "priority": "high", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Restock premium minibar & espresso pods", "assigneeKey": "ramesh", "status": "todo", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Press linens & set turndown", "assigneeKey": "sunita", "status": "todo", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "maintenance", "title": "Recalibrate AC thermostat", "assigneeKey": "joseph", "status": "done", "priority": "medium", "dueOffsetDays": -1}
+      ]
+    },
+    {
+      "key": "r214", "room_number": "214", "room_type": "twin", "floor": "2",
+      "title": "Room 214 — Twin",
+      "description": "Second-floor twin with two single beds, a shared work desk, and a bright east-facing window. Allocated to a conference group.",
+      "current_guest": "Conference Group — Block B", "check_in": "2026-06-18",
+      "stage": "servicing", "status": "active", "daysAgoStart": 2,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Change linens for both beds", "assigneeKey": "ramesh", "status": "done", "priority": "medium", "dueOffsetDays": -1},
+        {"teamKey": "housekeeping", "title": "Bathroom clean & amenity restock", "assigneeKey": "sunita", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Inspect & ready-check", "assigneeKey": "ramesh", "status": "in_review", "priority": "medium", "dueOffsetDays": 0, "reviewerKey": "lakshmi"}
+      ]
+    },
+    {
+      "key": "r309", "room_number": "309", "room_type": "double", "floor": "3",
+      "title": "Room 309 — Double",
+      "description": "Third-floor double with a king bed and a refreshed bathroom; standard between-guest servicing in progress.",
+      "stage": "servicing", "status": "active", "daysAgoStart": 1,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Full clean & linen change", "assigneeKey": "sunita", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Restock amenities", "assigneeKey": "ramesh", "status": "todo", "priority": "low", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Final inspection", "assigneeKey": "lakshmi", "status": "todo", "priority": "medium", "dueOffsetDays": 0}
+      ]
+    },
+
+    {
+      "key": "r415", "room_number": "415", "room_type": "suite", "floor": "4",
+      "title": "Room 415 — Suite",
+      "description": "Fourth-floor suite with a lounge area, king bed, and a skyline-facing bathtub. A long-stay corporate guest is in residence.",
+      "current_guest": "Mr. Daniel Fischer", "check_in": "2026-06-16", "check_out": "2026-06-21",
+      "stage": "checked_in", "status": "active", "daysAgoStart": 5,
+      "tasks": [
+        {"teamKey": "front_desk", "title": "Deliver extra towels & pillows", "assigneeKey": "priya", "status": "done", "priority": "low", "dueOffsetDays": -1},
+        {"teamKey": "housekeeping", "title": "Evening turndown service", "assigneeKey": "sunita", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "maintenance", "title": "AC not cooling — inspect & repair", "assigneeKey": "joseph", "status": "in_progress", "priority": "high", "dueOffsetDays": 0},
+        {"teamKey": "front_desk", "title": "Arrange late checkout request", "assigneeKey": "ritu", "status": "todo", "priority": "medium", "dueOffsetDays": 3}
+      ]
+    },
+    {
+      "key": "r322", "room_number": "322", "room_type": "double", "floor": "3",
+      "title": "Room 322 — Double",
+      "description": "Quiet third-floor double with a king bed and pool view, hosting a mid-week business guest.",
+      "current_guest": "Ms. Anita Pillai", "check_in": "2026-06-17", "check_out": "2026-06-20",
+      "stage": "checked_in", "status": "active", "daysAgoStart": 4,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Daily housekeeping & replenish", "assigneeKey": "ramesh", "status": "done", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "front_desk", "title": "Restaurant reservation request", "assigneeKey": "karan", "status": "todo", "priority": "low", "dueOffsetDays": 0}
+      ]
+    },
+    {
+      "key": "r103", "room_number": "103", "room_type": "accessible", "floor": "1",
+      "title": "Room 103 — Accessible",
+      "description": "Ground-floor accessible room beside the lift with a roll-in shower and emergency call button. Guest requires step-free routing to dining.",
+      "current_guest": "Mr. George Thomas", "check_in": "2026-06-15", "check_out": "2026-06-19",
+      "stage": "checked_in", "status": "active", "daysAgoStart": 4,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Daily clean & amenity restock", "assigneeKey": "sunita", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "maintenance", "title": "Check grab-rail tightness & call button", "assigneeKey": "imran", "status": "done", "priority": "high", "dueOffsetDays": -1}
+      ]
+    },
+    {
+      "key": "r511", "room_number": "511", "room_type": "single", "floor": "5",
+      "title": "Room 511 — Single",
+      "description": "Top-floor single with a city view and a compact ergonomic workspace, hosting an overnight business guest.",
+      "current_guest": "Ms. Sara Iqbal", "check_in": "2026-06-18", "check_out": "2026-06-19",
+      "stage": "checked_in", "status": "active", "daysAgoStart": 2,
+      "tasks": [
+        {"teamKey": "front_desk", "title": "Early breakfast & airport cab booking", "assigneeKey": "priya", "status": "todo", "priority": "medium", "dueOffsetDays": 0}
+      ]
+    },
+
+    {
+      "key": "r207", "room_number": "207", "room_type": "double", "floor": "2",
+      "title": "Room 207 — Double",
+      "description": "Second-floor double with a king bed and balcony, awaiting turnover after a guest checkout.",
+      "current_guest": "Mr. Verma (departed)", "check_out": "2026-06-18",
+      "stage": "checked_out", "status": "active", "daysAgoStart": 4,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Deep clean & sanitise", "assigneeKey": "ramesh", "status": "in_progress", "priority": "high", "dueOffsetDays": 0},
+        {"teamKey": "housekeeping", "title": "Inspect, restock & re-set room", "assigneeKey": "sunita", "status": "todo", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "maintenance", "title": "Check fixtures & bathroom drains", "assigneeKey": "joseph", "status": "todo", "priority": "low", "dueOffsetDays": 0}
+      ]
+    },
+    {
+      "key": "r418", "room_number": "418", "room_type": "twin", "floor": "4",
+      "title": "Room 418 — Twin",
+      "description": "Fourth-floor twin used by a departing conference group; turnover with linen reset and amenity restock.",
+      "current_guest": "Conference Group — Block A (departed)", "check_out": "2026-06-18",
+      "stage": "checked_out", "status": "active", "daysAgoStart": 3,
+      "tasks": [
+        {"teamKey": "housekeeping", "title": "Strip & deep clean both beds", "assigneeKey": "ramesh", "status": "done", "priority": "high", "dueOffsetDays": -1},
+        {"teamKey": "housekeeping", "title": "Final inspection & ready for inventory", "assigneeKey": "lakshmi", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0}
+      ]
+    },
+
+    {
+      "key": "r150", "room_number": "150", "room_type": "double", "floor": "1",
+      "title": "Room 150 — Double",
+      "description": "First-floor double temporarily out of rotation for a bathroom upgrade — re-tiling, new fixtures, and repainting before it returns to inventory.",
+      "stage": "available", "status": "maintenance", "statusNote": "Bathroom upgrade in progress — re-tiling & new fixtures.", "daysAgoStart": 8,
+      "tasks": [
+        {"teamKey": "maintenance", "title": "Re-tile bathroom & replace fixtures", "assigneeKey": "joseph", "status": "in_progress", "priority": "high", "dueOffsetDays": 2},
+        {"teamKey": "maintenance", "title": "Repaint & touch-up walls", "assigneeKey": "imran", "status": "todo", "priority": "medium", "dueOffsetDays": 4},
+        {"teamKey": "housekeeping", "title": "Deep clean post-works before release", "assigneeKey": "sunita", "status": "todo", "priority": "medium", "dueOffsetDays": 5}
+      ]
+    },
+    {
+      "key": "r601", "room_number": "601", "room_type": "suite", "floor": "6",
+      "title": "Room 601 — Suite",
+      "description": "Sixth-floor suite withdrawn from inventory for a full refurbishment — new flooring, rewiring, and furniture ahead of the season relaunch.",
+      "stage": "available", "status": "out_of_service", "daysAgoStart": 25,
+      "closeAction": {"id": "decommission", "payload": {"reason": "Full refurbishment — flooring, rewiring & furniture replacement."}},
+      "tasks": [
+        {"teamKey": "maintenance", "title": "Replace flooring & skirting", "assigneeKey": "joseph", "status": "in_progress", "priority": "high", "dueOffsetDays": 6},
+        {"teamKey": "maintenance", "title": "Rewire lighting & power sockets", "assigneeKey": "imran", "status": "todo", "priority": "high", "dueOffsetDays": 10},
+        {"teamKey": "maintenance", "title": "Install new furniture set", "assigneeKey": "joseph", "status": "blocked", "priority": "medium", "dueOffsetDays": 14}
+      ]
+    }
+  ]
+}

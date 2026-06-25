@@ -1,0 +1,367 @@
+[
+  {
+    "key": "gulfood",
+    "description": "India Pavilion design & build for Gulfood 2026 at Dubai World Trade Centre — an APEDA-style ~600 sqm national pavilion hosting 40+ Indian exporter co-exhibitors. Scope covers premium octanorm shell scheme plus custom hero fabrication, AV experience zones, signage/wayfinding, and a hospitality lounge. Project is mid-execution: fabrication and content production are underway with on-site build approaching.",
+    "leadCategory": "international",
+    "region": "WEST",
+    "tasks": [
+      {
+        "teamKey": "events_design",
+        "title": "Pavilion master plan & hero zone GA drawings - 600 sqm",
+        "description": "Approved floor plan locking 40+ co-exhibitor octanorm pods around the central hero arch, hospitality lounge and AV zone. Issued GA, sections and rigging plan to DWTC operations for approval.",
+        "assigneeKey": "karthik",
+        "reviewerKey": "ananya",
+        "status": "done",
+        "priority": "high",
+        "workType": "3d_design",
+        "dueOffsetDays": -14
+      },
+      {
+        "teamKey": "copy_strategy",
+        "title": "Technical bid narrative & eligibility compliance matrix",
+        "description": "Concept note and compliance matrix mapping APEDA tender clauses, DWTC build regulations and exporter eligibility against our submission. Signed off and filed in the bid dossier.",
+        "assigneeKey": "ananya",
+        "reviewerKey": "meera",
+        "status": "done",
+        "priority": "high",
+        "workType": "content_qc",
+        "dueOffsetDays": -10
+      },
+      {
+        "teamKey": "client_servicing",
+        "title": "Submission dossier - EMD, tender fee & compliance checklist",
+        "description": "Compiled EMD bank guarantee, tender-fee receipt and signed compliance checklist; submitted the full dossier to APEDA and confirmed acknowledgement.",
+        "assigneeKey": "meera",
+        "reviewerKey": "ananya",
+        "status": "done",
+        "priority": "high",
+        "workType": "bid_compliance",
+        "dueOffsetDays": -7
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Custom hero arch & lounge fabrication - vendor build",
+        "description": "GA & fabrication drawings released; coordinating with the Dubai fabrication vendor on the custom hero arch, premium lounge counters and material samples. On-site build slot at DWTC confirmed.",
+        "assigneeKey": "ishaan",
+        "reviewerKey": "karthik",
+        "status": "in_progress",
+        "priority": "high",
+        "workType": "fabrication",
+        "dueOffsetDays": 6
+      },
+      {
+        "teamKey": "graphic_design",
+        "title": "Pavilion signage, wayfinding & 40+ co-exhibitor fascia",
+        "description": "Producing the bilingual fascia name boards, directional wayfinding and hero backdrop graphics for all exporter pods, applying APEDA brand guidelines and print-ready bleed specs.",
+        "assigneeKey": "rohan",
+        "reviewerKey": "ananya",
+        "status": "in_progress",
+        "priority": "high",
+        "workType": "2d_design",
+        "dueOffsetDays": 4
+      },
+      {
+        "teamKey": "video_editing",
+        "title": "Hero LED wall content & 90s India Pavilion brand film",
+        "description": "Editing the 90-second brand film and looping LED wall content showcasing Indian agri-export categories for the central screen and lounge displays. First cut in review with audio mix pending.",
+        "assigneeKey": "tara",
+        "reviewerKey": "ananya",
+        "status": "in_progress",
+        "priority": "medium",
+        "workType": "av_content",
+        "dueOffsetDays": 8
+      },
+      {
+        "teamKey": "video_editing",
+        "title": "3D pavilion walkthrough animation for client preview",
+        "description": "Camera-mapped 3D walkthrough animation of the full 600 sqm pavilion built from the approved GA, used for the APEDA stakeholder preview. Rendered draft submitted for sign-off.",
+        "assigneeKey": "aditya",
+        "reviewerKey": "tara",
+        "status": "in_review",
+        "priority": "medium",
+        "workType": "3d_animation",
+        "dueOffsetDays": 2
+      },
+      {
+        "teamKey": "copy_strategy",
+        "title": "Co-exhibitor profile content & lounge collateral copy",
+        "description": "Writing and QC-ing the 40+ exporter profile blurbs, lounge brochure copy and category storyboards. Draft routed for content sign-off before handing to graphics.",
+        "assigneeKey": "rhea",
+        "reviewerKey": "ananya",
+        "status": "in_review",
+        "priority": "medium",
+        "workType": "content_qc",
+        "dueOffsetDays": 3
+      },
+      {
+        "teamKey": "client_servicing",
+        "title": "On-site build master timeline & deliverable tracker",
+        "description": "Maintaining the day-by-day build, dressing and exhibitor handover schedule synced with DWTC move-in dates and tracking all team deliverables against milestones.",
+        "assigneeKey": "arjun",
+        "reviewerKey": "meera",
+        "status": "todo",
+        "priority": "medium",
+        "workType": "coordination",
+        "dueOffsetDays": 10
+      },
+      {
+        "teamKey": "events_design",
+        "title": "AV & lighting rig BOQ - awaiting Dubai vendor quote",
+        "description": "Finalising the BOQ and costing for AV screens, LED wall and lounge lighting; blocked pending the revised quote from the Dubai AV vendor and client approval on the premium fixtures.",
+        "assigneeKey": "videsh",
+        "reviewerKey": "karthik",
+        "status": "blocked",
+        "priority": "high",
+        "workType": "boq_costing",
+        "dueOffsetDays": 5
+      }
+    ]
+  },
+  {
+    "key": "g20",
+    "description": "Permanent G20 legacy exhibition at Bharat Mandapam, ITPO Pragati Maidan, New Delhi, commemorating India's G20 presidency through immersive zones, projection mapping, and a curated narrative walk. Execution is complete and the build has gone through one rework round; deliverables are now consolidated for Vertical Head sign-off ahead of handover.",
+    "leadCategory": "indian",
+    "region": "WEST",
+    "tasks": [
+      {
+        "teamKey": "events_design",
+        "title": "Immersive zone GA drawings & fabrication package - final as-built",
+        "description": "Finalized GA and fabrication drawings for all five immersive zones (approx. 1,200 sqm) including projection-mapping surface geometry and curated narrative-walk circulation. As-built set reconciled against on-site build for VH review.",
+        "assigneeKey": "karthik",
+        "reviewerKey": "ananya",
+        "status": "done",
+        "priority": "high",
+        "workType": "fabrication_drawings",
+        "dueOffsetDays": -9
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Projection-mapping rig alignment fix - rework round",
+        "description": "Re-survey and re-render of the central dome projection surface after VH flagged keystone distortion on the curved wall; updating GA detail and vendor alignment spec for the AV install team.",
+        "assigneeKey": "ishaan",
+        "reviewerKey": "karthik",
+        "status": "in_progress",
+        "priority": "high",
+        "workType": "site_coordination",
+        "dueOffsetDays": 2
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Final BOQ & vendor cost reconciliation",
+        "description": "Closed-out BOQ for fabrication, lighting, and projection hardware with vendor invoices reconciled against estimate; variance note prepared for delivery handover.",
+        "assigneeKey": "videsh",
+        "reviewerKey": "meera",
+        "status": "in_review",
+        "priority": "medium",
+        "workType": "boq_costing",
+        "dueOffsetDays": 1
+      },
+      {
+        "teamKey": "graphic_design",
+        "title": "Narrative-walk graphic panels & wayfinding - print-ready set",
+        "description": "Print-ready artwork for the curated narrative-walk panels, zone identifiers, and bilingual (Hindi/English) wayfinding signage matching the G20 legacy brand palette. Pre-press files released to fabrication.",
+        "assigneeKey": "rohan",
+        "reviewerKey": "ananya",
+        "status": "done",
+        "priority": "high",
+        "workType": "signage_artwork",
+        "dueOffsetDays": -6
+      },
+      {
+        "teamKey": "graphic_design",
+        "title": "VH presentation deck - exhibition walkthrough & sign-off pack",
+        "description": "Vertical Head review deck compiling zone renders, projection-mapping stills, and as-built photos into a single walkthrough narrative for final sign-off.",
+        "assigneeKey": "sneha",
+        "reviewerKey": "rohan",
+        "status": "in_review",
+        "priority": "medium",
+        "workType": "presentation_deck",
+        "dueOffsetDays": 0
+      },
+      {
+        "teamKey": "copy_strategy",
+        "title": "Curated narrative-walk content & zone concept notes - QC sign-off",
+        "description": "Final editorial pass on the G20 presidency narrative copy across all zones, with concept notes and a compliance check against the ITPO content guidelines. QC sign-off logged for VH review.",
+        "assigneeKey": "ananya",
+        "reviewerKey": "meera",
+        "status": "done",
+        "priority": "high",
+        "workType": "qc_signoff",
+        "dueOffsetDays": -4
+      },
+      {
+        "teamKey": "client_servicing",
+        "title": "Delivery dossier & deliverable tracker - handover prep",
+        "description": "Consolidated handover dossier with master timeline, deliverable tracker, sign-off log, and ITPO compliance checklist assembled for Vertical Head approval before client delivery.",
+        "assigneeKey": "meera",
+        "reviewerKey": "ananya",
+        "status": "in_review",
+        "priority": "high",
+        "workType": "deliverable_tracker",
+        "dueOffsetDays": 1
+      }
+    ]
+  },
+  {
+    "key": "autoexpo",
+    "description": "Custom OEM pavilion for an automotive manufacturer at Bharat Mobility / Auto Expo 2026, India Expo Mart, Greater Noida. A double-decker fabricated structure featuring vehicle display turntables, an immersive LED feature wall, and a test-drive booking zone. Project delivered on-site and tender successfully awarded.",
+    "leadCategory": "indian",
+    "region": "WEST",
+    "tasks": [
+      {
+        "teamKey": "events_design",
+        "title": "Double-decker pavilion 3D design - hero renders & GA drawings",
+        "description": "Final 3D concept renders and general arrangement drawings for the ~18m x 15m double-decker OEM pavilion, including upper-deck lounge, vehicle display bays and circulation flow approved by the client.",
+        "assigneeKey": "karthik",
+        "reviewerKey": "ananya",
+        "workType": "3d_design",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -34
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Fabrication drawings, BOQ & vendor coordination - turntables & LED wall",
+        "description": "Detailed fabrication & GA drawings, structural BOQ and costing for two motorised vehicle turntables and the LED feature wall frame; coordinated steel, carpentry and LED vendors for on-site mobilisation.",
+        "assigneeKey": "ishaan",
+        "reviewerKey": "karthik",
+        "workType": "fabrication",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -22
+      },
+      {
+        "teamKey": "events_design",
+        "title": "On-site build & handover - test-drive booking zone",
+        "description": "Supervised on-site fabrication, installation and snagging of the test-drive booking zone and upper-deck build at India Expo Mart, completing final handover to the client before show open.",
+        "assigneeKey": "videsh",
+        "reviewerKey": "karthik",
+        "workType": "on_site_build",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -6
+      },
+      {
+        "teamKey": "video_editing",
+        "title": "LED feature wall content - 3D brand walkthrough loop",
+        "description": "Produced a 120s synchronised LED feature-wall content loop with a 3D pavilion walkthrough animation and OEM brand film, mastered to the wall's native resolution and aspect ratio.",
+        "assigneeKey": "tara",
+        "reviewerKey": "ananya",
+        "workType": "av_content",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -12
+      },
+      {
+        "teamKey": "video_editing",
+        "title": "Vehicle turntable AV loop & test-drive zone screen content",
+        "description": "Edited a 60s vehicle hero AV loop synced to the turntable rotation plus a looping booking-zone explainer for the test-drive registration screens, delivered in show-ready playback formats.",
+        "assigneeKey": "aditya",
+        "reviewerKey": "tara",
+        "workType": "av_content",
+        "status": "done",
+        "priority": "medium",
+        "dueOffsetDays": -9
+      },
+      {
+        "teamKey": "client_servicing",
+        "title": "Submission dossier - EMD, tender fee & compliance checklist",
+        "description": "Compiled and submitted the full bid dossier including EMD, tender-fee documents, compliance checklist and master deliverable timeline; tracked award confirmation and post-delivery client sign-off.",
+        "assigneeKey": "meera",
+        "reviewerKey": "ananya",
+        "workType": "bid_submission",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -40
+      }
+    ]
+  },
+  {
+    "key": "repday",
+    "description": "Design and fabrication of a state tableau (jhanki) for the Republic Day 2026 parade on Kartavya Path, New Delhi, responding to a Ministry of Culture tender. Scope covered theme concept and narrative, a scaled tractor-trailer tableau model with moving/kinetic elements, and costume and prop coordination for performing artists. The bid was completed and the final outcome dossier submitted to the client.",
+    "leadCategory": "indian",
+    "region": "WEST",
+    "tasks": [
+      {
+        "teamKey": "copy_strategy",
+        "title": "Tableau theme concept note & cultural narrative",
+        "description": "Authored the bilingual (Hindi/English) theme concept note framing the state's cultural heritage story for the 45ft tableau, with the front-portion and trailer narrative beats aligned to Ministry of Culture brief.",
+        "assigneeKey": "ananya",
+        "reviewerKey": "ananya",
+        "workType": "concept_note",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -38
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Scaled tableau model - hero render & GA drawings",
+        "description": "Produced the 1:10 scaled physical model plus 3D hero renders and general arrangement drawings for the 45ft x 14ft tractor-trailer tableau, detailing platform, elevation profile and sightlines for parade review.",
+        "assigneeKey": "karthik",
+        "reviewerKey": "ananya",
+        "workType": "3d_design",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -30
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Moving elements - kinetic mechanism & fabrication drawings",
+        "description": "Engineered the rotating centrepiece and articulated moving figures with hydraulic/motorised mechanism specs, structural load calcs and fabrication drawings for on-trailer assembly within parade height limits.",
+        "assigneeKey": "ishaan",
+        "reviewerKey": "karthik",
+        "workType": "fabrication",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -18
+      },
+      {
+        "teamKey": "events_design",
+        "title": "Costume & prop coordination - artist styling & on-trailer props",
+        "description": "Coordinated costume design and prop fabrication for the 12 performing artists on the tableau, including handcrafted regional attire, headgear and ceremonial props matched to the cultural theme.",
+        "assigneeKey": "videsh",
+        "reviewerKey": "karthik",
+        "workType": "production_coordination",
+        "status": "done",
+        "priority": "medium",
+        "dueOffsetDays": -12
+      },
+      {
+        "teamKey": "graphic_design",
+        "title": "Tableau graphic panels & decorative motif artwork",
+        "description": "Designed the side-panel mural artwork, decorative cultural motifs and state-name signage as print-ready vector files scaled for vinyl wrap and FRP cladding on the tableau body.",
+        "assigneeKey": "rohan",
+        "reviewerKey": "ananya",
+        "workType": "2d_design",
+        "status": "done",
+        "priority": "medium",
+        "dueOffsetDays": -14
+      },
+      {
+        "teamKey": "graphic_design",
+        "title": "Submission dossier - presentation deck & compliance pack",
+        "description": "Compiled the final Ministry of Culture submission dossier: pitch presentation deck, annotated renders, model photographs and the theme-justification compliance pack delivered to the client.",
+        "assigneeKey": "sneha",
+        "reviewerKey": "ananya",
+        "workType": "presentation",
+        "status": "done",
+        "priority": "high",
+        "dueOffsetDays": -6
+      }
+    ]
+  },
+  {
+    "key": "mahakumbh",
+    "description": "Show Runner is pursuing the tender for Startup Mahakumbh 2026, delivering main-stage scenography and founder-experience zones at Bharat Mandapam, New Delhi. The scope covers a hero stage set design, immersive founder/investor experience zones, and supporting brand environments for the flagship startup summit. The bid has just been allocated to a Vertical Head and is awaiting the lead decision before teams and tasks are assigned.",
+    "leadCategory": "indian",
+    "region": "EAST",
+    "tasks": []
+  },
+  {
+    "key": "smartcity",
+    "description": "A travelling citizen-engagement roadshow for the Smart Cities Mission, touring 8 smart cities with a modular geodesic dome, interactive touch kiosks, AV storytelling and local-language content to drive public participation in urban governance. Scope spans repeatable modular fabrication, multi-city logistics, regional language localization and on-ground experience design for diverse civic audiences. Lead has been accepted and the bid is now in task setup ahead of execution kickoff.",
+    "leadCategory": "indian",
+    "region": "WEST",
+    "tasks": []
+  }
+]

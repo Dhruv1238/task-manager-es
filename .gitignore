@@ -15,6 +15,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# demo seed artifacts (contain a shared password / scratch dumps)
+scripts/s
+scripts/_*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

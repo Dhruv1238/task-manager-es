@@ -1,0 +1,215 @@
+{
+  "show": "Bharat Mobility & EV Expo 2027 — India Expo Mart, Greater Noida",
+  "exhibitors": [
+    {
+      "key": "northstar",
+      "company": "Northstar Lubricants — EV Thermal Fluids Launch",
+      "description": "Northstar Lubricants, a Chennai-based automotive lubricants and coolants manufacturer, has enquired about exhibiting to showcase its new EV thermal-management fluid range to OEMs and Tier-1 suppliers. Inbound enquiry through the show website, looking for a mid-size stall in the components hall. Booth size and budget still to be discussed.",
+      "stage": "created", "status": "in_progress",
+      "aeKey": null, "salesManagerKey": null, "accountManagerKey": null,
+      "lead_source": "inbound", "expected_value": "Under discussion",
+      "contact_person": "Suresh Iyer", "contact_email": "suresh.iyer@northstarlubricants.in", "contact_phone": "+91 98401 22674",
+      "daysAgoStart": 2,
+      "tasks": []
+    },
+    {
+      "key": "voltcharge",
+      "company": "VoltCharge Networks — Fast-Charging Partnerships",
+      "description": "VoltCharge Networks operates a pan-India EV fast-charging network and wants a presence at the show to sign up fleet operators and real-estate partners for charger deployment. Interested in a 36 sqm stall with a live charger demo and a partner-meeting zone. Outbound prospect with clear B2B partnership intent rather than retail footfall.",
+      "stage": "outreach", "status": "in_progress",
+      "aeKey": "rohit", "salesManagerKey": "nikhil", "accountManagerKey": null,
+      "lead_source": "outbound", "expected_value": "₹9,00,000",
+      "contact_person": "Ankit Verma", "contact_email": "ankit@voltcharge.io", "contact_phone": "+91 99100 47821",
+      "daysAgoStart": 6,
+      "tasks": [
+        {"teamKey": "sales", "title": "Intro call & qualify requirements", "assigneeKey": "rohit", "status": "done", "priority": "high", "dueOffsetDays": -3},
+        {"teamKey": "sales", "title": "Send capability deck & show prospectus", "assigneeKey": "rohit", "status": "in_progress", "priority": "medium", "dueOffsetDays": 1},
+        {"teamKey": "sales", "title": "Schedule charger-demo site walkthrough", "assigneeKey": "sana", "status": "todo", "priority": "medium", "dueOffsetDays": 4}
+      ]
+    },
+    {
+      "key": "gearbox",
+      "company": "GearBox Retail — Accessories Kiosk Enquiry",
+      "description": "GearBox Retail, a regional car-accessories retail chain, was approached about a compact retail kiosk to reach walk-in consumers. The show's B2B/trade audience does not match their consumer-retail goals and no budget is allocated this cycle.",
+      "stage": "outreach", "status": "disqualified",
+      "aeKey": "sana", "salesManagerKey": "nikhil", "accountManagerKey": null,
+      "lead_source": "outbound", "expected_value": "₹2,50,000",
+      "contact_person": "Rakesh Malhotra", "contact_email": "rakesh@gearboxretail.com", "contact_phone": "+91 98730 11204",
+      "daysAgoStart": 20,
+      "closeAction": {"id": "not_interested", "payload": {"outcomeNote": "Audience mismatch (B2B trade vs. consumer retail); no budget this edition."}},
+      "tasks": [
+        {"teamKey": "sales", "title": "Discovery call — gauge fit & budget", "assigneeKey": "sana", "status": "done", "priority": "medium", "dueOffsetDays": -16},
+        {"teamKey": "sales", "title": "Follow-up on retail-kiosk option", "assigneeKey": "sana", "status": "done", "priority": "low", "dueOffsetDays": -12}
+      ]
+    },
+    {
+      "key": "helios",
+      "company": "Helios Solar Mobility — Cargo EV Showcase",
+      "description": "Helios Solar Mobility builds solar-assisted three-wheelers and last-mile cargo EVs for logistics fleets. They want a prominent 48 sqm stall to display two vehicles plus a battery-swap demo, and have enquired about a speaking slot. Referral from an existing exhibitor with strong intent; expecting a proposal with corner-stall options and sponsorship add-ons.",
+      "stage": "proposal", "status": "in_progress",
+      "aeKey": "vikram", "salesManagerKey": "nikhil", "accountManagerKey": null,
+      "lead_source": "referral", "expected_value": "₹14,00,000",
+      "contact_person": "Meghna Rao", "contact_email": "meghna@heliosmobility.in", "contact_phone": "+91 90080 55613",
+      "daysAgoStart": 12,
+      "tasks": [
+        {"teamKey": "sales", "title": "Build booth package & pricing options", "assigneeKey": "vikram", "status": "in_progress", "priority": "high", "dueOffsetDays": 1},
+        {"teamKey": "sales", "title": "Request 48 sqm corner floor-plan hold", "assigneeKey": "vikram", "status": "todo", "priority": "medium", "dueOffsetDays": 2},
+        {"teamKey": "sales", "title": "Draft proposal with sponsorship add-on", "assigneeKey": "nikhil", "status": "in_review", "priority": "high", "dueOffsetDays": 0, "reviewerKey": "vikram"}
+      ]
+    },
+    {
+      "key": "voltaic",
+      "company": "Voltaic Mobility — E-Scooter Launch Pavilion",
+      "description": "Voltaic Mobility, a Pune EV two-wheeler maker, is launching its first high-speed electric scooter at the show. Wants a 54 sqm premium corner stall near the main entrance for the unveil — space for four vehicles, a test-ride enquiry desk, and a dealer-meet lounge. Negotiating against a competing show; marketing-led decision with a ~₹18L space budget.",
+      "stage": "negotiation", "status": "in_progress",
+      "aeKey": "rohit", "salesManagerKey": "nikhil", "accountManagerKey": null,
+      "lead_source": "outbound", "expected_value": "₹18,00,000",
+      "contact_person": "Karan Joshi", "contact_email": "karan.joshi@voltaicmobility.com", "contact_phone": "+91 98220 33915",
+      "daysAgoStart": 18,
+      "tasks": [
+        {"teamKey": "sales", "title": "Issue revised quote — premium corner stall", "assigneeKey": "rohit", "status": "in_progress", "priority": "high", "dueOffsetDays": 1},
+        {"teamKey": "sales", "title": "Prepare terms sheet & cancellation clause", "assigneeKey": "rohit", "status": "todo", "priority": "medium", "dueOffsetDays": 3},
+        {"teamKey": "sales", "title": "Confirm vehicle access & rigging requirements", "assigneeKey": "nikhil", "status": "done", "priority": "medium", "dueOffsetDays": -2}
+      ]
+    },
+    {
+      "key": "apex",
+      "company": "Apex Components — OEM Braking Systems",
+      "description": "Apex Components, a Gurugram Tier-1 supplier of braking and suspension systems, evaluated a 36 sqm stall to meet OEM procurement teams. They chose a competing trade show with stronger OEM footfall this edition — audience fit, not price, was the deciding factor.",
+      "stage": "negotiation", "status": "lost",
+      "aeKey": "sana", "salesManagerKey": "nikhil", "accountManagerKey": null,
+      "lead_source": "referral", "expected_value": "₹11,00,000",
+      "contact_person": "Vivek Saxena", "contact_email": "vivek.saxena@apexcomponents.in", "contact_phone": "+91 99710 88420",
+      "daysAgoStart": 30,
+      "closeAction": {"id": "lost", "payload": {"lostReason": "Chose a competing OEM-focused show this edition; audience fit over price.", "competitor": "AutoComponents India Show"}},
+      "tasks": [
+        {"teamKey": "sales", "title": "Send proposal — 36 sqm components hall", "assigneeKey": "sana", "status": "done", "priority": "high", "dueOffsetDays": -18},
+        {"teamKey": "sales", "title": "Negotiation follow-ups (3 rounds)", "assigneeKey": "sana", "status": "done", "priority": "medium", "dueOffsetDays": -8}
+      ]
+    },
+    {
+      "key": "greenmile",
+      "company": "GreenMile Logistics — Franchise Recruitment Stall",
+      "description": "GreenMile Logistics runs an electric last-mile delivery fleet and is booking a 60 sqm stall to recruit franchise partners and demo its fleet-management platform. Deal agreed on a premium package with a sponsored charging-lounge add-on; contract issued and awaiting first payment. Repeat exhibitor from the previous edition.",
+      "stage": "booking", "status": "in_progress",
+      "aeKey": "vikram", "salesManagerKey": "nikhil", "accountManagerKey": "neha",
+      "lead_source": "repeat", "expected_value": "₹16,00,000",
+      "contact_person": "Farah Khan", "contact_email": "farah@greenmilelogistics.in", "contact_phone": "+91 90040 27188",
+      "daysAgoStart": 25,
+      "tasks": [
+        {"teamKey": "sales", "title": "Issue contract & space agreement", "assigneeKey": "vikram", "status": "done", "priority": "high", "dueOffsetDays": -3},
+        {"teamKey": "finance", "title": "Raise proforma invoice", "assigneeKey": "deepa", "status": "in_progress", "priority": "high", "dueOffsetDays": 1},
+        {"teamKey": "finance", "title": "First-payment follow-up", "assigneeKey": "amit", "status": "todo", "priority": "high", "dueOffsetDays": 3}
+      ]
+    },
+    {
+      "key": "metro",
+      "company": "Metro EV Finance — Buyer-Lead Capture Stall",
+      "description": "Metro EV Finance offers retail financing for electric vehicles and wants a 24 sqm stall in the finance & services zone to capture leads from EV buyers and dealers. Terms agreed, but the booking is on hold pending internal budget sign-off for the quarter — finance team awaiting their PO.",
+      "stage": "booking", "status": "on_hold",
+      "aeKey": "rohit", "salesManagerKey": "nikhil", "accountManagerKey": null,
+      "lead_source": "inbound", "expected_value": "₹6,50,000",
+      "contact_person": "Sandeep Nair", "contact_email": "sandeep.nair@metroevfinance.com", "contact_phone": "+91 98860 71530",
+      "daysAgoStart": 22,
+      "tasks": [
+        {"teamKey": "sales", "title": "Send contract & await PO", "assigneeKey": "rohit", "status": "done", "priority": "medium", "dueOffsetDays": -5},
+        {"teamKey": "finance", "title": "Payment pending — awaiting budget sign-off", "assigneeKey": "deepa", "status": "blocked", "priority": "high", "dueOffsetDays": 2}
+      ]
+    },
+    {
+      "key": "surya",
+      "company": "Surya Tyres — EV Tyre Line Launch (Island Stall)",
+      "description": "Surya Tyres, a national tyre manufacturer, has booked a 90 sqm island stall to launch its EV-specific tyre line and run a dealer-engagement programme. High-visibility location confirmed near the central atrium; onboarding now covers booth design, branding, and on-site logistics with the operations and design teams.",
+      "stage": "onboarding", "status": "booked",
+      "aeKey": "sana", "salesManagerKey": "nikhil", "accountManagerKey": "neha",
+      "lead_source": "repeat", "expected_value": "₹28,00,000",
+      "contact_person": "Anjali Deshpande", "contact_email": "anjali.d@suryatyres.com", "contact_phone": "+91 99300 64127",
+      "daysAgoStart": 35,
+      "tasks": [
+        {"teamKey": "servicing", "title": "Onboarding kickoff & checklist", "assigneeKey": "neha", "status": "in_progress", "priority": "high", "dueOffsetDays": 0},
+        {"teamKey": "servicing", "title": "Share exhibitor manual & build deadlines", "assigneeKey": "neha", "status": "done", "priority": "medium", "dueOffsetDays": -4},
+        {"teamKey": "servicing", "title": "Collect booth artwork & brand assets", "assigneeKey": "sahil", "status": "todo", "priority": "medium", "dueOffsetDays": 3},
+        {"teamKey": "events_design", "title": "90 sqm island stall — 3D design & build", "assigneeKey": "karthik", "status": "in_progress", "priority": "high", "dueOffsetDays": 5},
+        {"teamKey": "graphic_design", "title": "Stall branding, fascia & tyre-launch wall", "assigneeKey": "rohan", "status": "in_review", "priority": "high", "dueOffsetDays": 2, "reviewerKey": "neha"}
+      ]
+    },
+    {
+      "key": "econova",
+      "company": "EcoNova Batteries — Battery-Swap Demo Theatre",
+      "description": "EcoNova Batteries manufactures lithium-ion packs and BMS for two- and three-wheelers. Booked a 54 sqm stall with a live battery-swap demo and a technical theatre for OEM presentations. Onboarding covers a custom demo rig, safety compliance for live cells, and branded graphics; audience is OEMs and assemblers.",
+      "stage": "onboarding", "status": "booked",
+      "aeKey": "vikram", "salesManagerKey": "nikhil", "accountManagerKey": "pooja",
+      "lead_source": "inbound", "expected_value": "₹15,00,000",
+      "contact_person": "Rohan Bhatt", "contact_email": "rohan.bhatt@econovabatteries.in", "contact_phone": "+91 90190 33256",
+      "daysAgoStart": 32,
+      "tasks": [
+        {"teamKey": "servicing", "title": "Requirements, power load & deadlines", "assigneeKey": "pooja", "status": "done", "priority": "high", "dueOffsetDays": -2},
+        {"teamKey": "servicing", "title": "Exhibitor badge allocation", "assigneeKey": "pooja", "status": "todo", "priority": "low", "dueOffsetDays": 4},
+        {"teamKey": "events_design", "title": "Custom battery-swap demo rig fabrication", "assigneeKey": "ishaan", "status": "in_progress", "priority": "high", "dueOffsetDays": 6},
+        {"teamKey": "graphic_design", "title": "Technical-theatre graphics & wayfinding", "assigneeKey": "sneha", "status": "in_progress", "priority": "medium", "dueOffsetDays": 3}
+      ]
+    },
+    {
+      "key": "dynamo",
+      "company": "Dynamo Drivetrains — Live OEM Servicing",
+      "description": "Dynamo Drivetrains supplies e-axles and motors to EV OEMs and is live on the show floor with a 72 sqm stall. Active servicing covers on-site requests, lead-retrieval, and a sponsorship upsell for the OEM networking dinner. The account manager is driving upsell and a smooth on-ground experience.",
+      "stage": "servicing", "status": "booked",
+      "aeKey": "rohit", "salesManagerKey": "nikhil", "accountManagerKey": "neha",
+      "lead_source": "referral", "expected_value": "₹21,00,000",
+      "contact_person": "Pranav Kulkarni", "contact_email": "pranav@dynamodrivetrains.com", "contact_phone": "+91 98200 90471",
+      "daysAgoStart": 50,
+      "tasks": [
+        {"teamKey": "servicing", "title": "On-site support desk", "assigneeKey": "neha", "status": "done", "priority": "high", "dueOffsetDays": -1},
+        {"teamKey": "servicing", "title": "Lead-retrieval & scanner setup", "assigneeKey": "sahil", "status": "done", "priority": "medium", "dueOffsetDays": -2},
+        {"teamKey": "servicing", "title": "Upsell — OEM networking-dinner sponsorship", "assigneeKey": "neha", "status": "in_progress", "priority": "high", "dueOffsetDays": 1},
+        {"teamKey": "events_design", "title": "On-site build & handover", "assigneeKey": "karthik", "status": "done", "priority": "high", "dueOffsetDays": -3}
+      ]
+    },
+    {
+      "key": "breeze",
+      "company": "Breeze Mobility — Ride-Simulator Experience Stall",
+      "description": "Breeze Mobility, an electric-scooter sharing operator, is exhibiting a 36 sqm experiential stall with a ride simulator to attract city-partnership and investor conversations. Live on the floor now; the servicing team handles daily support, footfall reporting, and investor-meeting scheduling.",
+      "stage": "servicing", "status": "booked",
+      "aeKey": "sana", "salesManagerKey": "nikhil", "accountManagerKey": "pooja",
+      "lead_source": "inbound", "expected_value": "₹9,50,000",
+      "contact_person": "Ishita Sharma", "contact_email": "ishita@breezemobility.in", "contact_phone": "+91 99580 12640",
+      "daysAgoStart": 48,
+      "tasks": [
+        {"teamKey": "servicing", "title": "Daily floor support & footfall report", "assigneeKey": "pooja", "status": "in_progress", "priority": "medium", "dueOffsetDays": 0},
+        {"teamKey": "servicing", "title": "Investor-meeting scheduling", "assigneeKey": "sahil", "status": "todo", "priority": "medium", "dueOffsetDays": 2},
+        {"teamKey": "servicing", "title": "Ride-simulator uptime checks", "assigneeKey": "pooja", "status": "done", "priority": "low", "dueOffsetDays": -1}
+      ]
+    },
+    {
+      "key": "quantum",
+      "company": "Quantum Motors — Anchor Pavilion & Renewal",
+      "description": "Quantum Motors, an established EV passenger-car OEM, exhibited a 120 sqm anchor pavilion for a product reveal and dealer conclave. Strong outcome — high-quality leads and press coverage. Wrapping up with a post-event report and an early-bird renewal for the 2028 edition with an expanded footprint.",
+      "stage": "post_event", "status": "won_renewed",
+      "aeKey": "vikram", "salesManagerKey": "nikhil", "accountManagerKey": "neha",
+      "lead_source": "repeat", "expected_value": "₹42,00,000",
+      "contact_person": "Aditi Khanna", "contact_email": "aditi.khanna@quantummotors.com", "contact_phone": "+91 98110 45209",
+      "daysAgoStart": 75,
+      "closeAction": {"id": "renew", "payload": {"renewalNote": "Renewed for 2028 with an expanded 150 sqm footprint; early-bird rate locked.", "feedback": "Excellent lead quality and press coverage; smooth on-ground execution."}},
+      "tasks": [
+        {"teamKey": "servicing", "title": "Post-show performance report", "assigneeKey": "neha", "status": "done", "priority": "high", "dueOffsetDays": -3},
+        {"teamKey": "servicing", "title": "Renewal proposal — 2028 anchor pavilion", "assigneeKey": "neha", "status": "done", "priority": "high", "dueOffsetDays": -1},
+        {"teamKey": "servicing", "title": "Capture exhibitor feedback & testimonial", "assigneeKey": "sahil", "status": "done", "priority": "medium", "dueOffsetDays": -2}
+      ]
+    },
+    {
+      "key": "tracksure",
+      "company": "TrackSure Telematics — Did Not Renew",
+      "description": "TrackSure Telematics offers fleet GPS and telematics and exhibited an 18 sqm stall in the services zone. Footfall was below their expectation for direct fleet-owner leads, and they have decided not to renew for the next edition, citing audience mismatch. Exit feedback captured for the sales team.",
+      "stage": "post_event", "status": "churned",
+      "aeKey": "rohit", "salesManagerKey": "nikhil", "accountManagerKey": "pooja",
+      "lead_source": "outbound", "expected_value": "₹4,50,000",
+      "contact_person": "Naveen Reddy", "contact_email": "naveen@tracksure.io", "contact_phone": "+91 90420 66713",
+      "daysAgoStart": 72,
+      "closeAction": {"id": "churn", "payload": {"churnReason": "Footfall below expectation for direct fleet-owner leads; audience mismatch for their segment."}},
+      "tasks": [
+        {"teamKey": "servicing", "title": "Exit feedback call", "assigneeKey": "pooja", "status": "done", "priority": "medium", "dueOffsetDays": -2},
+        {"teamKey": "servicing", "title": "Log churn reason & learnings", "assigneeKey": "pooja", "status": "done", "priority": "low", "dueOffsetDays": -1}
+      ]
+    }
+  ]
+}
