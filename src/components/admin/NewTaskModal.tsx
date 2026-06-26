@@ -154,8 +154,8 @@ export default function NewTaskModal({
   const canSubmit = !!title.trim() && !!teamId && !submitting
 
   const description2 = initialTeamName
-    ? `Adding a task to ${initialTeamName}. Pick a template to switch teams or stamp a work type.`
-    : 'Pick a template to auto-fill team and assignee, or stay custom.'
+    ? `Adding a task to ${initialTeamName}.`
+    : `Define the work, pick who owns it, and set when it's due.`
 
   return (
     <Modal
@@ -175,7 +175,8 @@ export default function NewTaskModal({
         className="space-y-5"
         noValidate
       >
-        <div className="space-y-1.5">
+
+        {/* <div className="space-y-1.5">
           <label htmlFor="task-template" className="text-sm font-medium text-fg-muted">
             Template
           </label>
@@ -194,7 +195,7 @@ export default function NewTaskModal({
               </option>
             ))}
           </select>
-        </div>
+        </div> */}
 
         <div className="space-y-1.5">
           <label htmlFor="task-title" className="text-sm font-medium text-fg-muted">
