@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -109,10 +108,9 @@ export default function ProjectPicker({
     }
   }, [value, selectedLabel])
 
-  const accessKeys = useMemo(() => {
-    if (!profile) return []
-    return [profile.uid, ...(profile.teamIds ?? [])].slice(0, 30)
-  }, [profile])
+  // Single uid match — accessKeys is a flat set of user uids; team membership is
+  // no longer an access vector, so there's no team-id expansion or 30-key cap.
+  const accessUid = profile?.uid ?? null
 
   // Auto-select the first visible project when enabled and no value is set.
   // No ref/cancellation guards — once onChange fires, `value` becomes truthy
@@ -129,8 +127,8 @@ export default function ProjectPicker({
     const projectsRef = tenantCol('projects')
     const constraints = []
     if (!isAdmin) {
-      if (accessKeys.length === 0) return
-      constraints.push(where('accessKeys', 'array-contains-any', accessKeys))
+      if (!accessUid) return
+      constraints.push(where('accessKeys', 'array-contains', accessUid))
     }
     constraints.push(orderBy('createdAt', 'desc'))
     constraints.push(limit(1))
@@ -142,7 +140,7 @@ export default function ProjectPicker({
       .catch(() => {
         // If the query fails we just leave value as null and let the user pick.
       })
-  }, [autoSelectFirst, value, profile, isAdmin, accessKeys])
+  }, [autoSelectFirst, value, profile, isAdmin, accessUid])
 
   const buildQuery = useCallback(
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
@@ -150,8 +148,8 @@ export default function ProjectPicker({
       const projectsRef = tenantCol('projects')
       const constraints = []
       if (!isAdmin) {
-        if (accessKeys.length === 0) return null
-        constraints.push(where('accessKeys', 'array-contains-any', accessKeys))
+        if (!accessUid) return null
+        constraints.push(where('accessKeys', 'array-contains', accessUid))
       }
       if (debouncedSearch) {
         constraints.push(where('titleLower', '>=', debouncedSearch))
@@ -164,13 +162,13 @@ export default function ProjectPicker({
       constraints.push(limit(PAGE_SIZE))
       return query(projectsRef, ...constraints)
     },
-    [accessKeys, debouncedSearch, isAdmin, open, profile],
+    [accessUid, debouncedSearch, isAdmin, open, profile],
   )
 
   const { items, loading, loadingMore, hasMore, loadMore } = usePaginatedQuery<Project>(
     buildQuery,
     PAGE_SIZE,
-    [open, isAdmin, debouncedSearch, profile?.uid, (profile?.teamIds ?? []).join('|')],
+    [open, isAdmin, debouncedSearch, profile?.uid],
     (snap) => ({ ...(snap.data() as Project), id: snap.id }),
   )
 

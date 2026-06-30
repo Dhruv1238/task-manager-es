@@ -131,9 +131,13 @@ export default function TeamDetail() {
   const members = team.memberIds
     .map((uid) => userById.get(uid))
     .filter(Boolean) as User[]
-  const assignedProjects = projects.filter((p) =>
-    (p.teamIds ?? []).includes(team.id),
-  )
+  // Only roster managers (admins, the team lead, teams-update holders) see this
+  // team's attached projects here. Everyone else uses the access-scoped Projects
+  // list — surfacing every attached project on this open team route would leak
+  // project titles/links to users without access to them.
+  const assignedProjects = canManageRoster
+    ? projects.filter((p) => (p.teamIds ?? []).includes(team.id))
+    : []
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -339,7 +343,11 @@ export default function TeamDetail() {
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
             Projects
           </h2>
-          {assignedProjects.length === 0 ? (
+          {!canManageRoster ? (
+            <div className="rounded-2xl border border-dashed border-line bg-card p-6 text-sm text-fg-subtle">
+              Only team leads and admins can view this team's projects.
+            </div>
+          ) : assignedProjects.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-line bg-card p-6 text-sm text-fg-subtle">
               Not assigned to any projects yet.
             </div>

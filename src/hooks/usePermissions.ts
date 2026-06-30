@@ -186,21 +186,23 @@ export function usePermissions(projectId?: string, teamId?: string): Permissions
       project && (isSuperAdmin || isAnyRoleHolder || isProjectCreator) && !closed,
     )
 
-    const userTeamIds = resolvedProfile?.teamIds ?? []
-    const isProjectTeamMember = Boolean(
-      uid && project && project.teamIds.some((tid) => userTeamIds.includes(tid)),
-    )
+    // A user has project access iff their uid is in the denormalised accessKeys
+    // set (creator ∪ lead ∪ role-holders ∪ attached-team leads ∪ task assignees).
+    // Team membership alone no longer grants access.
+    const isProjectMember = Boolean(uid && project && (project.accessKeys ?? []).includes(uid))
     // Chat is visible to everyone with access to the project: super-admins and
     // global admins, the creator (baseline), anyone holding an assigned project
-    // role, members of any team added to the project, and the allocated lead.
-    // This mirrors the Firestore rules' accessKeys-based hasProjectAccess().
+    // role, the allocated lead, attached-team leads, and task assignees (the last
+    // two via accessKeys). Mirrors the Firestore rules' accessKeys-based
+    // hasProjectAccess(). The explicit creator/role/lead disjuncts stay so chat
+    // doesn't blink off if accessKeys is briefly stale after a write.
     const canViewProjectChat = Boolean(
       project &&
         (isSuperAdmin ||
           isAdmin ||
           isProjectCreator ||
           isAnyRoleHolder ||
-          isProjectTeamMember ||
+          isProjectMember ||
           isProjectLead),
     )
 

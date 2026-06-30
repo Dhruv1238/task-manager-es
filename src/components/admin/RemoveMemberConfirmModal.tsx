@@ -96,7 +96,9 @@ export default function RemoveMemberConfirmModal({
       <div className="space-y-4">
         <div className="rounded-xl border border-line bg-card p-4 text-sm">
           <p className="text-fg-muted">
-            They'll lose access to every project this team is on.
+            Project access follows lead roles and assigned tasks, not team
+            membership — they'll keep access to any project where they lead a team
+            or have tasks assigned.
           </p>
           {counting ? (
             <p className="mt-2 text-xs text-fg-subtle">Checking open tasks…</p>

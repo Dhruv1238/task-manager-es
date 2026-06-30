@@ -27,6 +27,7 @@ import {
 import { db } from './firebase'
 import { tenantDoc } from './firestore'
 import { recordAuditEvent } from './firestore'
+import { recomputeProjectAccessKeys } from './firestore'
 import { bumpStatusTally, stageEnteredPatch } from './rules/analyticsCounters'
 
 // Re-export so callers can import the error class directly from this module.
@@ -411,6 +412,9 @@ export interface PerformActionArgs {
   // Optional: extra fields to merge into the project patch (e.g.
   // denormalised eligibilityNote). Caller-trusted, not validated here.
   extras?: Record<string, unknown>
+  // Optional tenant user directory. Used by clear_lead's accessKeys recompute so
+  // hierarchy-role-actor holders are preserved across the rebuild.
+  users?: User[]
 }
 
 export async function performAction(args: PerformActionArgs): Promise<void> {
@@ -503,6 +507,9 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
         throw makeError('missing_required_input', 'A lead must be selected.')
       }
       patch.leadUid = leadUid
+      // The newly-assigned lead (vertical head) gains access. Additive union —
+      // preserves every existing key and is safe inside a caller's shared batch.
+      patch.accessKeys = arrayUnion(leadUid)
       break
     }
     case 'clear_lead': {
@@ -511,6 +518,14 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
       if (counter) {
         patch[counter === 'iteration' ? 'iterationCount' : 'escalationCount'] = increment(1)
       }
+      // Clearing the lead must REVOKE the old lead's access unless still
+      // justified (role / task / team-lead / creator). arrayRemove can't decide
+      // that, so rebuild from scratch with leadUid forced to null.
+      patch.accessKeys = await recomputeProjectAccessKeys(project.id, {
+        leadUid: null,
+        workflow,
+        users: args.users,
+      })
       break
     }
     case 'mark_complete': {

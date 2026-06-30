@@ -16,12 +16,15 @@ service cloud.firestore {
     // Chat is always available to anyone with project access — the legacy
     // features.chat flag has been retired (no UI toggle, no gate).
 
+    // accessKeys is a flat set of user uids with project access (creator ∪ lead ∪
+    // project-role holders ∪ hierarchy-role-actor holders ∪ attached-team leads ∪
+    // task assignees). Team membership is no longer an access vector, so the old
+    // `accessKeys.hasAny(u.teamIds)` clause has been dropped — a direct uid match
+    // is the whole story.
     function hasProjectAccess(projectId) {
       let p = get(/databases/$(database)/documents/projects/$(projectId)).data;
-      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return isSuperAdmin()
-          || request.auth.uid in p.accessKeys
-          || p.accessKeys.hasAny(u.teamIds);
+          || request.auth.uid in p.accessKeys;
     }
 
     function validNewMessage() {

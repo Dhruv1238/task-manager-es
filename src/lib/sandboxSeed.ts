@@ -289,11 +289,11 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
   // Best-effort: if the visitor configured a slimmer org (no specialist role),
   // tasks land without a teamId and still show up on the assignee's My Tasks.
   const teamsSnap = await getDocs(tenantCol('teams'))
-  const teamsByRole = new Map<string, { id: string; name: string }>()
+  const teamsByRole = new Map<string, { id: string; name: string; leadId?: string }>()
   for (const t of teamsSnap.docs) {
-    const data = t.data() as { teamRoleId?: string; name?: string }
+    const data = t.data() as { teamRoleId?: string; name?: string; leadId?: string }
     if (data.teamRoleId && !teamsByRole.has(data.teamRoleId)) {
-      teamsByRole.set(data.teamRoleId, { id: t.id, name: data.name ?? 'Team' })
+      teamsByRole.set(data.teamRoleId, { id: t.id, name: data.name ?? 'Team', leadId: data.leadId })
     }
   }
   const specialistTeam = teamsByRole.get('specialist')
@@ -350,14 +350,16 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
     const teamIds: string[] = p.withSpecialistTeam && specialistTeam ? [specialistTeam.id] : []
     // Phase 2d: assign the collab-default roles to personas so the demo shows
     // real people (and role-based visibility) — admin_head (single) to Aarti,
-    // functional_head (multiple) to Rohan. accessKeys derives from these +
-    // teamIds + the creator so role-holders who aren't on an attached team
-    // still see the project.
+    // functional_head (multiple) to Rohan. accessKeys derives from these role
+    // holders ∪ the attached team's lead ∪ the creator (team membership alone no
+    // longer grants access — only the lead does).
     const roleAssignments: Record<string, string | string[]> = {
       admin_head: 'persona-vh-primary',
       functional_head: ['persona-ct-lead'],
     }
-    const accessKeys = computeAccessKeys(roleAssignments, teamIds, ctx.uid)
+    const teamLeadIds: string[] =
+      p.withSpecialistTeam && specialistTeam?.leadId ? [specialistTeam.leadId] : []
+    const accessKeys = computeAccessKeys(roleAssignments, ctx.uid, null, teamLeadIds, [])
     batch.set(ref, {
       title: p.title,
       titleLower: p.title.toLowerCase(),

@@ -24,7 +24,7 @@ import {
   type WriteBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import { tenantDoc, recordAuditEvent, computeAccessKeys } from '../firestore'
+import { tenantDoc, recordAuditEvent, recomputeProjectAccessKeys } from '../firestore'
 import {
   WorkflowValidationError,
   actorOnlyMatch,
@@ -241,15 +241,18 @@ export async function executeOutcome(args: ExecuteOutcomeArgs): Promise<void> {
   }
   patch.outcomeLog = arrayUnion(logEntry)
 
-  // 9. accessKeys recompute (lead/role changes affect visibility). Uses the
-  // post-assign roleAssignments and enumerates `role`-actor holders so the
-  // assignee + any hierarchy-role actors stay visible.
-  patch.accessKeys = computeAccessKeys(
-    effectiveRoleAssignments,
-    project.teamIds ?? [],
-    project.createdBy,
-    { workflow, users: args.users, roles: args.roles },
-  )
+  // 9. accessKeys recompute (lead/role changes affect visibility). Full rebuild
+  // from the post-action roleAssignments + leadUid, plus the project's attached-
+  // team leads + task assignees + hierarchy-role-actor holders. A rebuild (not a
+  // union) is required so a role/lead the outcome CLEARED is correctly revoked.
+  patch.accessKeys = await recomputeProjectAccessKeys(project.id, {
+    roleAssignments: effectiveRoleAssignments,
+    createdBy: project.createdBy,
+    leadUid: 'leadUid' in patch ? (patch.leadUid as string | null) : project.leadUid,
+    workflow,
+    users: args.users,
+    roles: args.roles,
+  })
 
   // Merge caller extras (trusted).
   if (args.extras) {

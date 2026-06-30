@@ -203,12 +203,12 @@ export default function Projects() {
     return () => clearTimeout(t)
   }, [search])
 
-  // `array-contains-any` is capped at 30 disjuncts; slice defensively so an
-  // exceptionally over-teamed user doesn't break the query outright.
-  const accessKeys = useMemo(() => {
-    if (!profile) return []
-    return [profile.uid, ...(profile.teamIds ?? [])].slice(0, 30)
-  }, [profile])
+  // Access is denormalised onto each project's `accessKeys` as a flat set of
+  // user uids (creator ∪ lead ∪ role-holders ∪ attached-team leads ∪ task
+  // assignees). A single-value `array-contains <uid>` resolves list visibility —
+  // team membership is no longer an access vector, so no team-id expansion and
+  // no 30-disjunct cap.
+  const accessUid = profile?.uid ?? null
 
   const buildQuery = useCallback(
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
@@ -216,8 +216,8 @@ export default function Projects() {
       const projectsRef = tenantCol('projects')
       const constraints = []
       if (!isAdmin) {
-        if (accessKeys.length === 0) return null
-        constraints.push(where('accessKeys', 'array-contains-any', accessKeys))
+        if (!accessUid) return null
+        constraints.push(where('accessKeys', 'array-contains', accessUid))
       }
       if (statusFilter !== 'all') {
         constraints.push(where('status', '==', statusFilter))
@@ -247,7 +247,7 @@ export default function Projects() {
       return query(projectsRef, ...constraints)
     },
     [
-      accessKeys,
+      accessUid,
       allSelected,
       debouncedSearch,
       isAdmin,

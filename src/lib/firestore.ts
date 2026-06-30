@@ -43,10 +43,14 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   increment,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
+  where,
   writeBatch,
   type CollectionReference,
   type DocumentReference,
@@ -184,6 +188,7 @@ export async function runWorkflowAction(input: RunWorkflowActionInput): Promise<
     actionId: input.actionId,
     inputs: input.inputs,
     extras: input.extras,
+    users: input.users,
   })
 }
 
@@ -427,16 +432,32 @@ export async function setTeamLead(input: SetTeamLeadInput): Promise<void> {
     batch,
   })
   await batch.commit()
+
+  // A lead change flips access on every project this team is attached to: the
+  // old lead loses access (unless still a role-holder / assignee / creator /
+  // pinned lead) and the new lead gains it. Recompute AFTER the commit so the
+  // teams-by-projectId read inside recomputeProjectAccessKeys reflects the new
+  // leadId. Chunk the project writes to stay under the 500-op batch limit.
+  const teamSnap = await getDoc(tenantDoc('teams', input.teamId))
+  const projectIds = teamSnap.exists()
+    ? ((teamSnap.data() as { projectIds?: string[] }).projectIds ?? [])
+    : []
+  if (projectIds.length) {
+    const recomputed = await Promise.all(
+      projectIds.map(async (pid) => ({ pid, keys: await recomputeProjectAccessKeys(pid) })),
+    )
+    for (let i = 0; i < recomputed.length; i += 400) {
+      const writeB = writeBatch(db)
+      for (const { pid, keys } of recomputed.slice(i, i + 400)) {
+        writeB.update(tenantDoc('projects', pid), { accessKeys: keys, updatedAt: serverTimestamp() })
+      }
+      await writeB.commit()
+    }
+  }
 }
 
 // --- Projects (Sprint 3 — Flow 2, Sprint 4 — Flow 3) ---------------------------
 
-// Phase 2d: the single place the denormalised visibility array is built.
-// accessKeys = role-holder uids ∪ teamIds ∪ creator. Team membership stays
-// expressed as teamIds (NOT expanded to uids), so a user joining/leaving a team
-// needs no per-project recompute — the `array-contains-any [uid, ...myTeamIds]`
-// query on the projects list resolves it. Including `createdBy` guarantees the
-// creator baseline keeps list-visibility even on a role-less / team-less project.
 // The hierarchy-role ids referenced as actors anywhere in a workflow's actions
 // (canonical actor + actors[] + alsoAllow, via the adapter). These are the roles
 // whose holders must be able to SEE a project on this workflow to act on it.
@@ -452,14 +473,33 @@ function roleActorIdsOf(workflow: Workflow): string[] {
   return [...ids]
 }
 
+// The single place the denormalised visibility array is built. As of the
+// access-scoping change, `accessKeys` is a PURE SET OF USER UIDS — team
+// membership is no longer an access vector. Access =
+//   createdBy ∪ leadUid (vertical head) ∪ project-role holders
+//   ∪ hierarchy-role-actor holders ∪ {lead of each attached team}
+//   ∪ {assignee of each task in the project}.
+// Because team membership no longer grants access, callers must resolve the
+// attached teams' lead uids (`teamLeadIds`) and the project's task-assignee uids
+// (`assigneeIds`) up front — see `recomputeProjectAccessKeys`, which does those
+// reads. This function stays pure/synchronous so seeds and tests can call it
+// directly. Powers the non-admin `array-contains <uid>` query on the projects
+// list + ProjectPicker, and the chat gate.
 export function computeAccessKeys(
   roleAssignments: Record<string, string | string[]> | undefined,
-  teamIds: string[],
-  createdBy?: string,
+  createdBy: string | undefined,
+  // The pinned project lead (vertical head). Folded in here — NOT threaded per
+  // call site — so every recompute keeps the VH visible (they previously relied
+  // on a client-only fallback and were invisible in the server-queried picker).
+  leadUid: string | null | undefined,
+  // Resolved lead uids of every team attached to the project (replaces the old
+  // raw teamIds union that leaked whole-team access).
+  teamLeadIds: string[],
+  // Resolved assignee uids of every task in the project (any status).
+  assigneeIds: string[],
   // Phase 3.6: when supplied, also enumerate the holders of every `role`-kind
   // actor referenced by the workflow so hierarchy-role-gated projects are
-  // visible to (and routable for) their holders. Omitted → identical to before,
-  // so every legacy caller + seed is unaffected.
+  // visible to (and routable for) their holders. Omitted → not seeded.
   opts?: { workflow?: Workflow; users?: User[]; roles?: RoleDef[] },
 ): string[] {
   const keys = new Set<string>()
@@ -467,14 +507,87 @@ export function computeAccessKeys(
     if (Array.isArray(v)) v.forEach((u) => u && keys.add(u))
     else if (v) keys.add(v)
   }
-  for (const t of teamIds) if (t) keys.add(t)
   if (createdBy) keys.add(createdBy)
+  if (leadUid) keys.add(leadUid)
+  for (const id of teamLeadIds) if (id) keys.add(id)
+  for (const id of assigneeIds) if (id) keys.add(id)
   if (opts?.workflow && opts.users?.length && opts.roles?.length) {
     for (const roleId of roleActorIdsOf(opts.workflow)) {
       for (const uid of resolveRoleHolders(roleId, opts.users, opts.roles)) keys.add(uid)
     }
   }
   return [...keys]
+}
+
+// Overrides for the field(s) the current operation is mutating. Each wins over
+// the value read from the project doc. Use the `leadUid` key (even with a null
+// value) to force-clear the lead; omit it to keep the doc's leadUid.
+export interface RecomputeAccessKeysOverrides {
+  roleAssignments?: Record<string, string | string[]>
+  createdBy?: string
+  leadUid?: string | null
+  // Resolved team-lead uids to use instead of reading the teams back — needed
+  // when the team.projectIds mirror is changing in the same op (setProjectTeams).
+  teamLeadIds?: string[]
+  // Hierarchy-role enrichment (optional → not seeded, matching prior behaviour).
+  // There is no module-level users snapshot, so callers pass the directory;
+  // roles falls back to getRolesSnapshot(), workflow to the project's pinned one.
+  workflow?: Workflow
+  users?: User[]
+  roles?: RoleDef[]
+}
+
+// Rebuilds the full UID-only accessKeys for a project. Reads the project doc for
+// baseline state (createdBy / leadUid / roleAssignments / pinnedWorkflow), its
+// attached teams (→ each `leadId`), and its tasks (→ each `assigneeId`), then
+// unions them via computeAccessKeys. `overrides` win over the doc for whatever
+// the caller is mutating. A full rebuild is the ONLY correct way to REVOKE
+// (team detached, role cleared, lead changed, task reassigned): a UID can't be
+// blindly arrayRemove'd because it may still be justified by another path.
+// All reads happen outside any write batch — `await` this, then stage the write.
+// NB: callers that mutate the team-lead set or a task assignee should recompute
+// AFTER committing that change (so the teams/tasks reads reflect it), or pass
+// `teamLeadIds`.
+export async function recomputeProjectAccessKeys(
+  projectId: string,
+  overrides?: RecomputeAccessKeysOverrides,
+): Promise<string[]> {
+  const projSnap = await getDoc(tenantDoc('projects', projectId))
+  const proj = projSnap.exists()
+    ? (projSnap.data() as {
+        createdBy?: string
+        ownerId?: string
+        leadUid?: string | null
+        roleAssignments?: Record<string, string | string[]>
+        pinnedWorkflow?: Workflow
+      })
+    : {}
+
+  const roleAssignments = overrides?.roleAssignments ?? proj.roleAssignments
+  const createdBy = overrides?.createdBy ?? proj.createdBy ?? proj.ownerId
+  const leadUid =
+    overrides && 'leadUid' in overrides ? overrides.leadUid : proj.leadUid ?? null
+  const workflow = overrides?.workflow ?? proj.pinnedWorkflow
+
+  let teamLeadIds = overrides?.teamLeadIds
+  if (!teamLeadIds) {
+    const teamsSnap = await getDocs(
+      query(tenantCol('teams'), where('projectIds', 'array-contains', projectId)),
+    )
+    teamLeadIds = teamsSnap.docs
+      .map((d) => (d.data() as { leadId?: string }).leadId)
+      .filter((id): id is string => Boolean(id))
+  }
+  const tasksSnap = await getDocs(query(tenantCol('tasks'), where('projectId', '==', projectId)))
+  const assigneeIds = tasksSnap.docs
+    .map((d) => (d.data() as { assigneeId?: string | null }).assigneeId)
+    .filter((id): id is string => Boolean(id))
+
+  return computeAccessKeys(roleAssignments, createdBy, leadUid, teamLeadIds, assigneeIds, {
+    workflow,
+    users: overrides?.users,
+    roles: overrides?.roles ?? getRolesSnapshot(),
+  })
 }
 
 export interface AddProjectInput {
@@ -593,7 +706,10 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     createdBy: input.createdBy,
     status: 'in_progress',
     teamIds: [],
-    accessKeys: computeAccessKeys(hasRoles ? roleAssignments : undefined, [], input.createdBy, {
+    // Brand-new project: no teams attached and no tasks yet, so team-lead and
+    // assignee sets are empty. A lead assigned via auto-allocation is folded in
+    // by the chained performAction below.
+    accessKeys: computeAccessKeys(hasRoles ? roleAssignments : undefined, input.createdBy, null, [], [], {
       workflow,
       users: input.users,
       roles: getRolesSnapshot(),
@@ -677,6 +793,7 @@ export async function addProject(input: AddProjectInput): Promise<string> {
           actionId: input.initialAction.actionId,
           inputs: input.initialAction.inputs,
           batch,
+          users: input.users,
         })
       } catch (e) {
         // Auto-allocation is best-effort: the project is still created at
@@ -753,9 +870,10 @@ export async function updateProjectStatus(input: UpdateProjectStatusInput): Prom
 export interface SetProjectTeamsInput {
   projectId: string
   projectTitle: string
-  // Phase 2d: accessKeys = role-holders ∪ teamIds ∪ creator. The caller passes
-  // the project's current roleAssignments + createdBy so the array stays honest
-  // after a team change (owner retired).
+  // accessKeys is recomputed (UID-only) after a team change — the attached
+  // teams' leads + task assignees + role-holders + creator. The caller passes
+  // the project's current roleAssignments + createdBy; leadUid is read from the
+  // project doc by recomputeProjectAccessKeys.
   roleAssignments?: Record<string, string | string[]>
   createdBy?: string
   previousTeamIds: string[]
@@ -775,14 +893,29 @@ export async function setProjectTeams(input: SetProjectTeamsInput): Promise<void
   const added = [...next].filter((id) => !previous.has(id))
   const removed = [...previous].filter((id) => !next.has(id))
 
+  // Resolve the lead uid of each team that WILL be attached. The team.projectIds
+  // mirror is updated in this same batch, so a teams-by-projectId query inside
+  // recomputeProjectAccessKeys would still see the OLD set — pass the new leads
+  // explicitly. Detached teams' leads are simply omitted here, so they lose
+  // access unless still justified by a role / task / lead / creator entry.
+  const teamLeadIds: string[] = []
+  for (const teamId of input.newTeamIds) {
+    const tSnap = await getDoc(tenantDoc('teams', teamId))
+    const lead = tSnap.exists() ? (tSnap.data() as { leadId?: string }).leadId : undefined
+    if (lead) teamLeadIds.push(lead)
+  }
+  const accessKeys = await recomputeProjectAccessKeys(input.projectId, {
+    roleAssignments: input.roleAssignments,
+    createdBy: input.createdBy,
+    teamLeadIds,
+    workflow: input.workflow,
+    users: input.users,
+  })
+
   const batch = writeBatch(db)
   batch.update(tenantDoc('projects', input.projectId), {
     teamIds: input.newTeamIds,
-    accessKeys: computeAccessKeys(input.roleAssignments, input.newTeamIds, input.createdBy, {
-      workflow: input.workflow,
-      users: input.users,
-      roles: getRolesSnapshot(),
-    }),
+    accessKeys,
     updatedAt: serverTimestamp(),
   })
   for (const teamId of added) {
@@ -846,14 +979,20 @@ export async function setProjectRole(input: SetProjectRoleInput): Promise<void> 
     assignedAt: Timestamp.now(), // serverTimestamp() is rejected inside arrays
     assignedBy: input.actorId,
   }
+  // Role membership is changing; team-lead and assignee sets are not, so a
+  // full recompute (with the merged roleAssignments as the override) keeps the
+  // array honest and correctly drops a cleared role-holder if nothing else
+  // justifies their access.
+  const accessKeys = await recomputeProjectAccessKeys(input.projectId, {
+    roleAssignments: merged,
+    createdBy: input.createdBy,
+    workflow: input.workflow,
+    users: input.users,
+  })
   const batch = writeBatch(db)
   batch.update(tenantDoc('projects', input.projectId), {
     roleAssignments: merged,
-    accessKeys: computeAccessKeys(merged, input.teamIds, input.createdBy, {
-      workflow: input.workflow,
-      users: input.users,
-      roles: getRolesSnapshot(),
-    }),
+    accessKeys,
     projectHistory: arrayUnion(event),
     updatedAt: serverTimestamp(),
   })
@@ -1031,16 +1170,31 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     updatedAt: serverTimestamp(),
   })
 
+  // Access maintenance: the assignee (if any) gains task-based access to the
+  // project. On auto-attach, the newly-attached team's lead also gains access
+  // (team membership alone no longer grants it). arrayUnion is additive, so
+  // these pure additions need no full recompute.
+  const accessKeysToAdd: string[] = []
+  if (input.assigneeId) accessKeysToAdd.push(input.assigneeId)
+
   if (needsAttach) {
+    const teamSnap = await getDoc(tenantDoc('teams', input.teamId))
+    const teamLeadId = teamSnap.exists()
+      ? (teamSnap.data() as { leadId?: string }).leadId
+      : undefined
+    if (teamLeadId) accessKeysToAdd.push(teamLeadId)
     batch.update(projectRef, {
       teamIds: arrayUnion(input.teamId),
-      // Keep the denormalized visibility array in sync so non-admin members
-      // of the auto-attached team can see this project on the Projects list.
-      accessKeys: arrayUnion(input.teamId),
+      ...(accessKeysToAdd.length ? { accessKeys: arrayUnion(...accessKeysToAdd) } : {}),
       updatedAt: serverTimestamp(),
     })
     batch.update(tenantDoc('teams', input.teamId), {
       projectIds: arrayUnion(input.projectId),
+    })
+  } else if (accessKeysToAdd.length) {
+    batch.update(projectRef, {
+      accessKeys: arrayUnion(...accessKeysToAdd),
+      updatedAt: serverTimestamp(),
     })
   }
   recordAuditEvent({
@@ -1156,6 +1310,12 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
 
   batch.update(tenantDoc('tasks', input.parentTaskId), {
     subtaskCount: increment(1),
+    updatedAt: serverTimestamp(),
+  })
+
+  // The subtask assignee gains task-based access to the project (additive).
+  batch.update(tenantDoc('projects', input.projectId), {
+    accessKeys: arrayUnion(input.assigneeId),
     updatedAt: serverTimestamp(),
   })
 
@@ -1615,4 +1775,19 @@ export async function transitionTaskFromReview(
   }
 
   await batch.commit()
+
+  // A reject can reassign the task to someone new. That changes who has
+  // task-based access: recompute AFTER the commit so the tasks read reflects
+  // the new assignee, and the previous assignee is dropped if no longer
+  // justified. arrayUnion can't revoke, so a full recompute is required.
+  if (input.decision === 'reject' && task.projectId) {
+    const nextAssigneeId = input.newAssigneeId ?? task.assigneeId ?? null
+    if (nextAssigneeId !== task.assigneeId) {
+      const accessKeys = await recomputeProjectAccessKeys(task.projectId)
+      await updateDoc(tenantDoc('projects', task.projectId), {
+        accessKeys,
+        updatedAt: serverTimestamp(),
+      })
+    }
+  }
 }
