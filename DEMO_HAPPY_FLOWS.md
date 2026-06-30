@@ -37,6 +37,70 @@ Button labels are exactly what you'll see on the stage banner.
 
 ---
 
+## 1B) TENDER — Aero India MoD Pavilion  (collaborative)
+
+### Create  (New Project → **Tender**)
+- **Title:** `Aero India 2027 — Ministry of Defence Pavilion, AFS Yelahanka, Bengaluru`
+- **Description:** `Aero India 2027 at Air Force Station Yelahanka — design & build of the Ministry of Defence pavilion showcasing indigenous aerospace & defence platforms, an immersive "Make in India" gallery, a 1:1 aircraft model bay, and a delegate briefing room. Responding to the MoD exhibition tender.`
+- **Submission / Presentation / Deadline dates:** pick any (≈ 2 / 3 / 4 weeks out)
+- **Project roles:** **Admin Head → Rachet Juneja (you)** ← REQUIRED (unlocks the next two steps). Functional Head → Alex Morgan (optional)
+- Create → lands at **Project Created**
+
+### Transitions
+| Stage | Click | Paste into inputs | → |
+|---|---|---|---|
+| Project Created | **Allocate Project Leader** | *Choose Vertical Head:* **Anirudha Sisodia** | Awaiting Lead Decision |
+| Awaiting Lead Decision | **Accept** | *Reason:* `Eligibility & security pre-qualification cleared — mobilising delivery teams.` | Task Setup |
+| Task Setup | *(add first task below — auto-advances)* or **Confirm setup → start execution** | — | In Execution |
+| In Execution | **Validation complete — sign off** | *(no inputs)* | VH Review |
+| VH Review | **Approve** | *(no inputs)* | Ready for Client |
+| Ready for Client | **Record outcome** | *Status:* **Awarded** · *Note:* `MoD pavilion tender awarded — LOA received.` | **Awarded** |
+
+### Teams + tasks to add (at **Task Setup**) — open each team → New Task
+| Team | Task title | Assign to | Priority |
+|---|---|---|---|
+| Events Design | `MoD pavilion 3D concept — aircraft model bay & gallery GA drawings` | Karthik Menon | High |
+| Graphic Design | `Indigenous-platforms graphics, MoD branding & wayfinding` | Rohan Verma | High |
+| Copy & Strategy | `Technical bid narrative & defence-exhibition compliance matrix` | Ananya Bose | High |
+| Client Servicing | `Submission dossier — EMD, tender fee & security clearance docs` | Meera Iyer | High |
+| Video Editing | `Make-in-India showcase film & LED gallery loops` | Tara Singh | Medium |
+
+> Same transition path as 1) — only the *Reason* and *outcome note* text differ. Skip the optional **Tender Review → Submit Assessment** eligibility branch for the happy flow.
+
+---
+
+## 1C) TENDER — Invest Karnataka Global Investors Meet  (collaborative)
+
+### Create  (New Project → **Tender**)
+- **Title:** `Invest Karnataka 2027 — Global Investors Meet, Plenary & Expo, Bengaluru`
+- **Description:** `Invest Karnataka 2027 Global Investors Meet — design, build & event management of the main plenary stage, the investment-showcase expo, sector & country pavilions, and delegate lounges across the Bengaluru Palace grounds. Responding to the state Department of Industries tender.`
+- **Submission / Presentation / Deadline dates:** pick any (≈ 2 / 3 / 4 weeks out)
+- **Project roles:** **Admin Head → Rachet Juneja (you)** ← REQUIRED (unlocks the next two steps). Functional Head → Alex Morgan (optional)
+- Create → lands at **Project Created**
+
+### Transitions
+| Stage | Click | Paste into inputs | → |
+|---|---|---|---|
+| Project Created | **Allocate Project Leader** | *Choose Vertical Head:* **Anirudha Sisodia** | Awaiting Lead Decision |
+| Awaiting Lead Decision | **Accept** | *Reason:* `Pre-qualification cleared — setting up delivery teams for the summit build.` | Task Setup |
+| Task Setup | *(add first task below — auto-advances)* or **Confirm setup → start execution** | — | In Execution |
+| In Execution | **Validation complete — sign off** | *(no inputs)* | VH Review |
+| VH Review | **Approve** | *(no inputs)* | Ready for Client |
+| Ready for Client | **Record outcome** | *Status:* **Awarded** · *Note:* `Investors-meet tender awarded — work order issued.` | **Awarded** |
+
+### Teams + tasks to add (at **Task Setup**) — open each team → New Task
+| Team | Task title | Assign to | Priority |
+|---|---|---|---|
+| Events Design | `Plenary stage & expo masterplan — 3D concept & GA drawings` | Karthik Menon | High |
+| Graphic Design | `Summit identity, sector-pavilion graphics & wayfinding` | Rohan Verma | High |
+| Copy & Strategy | `Technical & financial bid narrative + eligibility compliance matrix` | Ananya Bose | High |
+| Client Servicing | `Submission dossier — EMD, tender fee & document checklist` | Meera Iyer | High |
+| Video Editing | `Investment-pitch film & plenary backdrop content` | Tara Singh | Medium |
+
+> Same transition path as 1) — only the *Reason* and *outcome note* text differ.
+
+---
+
 ## 2) HOTEL MANAGEMENT  (basic — room lifecycle)
 
 ### Create  (New Project → **Hotel Management**)
