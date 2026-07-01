@@ -274,7 +274,8 @@ export default function ProjectDetail() {
   // creator, admin, or lead), plus anyone the hierarchy grants Tasks → Create.
   const canCreateTask =
     !isClosed && (canEditProjectMeta || isProjectLead || can('tasks', 'create'))
-  const canAddAttachments = isSuperAdmin || isProjectLead
+  const canAddAttachments =
+    isSuperAdmin || isProjectLead || can('projects', 'create') || can('projects', 'update')
   const projectAttachments = project.attachments ?? []
   const assignedTeams = (project.teamIds ?? [])
     .map((id) => teamById.get(id))
