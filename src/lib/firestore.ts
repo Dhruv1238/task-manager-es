@@ -1057,6 +1057,38 @@ export async function setUserRoles(input: SetUserRolesInput): Promise<void> {
   await batch.commit()
 }
 
+export interface SetUserStatusInput {
+  uid: string
+  status: 'active' | 'deactivated'
+  actorId: string
+  actorName: string
+  targetName: string
+}
+
+// Toggle a member's account activation state. Light write (single doc + audit),
+// mirroring setUserRoles. A 'deactivated' user is bounced at sign-in
+// (AuthContext) and denied all data by the isActive() Firestore rule.
+// status is optional on the User doc (missing ⇒ active), so reactivation just
+// sets status:'active'. No accessKeys recompute needed.
+export async function setUserStatus(input: SetUserStatusInput): Promise<void> {
+  const patch =
+    input.status === 'deactivated'
+      ? { status: 'deactivated', deactivatedAt: serverTimestamp(), deactivatedBy: input.actorId }
+      : { status: 'active', reactivatedAt: serverTimestamp() }
+  const batch = writeBatch(db)
+  batch.update(tenantDoc('users', input.uid), patch)
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: input.status === 'deactivated' ? 'user.deactivated' : 'user.reactivated',
+    targetType: 'user',
+    targetId: input.uid,
+    targetTitle: input.targetName,
+    batch,
+  })
+  await batch.commit()
+}
+
 export interface SetProjectFieldInput {
   projectId: string
   projectTitle: string

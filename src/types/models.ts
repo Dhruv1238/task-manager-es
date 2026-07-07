@@ -64,6 +64,13 @@ export interface User {
   // project.chatLastMessageAt to render unread dots on the projects list and to
   // compute the in-project unread count.
   chatLastReadAt?: { [projectId: string]: Timestamp }
+  // Account activation state. Optional → a missing field means active (no
+  // backfill of existing docs required). A 'deactivated' user is bounced at
+  // sign-in (AuthContext) and denied all data by the isActive() Firestore rule.
+  status?: 'active' | 'deactivated'
+  deactivatedAt?: Timestamp
+  deactivatedBy?: string
+  reactivatedAt?: Timestamp
 }
 
 export interface Team {
@@ -369,6 +376,9 @@ export type AuditAction =
   | 'user.role_changed'
   // Phase 3.6: explicit hierarchy-role assignment changed.
   | 'user.roles_changed'
+  // Account activation state changed via the Members page.
+  | 'user.deactivated'
+  | 'user.reactivated'
   | 'team.created'
   | 'team.member_added'
   | 'team.member_removed'

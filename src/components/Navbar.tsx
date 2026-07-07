@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
+// RELEASE(kpi-reports): uncomment with the KPI Reports navbar entries below.
+// import { TrendingUp } from 'lucide-react'
 import Logo from './Logo'
 import { lazy, Suspense } from 'react'
 import ThemeToggle from './ThemeToggle'
@@ -42,6 +44,8 @@ export default function Navbar() {
   // access, with super_admin as the always-pass baseline.
   const canViewMembers = isSuperAdmin || can('members', 'view')
   const canViewReports = isSuperAdmin || can('reports', 'view')
+  // RELEASE(kpi-reports): uncomment with the KPI Reports navbar entries below.
+  // const canViewKpiReports = isSuperAdmin || can('kpi_reports', 'view')
   const canViewSettings = isSuperAdmin || can('settings', 'view')
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
@@ -95,6 +99,23 @@ export default function Navbar() {
                   Admin Analytics
                 </NavLink>
               )}
+              {/* RELEASE(kpi-reports): uncomment to restore the KPI Reports
+                  navbar entry (icon-only; the label span surfaces on
+                  hover/focus to keep the crowded navbar compact). Also restore
+                  the TrendingUp import + canViewKpiReports flag above.
+              {canViewKpiReports && (
+                <NavLink
+                  to="/admin/reports"
+                  aria-label="KPI Reports"
+                  className={(args) => `group relative ${navLinkCls(args)}`}
+                >
+                  <TrendingUp size={16} aria-hidden />
+                  <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-line bg-elevated px-2 py-1 text-xs text-fg opacity-0 shadow-md transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                    KPI Reports
+                  </span>
+                </NavLink>
+              )}
+              */}
               {canViewSettings && (
                 <NavLink
                   to="/admin/config"
@@ -241,6 +262,13 @@ export default function Navbar() {
                   Admin Analytics
                 </NavLink>
               )}
+              {/* RELEASE(kpi-reports): uncomment to restore the mobile entry.
+              {canViewKpiReports && (
+                <NavLink to="/admin/reports" className={mobileLinkCls}>
+                  KPI Reports
+                </NavLink>
+              )}
+              */}
               {canViewSettings && (
                 <NavLink
                   to="/admin/config"

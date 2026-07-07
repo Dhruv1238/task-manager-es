@@ -25,6 +25,9 @@ export function noGrant(): ModuleGrant {
 function grantsFor(view: boolean, create = false, update = false, del = false): Record<string, ModuleGrant> {
   const out: Record<string, ModuleGrant> = {}
   for (const id of DEFAULT_MODULE_IDS) out[id] = { view, create, update, delete: del }
+  // Credentials (temp-password visibility) is sensitive — never part of the
+  // blanket starter grant. Authors enable it per-role in the access matrix.
+  out.credentials = noGrant()
   return out
 }
 

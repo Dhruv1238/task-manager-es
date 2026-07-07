@@ -40,6 +40,17 @@ class UnregisteredEmailError extends Error {
   }
 }
 
+// Thrown during sign-in when the account has been deactivated by an admin.
+// Bounces the session (same path as UnregisteredEmailError) and surfaces the
+// message on the login screen. The Firestore isActive() rule is the real
+// enforcement boundary; this is the UX layer.
+class DeactivatedAccountError extends Error {
+  constructor() {
+    super('This account has been deactivated. Contact an administrator.')
+    this.name = 'DeactivatedAccountError'
+  }
+}
+
 type AuthContextValue = {
   user: FirebaseUser | null
   profile: UserProfile | null
@@ -76,7 +87,9 @@ async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
   const ref = tenantDoc('users', u.uid)
   const snap = await getDoc(ref)
   if (snap.exists()) {
-    return snap.data() as UserProfile
+    const data = snap.data() as UserProfile
+    if (data.status === 'deactivated') throw new DeactivatedAccountError()
+    return data
   }
 
   const email = u.email ?? ''
@@ -121,8 +134,14 @@ async function upsertUserProfile(u: FirebaseUser): Promise<UserProfile> {
         photoURL: u.photoURL ?? existing.photoURL,
         globalRole: existing.globalRole,
         teamIds: existing.teamIds ?? [],
+        // Carry activation state across the email→Google uid bridge, otherwise a
+        // deactivated user could slip in via a fresh (status-less) Google doc.
+        ...(existing.status ? { status: existing.status } : {}),
+        ...(existing.deactivatedAt ? { deactivatedAt: existing.deactivatedAt } : {}),
+        ...(existing.deactivatedBy ? { deactivatedBy: existing.deactivatedBy } : {}),
         createdAt: serverTimestamp(),
       })
+      if (existing.status === 'deactivated') throw new DeactivatedAccountError()
       const resolved = await getDoc(ref)
       return resolved.data() as UserProfile
     }
@@ -182,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(u)
         setProfile(p)
       } catch (err) {
-        if (err instanceof UnregisteredEmailError) {
+        if (err instanceof UnregisteredEmailError || err instanceof DeactivatedAccountError) {
           setSignInError(err.message)
         } else {
           setSignInError(err instanceof Error ? err.message : 'Sign-in failed.')
@@ -195,6 +214,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
   }, [])
+
+  // Live subscription to the signed-in user's own doc. Keeps `profile` fresh
+  // and — critically — bounces the session the instant an admin deactivates the
+  // account mid-session, rather than waiting for a reload. The self-read
+  // Firestore rule keeps this listener alive even once isActive() would deny
+  // everything else. Mirrors the sandbox persona-doc listener above.
+  useEffect(() => {
+    const uid = user?.uid
+    if (!uid) return
+    return onSnapshot(tenantDoc('users', uid), (snap) => {
+      if (!snap.exists()) return
+      const p = snap.data() as UserProfile
+      if (p.status === 'deactivated') {
+        setSignInError('This account has been deactivated. Contact an administrator.')
+        void signOut(auth)
+        return
+      }
+      setProfile(p)
+    })
+  }, [user?.uid])
 
   const value = useMemo<AuthContextValue>(
     () => ({

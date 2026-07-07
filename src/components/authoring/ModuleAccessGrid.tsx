@@ -1,4 +1,4 @@
-import { DEFAULT_MODULE_IDS } from '../../types/v2'
+import { DEFAULT_MODULE_IDS, MODULE_LABELS } from '../../types/v2'
 import type { ModuleGrant, ModuleOp, RoleDef } from '../../types/v2'
 
 const OPS: ModuleOp[] = ['view', 'create', 'update', 'delete']
@@ -51,9 +51,9 @@ export default function ModuleAccessGrid({ roles, onChange, readOnly }: Props) {
             {DEFAULT_MODULE_IDS.map((m) => (
               <th
                 key={m}
-                className="whitespace-nowrap border-l border-line px-2 py-2 text-center text-xs font-medium capitalize text-fg-muted"
+                className="whitespace-nowrap border-l border-line px-2 py-2 text-center text-xs font-medium text-fg-muted"
               >
-                {m}
+                {MODULE_LABELS[m] ?? m}
               </th>
             ))}
           </tr>

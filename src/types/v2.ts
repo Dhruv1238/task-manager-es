@@ -69,8 +69,29 @@ export const DEFAULT_MODULE_IDS = [
   'members',
   'workflows',
   'reports',
+  // RELEASE(kpi-reports): KPI Reports is pushed but not yet released to the
+  // client. Uncomment this module id (and its MODULE_LABELS entry below) to
+  // surface the permission column in the access matrix, together with the
+  // Navbar entries and the route gate swap in App.tsx.
+  // 'kpi_reports',
+  'credentials',
   'settings',
 ] as const
+
+// Tenant-facing column labels for the access matrix. Ids stay stable slugs;
+// labels are presentation-only.
+export const MODULE_LABELS: Record<string, string> = {
+  projects: 'Projects',
+  tasks: 'Tasks',
+  teams: 'Teams',
+  members: 'Members',
+  workflows: 'Workflows',
+  reports: 'Reports',
+  // RELEASE(kpi-reports): uncomment together with the module id above.
+  // kpi_reports: 'KPI Reports',
+  credentials: 'Credentials',
+  settings: 'Settings',
+}
 
 // Computed + cached on /profiles/{uid}. Invalidated by a permissionsVersion
 // stamp bump on any role/grant/level edit.

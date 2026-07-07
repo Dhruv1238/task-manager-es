@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  getDocs,
   limit,
   orderBy,
   query,
@@ -11,7 +12,8 @@ import {
 } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useOrgStructure } from '../contexts/AppConfigContext'
-import { setUserRoles, tenantCol } from '../lib/firestore'
+import { usePermissions } from '../hooks/usePermissions'
+import { setUserRoles, setUserStatus, tenantCol } from '../lib/firestore'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import type { User } from '../types/models'
 import type { RoleDef } from '../types/v2'
@@ -143,6 +145,17 @@ export default function AdminMembers() {
   const [editing, setEditing] = useState<User | null>(null)
   const [savingRoles, setSavingRoles] = useState(false)
   const canEditRoles = profile?.globalRole === 'super_admin'
+  // Deactivation is gated on the members:update permission (super-admins always
+  // qualify via the coarse flag). The confirm modal + per-row guardrails below
+  // enforce no-self-deactivate and the last-super-admin rule.
+  const perms = usePermissions()
+  const canManageMembers = perms.isSuperAdmin || perms.can('members', 'update')
+  // Temp-password visibility is its own sensitive grant (credentials module in
+  // the access matrix) — members:view alone must not expose credentials.
+  const canViewCredentials = perms.isSuperAdmin || perms.can('credentials', 'view')
+  const [statusTarget, setStatusTarget] = useState<User | null>(null)
+  const [statusSaving, setStatusSaving] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 600)
@@ -204,6 +217,44 @@ export default function AdminMembers() {
       setEditing(null)
     } finally {
       setSavingRoles(false)
+    }
+  }
+
+  async function confirmStatusChange() {
+    const target = statusTarget
+    if (!firebaseUser || !target) return
+    const nextStatus: 'active' | 'deactivated' =
+      target.status === 'deactivated' ? 'active' : 'deactivated'
+    setStatusError(null)
+    setStatusSaving(true)
+    try {
+      // Guardrail: never deactivate the last active super-admin. One-shot count
+      // (the paginated list isn't a reliable global tally).
+      if (nextStatus === 'deactivated' && target.globalRole === 'super_admin') {
+        const snap = await getDocs(
+          query(tenantCol('users'), where('globalRole', '==', 'super_admin')),
+        )
+        const activeSuperAdmins = snap.docs
+          .map((d) => d.data() as User)
+          .filter((m) => m.status !== 'deactivated')
+        if (activeSuperAdmins.length <= 1) {
+          setStatusError("Can't deactivate the last active super-admin.")
+          return
+        }
+      }
+      await setUserStatus({
+        uid: target.uid,
+        status: nextStatus,
+        actorId: firebaseUser.uid,
+        actorName: profile?.displayName ?? firebaseUser.email ?? 'Admin',
+        targetName: target.displayName,
+      })
+      setUsers((prev) =>
+        prev.map((m) => (m.uid === target.uid ? { ...m, status: nextStatus } : m)),
+      )
+      setStatusTarget(null)
+    } finally {
+      setStatusSaving(false)
     }
   }
 
@@ -283,6 +334,13 @@ export default function AdminMembers() {
                   const isSelf = firebaseUser?.uid === u.uid
                   const isRevealed = revealed.has(u.uid)
                   const isCopied = copiedId === u.uid
+                  const isDeactivated = u.status === 'deactivated'
+                  // Only a super-admin may deactivate another super-admin; nobody
+                  // may deactivate themselves.
+                  const canManageThis =
+                    canManageMembers &&
+                    !isSelf &&
+                    (u.globalRole !== 'super_admin' || perms.isSuperAdmin)
                   return (
                     <tr key={u.uid} className="transition hover:bg-fill-1">
                       <td className="px-6 py-4">
@@ -295,6 +353,11 @@ export default function AdminMembers() {
                               {u.displayName}
                               {isSelf && (
                                 <span className="ml-2 text-xs font-normal text-fg-subtle">(you)</span>
+                              )}
+                              {isDeactivated && (
+                                <span className="ml-2 inline-flex items-center rounded-full border border-tone-danger-bd bg-tone-danger-bg px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tone-danger-fg">
+                                  Deactivated
+                                </span>
                               )}
                             </div>
                             <div className="text-xs text-fg-subtle">{u.email}</div>
@@ -317,7 +380,14 @@ export default function AdminMembers() {
                       </td>
                       <td className="px-6 py-4 text-fg-muted">{u.teamIds?.length ?? 0}</td>
                       <td className="px-6 py-4">
-                        {u.tempPassword ? (
+                        {!canViewCredentials ? (
+                          <span
+                            className="text-fg-faint"
+                            title="Requires the Credentials permission"
+                          >
+                            ••••••••
+                          </span>
+                        ) : u.tempPassword ? (
                           <div className="flex items-center gap-2">
                             <code className="rounded bg-fill-2 px-2 py-1 font-mono text-xs text-fg-muted">
                               {isRevealed ? u.tempPassword : '••••••••••••'}
@@ -346,17 +416,35 @@ export default function AdminMembers() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-fg-muted">{formatDate(u.createdAt)}</td>
-                      <td className="px-6 py-4 text-right">
-                        {u.tempPassword && (
-                          <button
-                            type="button"
-                            onClick={() => copyCredentials(u)}
-                            title="Copy user credentials"
-                            className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4"
-                          >
-                            {isCopied ? 'Copied' : 'Copy'}
-                          </button>
-                        )}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          {u.tempPassword && canViewCredentials && (
+                            <button
+                              type="button"
+                              onClick={() => copyCredentials(u)}
+                              title="Copy user credentials"
+                              className="inline-flex min-w-20 items-center justify-center whitespace-nowrap rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4"
+                            >
+                              {isCopied ? 'Copied' : 'Copy'}
+                            </button>
+                          )}
+                          {canManageThis && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStatusError(null)
+                                setStatusTarget(u)
+                              }}
+                              className={
+                                isDeactivated
+                                  ? 'inline-flex min-w-24 items-center justify-center whitespace-nowrap rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-xs font-medium text-fg-muted transition hover:bg-fill-4'
+                                  : 'inline-flex min-w-24 items-center justify-center whitespace-nowrap rounded-md border border-tone-danger-bd px-2.5 py-1.5 text-xs font-medium text-tone-danger-fg transition hover:bg-tone-danger-bg'
+                              }
+                            >
+                              {isDeactivated ? 'Reactivate' : 'Deactivate'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -395,6 +483,56 @@ export default function AdminMembers() {
         onClose={() => setEditing(null)}
         onSave={saveRoles}
       />
+
+      <Modal
+        open={Boolean(statusTarget)}
+        onClose={() => {
+          if (!statusSaving) setStatusTarget(null)
+        }}
+        title={
+          statusTarget?.status === 'deactivated'
+            ? `Reactivate ${statusTarget?.displayName}?`
+            : `Deactivate ${statusTarget?.displayName ?? ''}?`
+        }
+        description={
+          statusTarget?.status === 'deactivated'
+            ? 'They will be able to sign in and use the portal again.'
+            : 'They will be signed out immediately and blocked from signing in until an admin reactivates them.'
+        }
+        closeOnBackdrop={!statusSaving}
+      >
+        {statusError && (
+          <p className="mb-3 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 text-sm text-tone-danger-fg">
+            {statusError}
+          </p>
+        )}
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setStatusTarget(null)}
+            disabled={statusSaving}
+            className="flex-1 rounded-lg border border-line bg-fill-2 px-4 py-2.5 text-sm font-medium text-fg-muted transition hover:bg-fill-4 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={confirmStatusChange}
+            disabled={statusSaving}
+            className={
+              statusTarget?.status === 'deactivated'
+                ? 'flex-1 rounded-lg bg-brand-gradient px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-purple-900/30 transition hover-brand-gradient disabled:opacity-60'
+                : 'flex-1 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-2.5 text-sm font-medium text-tone-danger-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
+            }
+          >
+            {statusSaving
+              ? 'Saving…'
+              : statusTarget?.status === 'deactivated'
+                ? 'Reactivate'
+                : 'Deactivate'}
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }
