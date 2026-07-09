@@ -13,19 +13,6 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.globalRole == 'super_admin';
     }
 
-    // A deactivated account is locked out server-side: it can read its own user
-    // doc (see the /users/{uid} self-read below, so the client can show the
-    // "deactivated" message) but nothing else. `status` is optional — a missing
-    // field, or a not-yet-created doc on first sign-in, counts as active, so
-    // user provisioning is never blocked.
-    function isActive() {
-      return isSignedIn()
-          && (
-            !exists(/databases/$(database)/documents/users/$(request.auth.uid))
-            || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status != 'deactivated'
-          );
-    }
-
     // Chat is always available to anyone with project access — the legacy
     // features.chat flag has been retired (no UI toggle, no gate).
 
@@ -60,16 +47,13 @@ service cloud.firestore {
 
     match /projects/{projectId}/chat/{messageId} {
       allow read: if isSignedIn()
-                  && isActive()
                   && hasProjectAccess(projectId);
 
       allow create: if isSignedIn()
-                    && isActive()
                     && hasProjectAccess(projectId)
                     && validNewMessage();
 
       allow update: if isSignedIn()
-                    && isActive()
                     && hasProjectAccess(projectId)
                     && request.auth.uid == resource.data.authorId
                     && validEdit();
@@ -107,25 +91,12 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
-    // ─── /users/{uid} self-read ──────────────────────────────────────────
-    // A user may ALWAYS read their own doc — even when deactivated — so the
-    // client can surface the "account deactivated" message and the AuthContext
-    // listener can bounce the session. Placed above the blanket rule; a
-    // deactivated user's own-doc read is granted here while everything else is
-    // denied by isActive() below. (Rules are additive — this only grants read
-    // on the caller's own doc; other users' docs stay governed by the blanket.)
-
-    match /users/{uid} {
-      allow read: if isSignedIn() && request.auth.uid == uid;
-    }
-
-    // ─── Everything else — blanket rule, now gated on isActive() ──────────
-    // Preserves current behavior for users/, projects/, tasks/, etc. for active
-    // accounts; a deactivated account is denied all reads/writes here (its only
-    // survivor is the self-read above). Tighten further as part of productization.
+    // ─── Everything else — unchanged blanket rule ───────────────────────
+    // This preserves your current behavior for users/, projects/, tasks/, etc.
+    // Tighten these later as part of your productization work.
 
     match /{document=**} {
-      allow read, write: if isSignedIn() && isActive();
+      allow read, write: if isSignedIn();
     }
   }
 }

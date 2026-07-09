@@ -2,7 +2,8 @@
   "projects": {
     "default": "clm-phase-2",
     "exp360": "clm-phase-1",
-    "es": "task-manager-235f6"
+    "es": "task-manager-235f6",
+    "internal": "es-internal-task-tracker"
   },
   "targets": {},
   "etags": {}
