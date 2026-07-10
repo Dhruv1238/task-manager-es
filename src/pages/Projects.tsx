@@ -24,7 +24,7 @@ import SearchInput from '../components/ui/SearchInput'
 import Dropdown, { type DropdownOption } from '../components/ui/Dropdown'
 import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
 import UnreadChatBadge from '../components/projects/UnreadChatBadge'
-import ProjectsTable from '../components/projects/ProjectsTable'
+import ProjectsTable, { type ProjectSortField } from '../components/projects/ProjectsTable'
 import ProjectFilterBar from '../components/projects/ProjectFilterBar'
 import {
   hasActiveFilters,
@@ -135,8 +135,32 @@ export default function Projects() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
+  const [sortField, setSortField] = useState<ProjectSortField>('createdAt')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  // Client-only sort for the derived Deadline column (submissionDate ?? deadline
+  // has no single stored field to orderBy server-side). Sorts loaded rows only;
+  // mutually exclusive with the server sorts above.
+  const [deadlineSort, setDeadlineSort] = useState<'asc' | 'desc' | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
+
+  function setServerSort(field: ProjectSortField, dir: 'asc' | 'desc') {
+    setSortField(field)
+    setSortDir(dir)
+    setDeadlineSort(null)
+  }
+
+  function handleHeaderSort(field: ProjectSortField | 'deadline') {
+    if (field === 'deadline') {
+      setDeadlineSort((d) => (d === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    if (field === sortField && deadlineSort === null) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      // Text-ish columns activate ascending; recency activates newest-first.
+      setServerSort(field, field === 'createdAt' ? 'desc' : 'asc')
+    }
+  }
 
   // URL-bound filters (Phase 2b). `?workflows=collab-default,sales-default`
   // tracks the workflow multi-select; `?stage=in_execution` tracks the
@@ -236,11 +260,20 @@ export default function Projects() {
         }
       }
       if (debouncedSearch) {
+        // Prefix search: '\uf8ff' is the highest code point, so the range
+        // covers every title starting with the query. (The upper bound was
+        // previously `debouncedSearch + ''` — an empty-string sentinel that
+        // made search exact-match-only.)
         constraints.push(where('titleLower', '>=', debouncedSearch))
-        constraints.push(where('titleLower', '<=', debouncedSearch + ''))
+        constraints.push(where('titleLower', '<=', debouncedSearch + '\uf8ff'))
         constraints.push(orderBy('titleLower'))
       } else {
-        constraints.push(orderBy('createdAt', sortDir))
+        // Firestore forbids orderBy on an equality-filtered field, so sorting
+        // by status falls back to createdAt while a status filter is active
+        // (the Status header is disabled in that state too).
+        const effectiveSortField =
+          sortField === 'status' && statusFilter !== 'all' ? 'createdAt' : sortField
+        constraints.push(orderBy(effectiveSortField, sortDir))
       }
       if (cursor) constraints.push(startAfter(cursor))
       constraints.push(limit(PAGE_SIZE))
@@ -254,6 +287,7 @@ export default function Projects() {
       profile,
       selectedWorkflowIds,
       sortDir,
+      sortField,
       stageFilter,
       statusFilter,
     ],
@@ -267,6 +301,7 @@ export default function Projects() {
       debouncedSearch,
       statusFilter,
       sortDir,
+      sortField,
       profile?.uid,
       (profile?.teamIds ?? []).join('|'),
       selectedWorkflowIds.join('|'),
@@ -362,10 +397,21 @@ export default function Projects() {
     }
     return [...seen.values()].sort((a, b) => a.order - b.order)
   }, [items])
-  const displayedItems = useMemo(
-    () => items.filter((p) => matchesCustomFilters(p, filterFields, fieldFilters)),
-    [items, filterFields, fieldFilters],
-  )
+  const displayedItems = useMemo(() => {
+    const filtered = items.filter((p) => matchesCustomFilters(p, filterFields, fieldFilters))
+    if (!deadlineSort) return filtered
+    // Deadline is derived (submissionDate ?? deadline), so this sorts the
+    // LOADED rows only — the header tooltip says as much. Missing deadlines
+    // always sort last regardless of direction.
+    return [...filtered].sort((a, b) => {
+      const am = submissionDeadline(a)?.toMillis() ?? Number.POSITIVE_INFINITY
+      const bm = submissionDeadline(b)?.toMillis() ?? Number.POSITIVE_INFINITY
+      if (am === bm) return 0
+      if (am === Number.POSITIVE_INFINITY) return 1
+      if (bm === Number.POSITIVE_INFINITY) return -1
+      return deadlineSort === 'asc' ? am - bm : bm - am
+    })
+  }, [items, filterFields, fieldFilters, deadlineSort])
   const filtersActive = hasActiveFilters(filterFields, fieldFilters)
   useEffect(() => {
     if (filtersActive && hasMore) {
@@ -434,11 +480,23 @@ export default function Projects() {
           className="sm:w-44"
         />
         <Dropdown
-          value={sortDir}
-          onChange={(v) => setSortDir(v as 'desc' | 'asc')}
+          value={deadlineSort ? 'deadline' : `${sortField}:${sortDir}`}
+          displayValue={
+            deadlineSort
+              ? `Deadline ${deadlineSort === 'asc' ? '(soonest)' : '(latest)'}`
+              : undefined
+          }
+          onChange={(v) => {
+            const [field, dir] = v.split(':') as [ProjectSortField, 'asc' | 'desc']
+            setServerSort(field, dir)
+          }}
           options={[
-            { value: 'desc', label: 'Newest first' },
-            { value: 'asc', label: 'Oldest first' },
+            { value: 'createdAt:desc', label: 'Newest first' },
+            { value: 'createdAt:asc', label: 'Oldest first' },
+            { value: 'titleLower:asc', label: 'Title A–Z' },
+            { value: 'titleLower:desc', label: 'Title Z–A' },
+            { value: 'status:asc', label: 'Status A–Z' },
+            { value: 'status:desc', label: 'Status Z–A' },
           ]}
           disabled={!!debouncedSearch}
           disabledTooltip="Alphabetical order while searching"
@@ -515,6 +573,14 @@ export default function Projects() {
               chatEnabled={chatEnabled}
               chatLastReadAt={profile?.chatLastReadAt}
               listColumnFields={listColumnFields}
+              sort={
+                deadlineSort
+                  ? { field: 'deadline', dir: deadlineSort }
+                  : { field: sortField, dir: sortDir }
+              }
+              onSort={handleHeaderSort}
+              statusSortDisabled={statusFilter !== 'all'}
+              searching={!!debouncedSearch}
             />
           ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

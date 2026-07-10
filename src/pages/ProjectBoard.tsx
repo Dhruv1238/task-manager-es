@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {  onSnapshot } from 'firebase/firestore'
 import { tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
+import { useFeature } from '../contexts/AppConfigContext'
+import { effectiveKind } from '../lib/taskKind'
 import { useAllProjectTasks } from '../hooks/useAllProjectTasks'
 import { useAllTeams } from '../hooks/useAllTeams'
 import { useAllUsers } from '../hooks/useAllUsers'
@@ -15,6 +17,11 @@ import TaskFilters, {
   applyFilters,
   type TaskFilterState,
 } from '../components/tasks/TaskFilters'
+import {
+  boardFiltersKey,
+  readStoredFilters,
+  writeStoredFilters,
+} from '../components/tasks/taskFilterStorage'
 import type { Project, Task, Team, User } from '../types/models'
 
 export default function ProjectBoard() {
@@ -23,10 +30,29 @@ export default function ProjectBoard() {
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [filters, setFilters] = useState<TaskFilterState>(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<TaskFilterState>(() =>
+    projectId ? readStoredFilters(boardFiltersKey(projectId)) : EMPTY_FILTERS,
+  )
   const [newTaskTeamId, setNewTaskTeamId] = useState<string | null>(null)
 
+  // ProjectPicker navigates between projects on the SAME route, so this
+  // component does not remount. Re-hydrate on param change, and only persist
+  // once the current project's filters have been hydrated — otherwise project
+  // A's filters would flush into project B's key during the switch.
+  const hydratedKeyRef = useRef<string | null>(projectId ?? null)
+  useEffect(() => {
+    if (!projectId) return
+    if (hydratedKeyRef.current === projectId) return
+    setFilters(readStoredFilters(boardFiltersKey(projectId)))
+    hydratedKeyRef.current = projectId
+  }, [projectId])
+  useEffect(() => {
+    if (!projectId || hydratedKeyRef.current !== projectId) return
+    writeStoredFilters(boardFiltersKey(projectId), filters)
+  }, [filters, projectId])
+
   const { profile } = useAuth()
+  const hierarchyOn = useFeature('taskHierarchy')
   const { users } = useAllUsers()
   const { teams: allTeams } = useAllTeams()
   const { tasks, loading: tasksLoading, error: tasksError } = useAllProjectTasks(projectId)
@@ -91,6 +117,34 @@ export default function ProjectBoard() {
     )
   }, [projectTeams, userById])
 
+  // Drop persisted filter values that no longer resolve on this project (e.g.
+  // an assignee whose team was detached) so a stale saved filter can't blank
+  // the board. Runs only once real data is present — an empty first snapshot
+  // must not wipe valid values. Mirrors the stale-workflow-id guard on
+  // Projects.tsx.
+  useEffect(() => {
+    if (!project || allTeams.length === 0 || users.length === 0) return
+    setFilters((f) => {
+      const staleAssignee =
+        f.assigneeId !== null && !allAssignees.some((u) => u.uid === f.assigneeId)
+      const staleTeam = f.teamId !== null && !projectTeams.some((t) => t.id === f.teamId)
+      if (!staleAssignee && !staleTeam) return f
+      return {
+        ...f,
+        assigneeId: staleAssignee ? null : f.assigneeId,
+        teamId: staleTeam ? null : f.teamId,
+      }
+    })
+  }, [project, allTeams.length, users.length, allAssignees, projectTeams])
+
+  // The Type (kind) filter is only reachable while hierarchy is on. If the org
+  // turns it off, clear any persisted kinds so a now-hidden filter can't keep
+  // silently narrowing the board (same intent as the stale-value guard above).
+  useEffect(() => {
+    if (hierarchyOn) return
+    setFilters((f) => (f.kinds.size === 0 ? f : { ...f, kinds: new Set() }))
+  }, [hierarchyOn])
+
   // Effective assignee: team-level tasks fall back to their team lead.
   const effectiveAssigneeById = useMemo(() => {
     const m = new Map<string, string | null>()
@@ -106,6 +160,7 @@ export default function ProjectBoard() {
       tasks.map((t) => ({
         status: t.status,
         priority: t.priority,
+        kind: effectiveKind(t),
         effectiveAssigneeId: effectiveAssigneeById.get(t.id) ?? null,
         teamId: t.teamId,
       })),
@@ -250,6 +305,7 @@ export default function ProjectBoard() {
           members={allAssignees}
           teams={projectTeams}
           showStatus={false}
+          showKind={hierarchyOn}
         />
       </div>
 

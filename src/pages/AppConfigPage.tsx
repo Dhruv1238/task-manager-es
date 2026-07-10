@@ -7,11 +7,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { isDevConfigUser } from '../components/DevConfigRoute'
 import {
   DEFAULT_APP_CONFIG,
+  FEATURE_DEFAULTS,
   useAppConfigContext,
   useAppConfigLive,
   useWorkflow,
 } from '../contexts/AppConfigContext'
-import { type AppConfig } from '../types/models'
+import { type AppConfig, type FeatureKey } from '../types/models'
 import type { Workflow, WorkflowRegistry } from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
 import OrgStructureSection from '../components/admin/OrgStructureSection'
@@ -54,13 +55,7 @@ export default function AppConfigPage() {
   const { config: cachedConfig } = useAppConfigContext()
   const { config: liveConfig } = useAppConfigLive()
 
-  // Kept so any commented-out feature flag UI below can be re-enabled without
-  // re-deriving the baseline. The chat-toggle save flow was retired with
-  // Phase 2c — workflow management took its place as the main concern of this
-  // page. Re-add a draft/setDraft/handleSave trio here if/when a new flag
-  // needs editing.
   const baseline: AppConfig = liveConfig ?? cachedConfig ?? DEFAULT_APP_CONFIG
-  void baseline
 
   const [error] = useState<string | null>(null)
 
@@ -149,26 +144,16 @@ export default function AppConfigPage() {
 
       <WorkflowsSection adminUid={user?.uid ?? null} />
 
+      {profile?.globalRole === 'super_admin' && (
+        <FeaturesSection baseline={baseline} adminUid={user?.uid ?? null} />
+      )}
+
       {/* Dev Tools are scaffolding for the team — sandbox visitors don't need
           (or want) reseed/wipe/migration controls. Build-time gated so the
           whole section tree-shakes out of the sandbox bundle. */}
       {!__IS_SANDBOX__ && isDevConfigUser(profile) && (
         <DevToolsSection adminUid={user?.uid ?? null} />
       )}
-
-      {/* <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
-        <h2 className="text-lg font-semibold text-fg">Features</h2>
-        <div className="mt-4 space-y-3">
-          <Toggle
-            checked={draft.features.chat}
-            onChange={(next) =>
-              setDraft((d) => ({ ...d, features: { ...d.features, chat: next } }))
-            }
-            label="Chat"
-            hint="Placeholder — chat is not yet built. Toggling on adds a disabled 'Chat' nav item."
-          />
-        </div>
-      </section> */}
 
       {error && (
         <div className="mb-4 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-4 py-3 text-sm text-tone-danger-fg">
@@ -215,6 +200,181 @@ export default function AppConfigPage() {
         </div>
       </div> */}
     </main>
+  )
+}
+
+// ─── Features section ─────────────────────────────────────────────────────
+// Org-wide feature toggles on /config/appConfig.features. Super-admin only.
+// Toggles gate creation affordances, never data visibility — data created
+// while a flag was on stays readable after it turns off. Other users pick up
+// changes when their 24h appConfig cache expires (documented limitation).
+
+const FEATURE_META: Record<FeatureKey, { label: string; hint: string }> = {
+  taskHierarchy: {
+    label: 'Task hierarchy (Epic → Story → Task → Subtask)',
+    hint: 'Kind picker on New Task and nesting up to 4 levels. Existing epics stay visible when off.',
+  },
+  crossTeamSubtasks: {
+    label: 'Cross-team subtasks',
+    hint: 'Create a subtask under any team and assign it to that team’s members.',
+  },
+  taskLinking: {
+    label: 'Task linking',
+    hint: 'Relate tasks on the same project (blocks / blocked by / duplicates). Existing links stay visible when off.',
+  },
+  taskDuplication: {
+    label: 'Task duplication',
+    hint: 'Adds a Duplicate button to task details.',
+  },
+  notifications: {
+    label: 'In-app notifications',
+    hint: 'Bell with mentions, assignments and status updates. Enable only after the notifications index is built.',
+  },
+  descriptionPreview: {
+    label: 'Card description preview',
+    hint: 'First line of the task description on board cards.',
+  },
+}
+
+const FEATURE_ORDER: FeatureKey[] = [
+  'taskHierarchy',
+  'crossTeamSubtasks',
+  'taskLinking',
+  'taskDuplication',
+  'notifications',
+  'descriptionPreview',
+]
+
+function effectiveFeatures(config: AppConfig): Record<FeatureKey, boolean> {
+  const out = { ...FEATURE_DEFAULTS }
+  for (const key of FEATURE_ORDER) {
+    const v = config.features?.[key]
+    if (typeof v === 'boolean') out[key] = v
+  }
+  return out
+}
+
+function FeatureToggle({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  label: string
+  hint: string
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-line bg-card p-4">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition ${
+          checked ? 'bg-brand-edge' : 'bg-fill-4'
+        } disabled:cursor-not-allowed`}
+      >
+        <span
+          aria-hidden
+          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+            checked ? 'translate-x-4' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-fg">{label}</div>
+        <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>
+      </div>
+    </div>
+  )
+}
+
+function FeaturesSection({ baseline, adminUid }: { baseline: AppConfig; adminUid: string | null }) {
+  const { setConfigOptimistic } = useAppConfigContext()
+  const [draft, setDraft] = useState<Record<FeatureKey, boolean>>(() => effectiveFeatures(baseline))
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Re-seed the draft when the live doc resolves (or another admin saves) so
+  // the switches reflect the server state, not a stale first render.
+  useEffect(() => {
+    setDraft(effectiveFeatures(baseline))
+  }, [baseline.version]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const current = effectiveFeatures(baseline)
+  const dirty = FEATURE_ORDER.some((k) => draft[k] !== current[k])
+
+  async function handleSave() {
+    if (!adminUid || saving) return
+    setSaving(true)
+    setSaveError(null)
+    const next: AppConfig = {
+      ...baseline,
+      features: { ...baseline.features, ...draft },
+      version: baseline.version + 1,
+      updatedBy: adminUid,
+      updatedAt: Timestamp.now(),
+    }
+    try {
+      await setDoc(tenantDoc('config', 'appConfig'), {
+        ...next,
+        updatedAt: serverTimestamp(),
+      })
+      setConfigOptimistic(next)
+      setSavedAt(Date.now())
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save features.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-2xl border border-line bg-fill-1 p-5">
+      <h2 className="text-lg font-semibold text-fg">Features</h2>
+      <p className="mt-1 text-sm text-fg-subtle">
+        Org-wide switches. Turning a feature off hides its controls but never hides data
+        already created with it. Other users pick changes up within a day (cache refresh).
+      </p>
+      <div className="mt-4 space-y-3">
+        {FEATURE_ORDER.map((key) => (
+          <FeatureToggle
+            key={key}
+            checked={draft[key]}
+            onChange={(next) => setDraft((d) => ({ ...d, [key]: next }))}
+            label={FEATURE_META[key].label}
+            hint={FEATURE_META[key].hint}
+            disabled={saving}
+          />
+        ))}
+      </div>
+      {saveError && (
+        <div className="mt-3 rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 text-sm text-tone-danger-fg">
+          {saveError}
+        </div>
+      )}
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-xs text-fg-subtle">
+          Version <span className="font-medium text-fg-muted">{baseline.version}</span> · last
+          saved {formatDate(baseline.updatedAt)}
+          {savedAt && <span className="ml-2 text-tone-success-fg">Saved.</span>}
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={!dirty || saving}
+          className="rounded-lg bg-brand-gradient px-4 py-2 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition hover-brand-gradient disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save features'}
+        </button>
+      </div>
+    </section>
   )
 }
 

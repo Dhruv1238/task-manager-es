@@ -5,11 +5,12 @@ import Modal from '../ui/Modal'
 import TeamPicker from '../ui/TeamPicker'
 import UserPicker from '../ui/UserPicker'
 import { useAuth } from '../../contexts/AuthContext'
+import { useFeature } from '../../contexts/AppConfigContext'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { useAllUsers } from '../../hooks/useAllUsers'
-import { useTaskTemplates } from '../../hooks/useTaskTemplates'
 import { addTeamTask } from '../../lib/firestore'
-import type { TaskPriority, WorkType } from '../../types/models'
+import { KIND_STYLES } from '../../lib/taskKind'
+import type { TaskKind, TaskPriority, WorkType } from '../../types/models'
 
 interface Props {
   open: boolean
@@ -35,6 +36,10 @@ const PRIORITIES: { value: TaskPriority; label: string; cls: string }[] = [
 
 const CUSTOM = 'custom' as const
 
+// Top-level items can be an Epic, Story, or Task. Subtasks are never created
+// here — they're added under a parent, where the tier is derived automatically.
+const TOP_LEVEL_KINDS: TaskKind[] = ['epic', 'story', 'task']
+
 export default function NewTaskModal({
   open,
   onClose,
@@ -44,13 +49,14 @@ export default function NewTaskModal({
   teamName: initialTeamName,
 }: Props) {
   const { user, profile } = useAuth()
+  const hierarchyOn = useFeature('taskHierarchy')
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
-  const { templates } = useTaskTemplates()
 
   const [templateCode, setTemplateCode] = useState<WorkType | typeof CUSTOM>(CUSTOM)
   const [teamId, setTeamId] = useState<string | null>(initialTeamId ?? null)
   const [assigneeId, setAssigneeId] = useState<string | null>(null)
+  const [kind, setKind] = useState<TaskKind>('task')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('medium')
@@ -63,6 +69,7 @@ export default function NewTaskModal({
       setTemplateCode(CUSTOM)
       setTeamId(initialTeamId ?? null)
       setAssigneeId(null)
+      setKind('task')
       setTitle('')
       setDescription('')
       setPriority('medium')
@@ -89,22 +96,6 @@ export default function NewTaskModal({
   const teamMemberUids = selectedTeam
     ? Array.from(new Set([selectedTeam.leadId, ...selectedTeam.memberIds]))
     : []
-
-  // When the user picks a predefined template, auto-fill team + assignee. Title
-  // stays user-controlled — templates shouldn't dictate the wording of the task.
-  function applyTemplate(code: WorkType | typeof CUSTOM) {
-    setTemplateCode(code)
-    if (code === CUSTOM) return
-    const tpl = templates.find((t) => t.code === code)
-    if (!tpl) return
-    const team = teamById.get(tpl.teamId)
-    if (team) {
-      setTeamId(team.id)
-      setAssigneeId(team.leadId)
-    } else {
-      setTeamId(tpl.teamId)
-    }
-  }
 
   async function handleSubmit() {
     if (!user) return
@@ -140,6 +131,7 @@ export default function NewTaskModal({
         workType: templateCode === CUSTOM ? undefined : templateCode,
         assigneeId: assignee?.uid ?? null,
         assigneeName: assignee?.displayName ?? null,
+        kind: hierarchyOn ? kind : 'task',
       })
       onClose()
     } catch (e) {
@@ -176,26 +168,30 @@ export default function NewTaskModal({
         noValidate
       >
 
-        {/* <div className="space-y-1.5">
-          <label htmlFor="task-template" className="text-sm font-medium text-fg-muted">
-            Template
-          </label>
-          <select
-            id="task-template"
-            value={templateCode}
-            onChange={(e) => applyTemplate(e.target.value as WorkType | typeof CUSTOM)}
-            className={inputCls}
-          >
-            <option value={CUSTOM} className="bg-overlay">
-              Custom task — no pre-fill
-            </option>
-            {templates.map((t) => (
-              <option key={t.code} value={t.code} className="bg-overlay">
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div> */}
+        {hierarchyOn && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-fg-muted">Type</label>
+            <div className="flex gap-2">
+              {TOP_LEVEL_KINDS.map((k) => {
+                const active = kind === k
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKind(k)}
+                    className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+                      active
+                        ? 'border-brand-edge bg-brand-soft text-fg'
+                        : 'border-line bg-fill-2 text-fg-muted hover:bg-fill-4'
+                    }`}
+                  >
+                    {KIND_STYLES[k].label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <label htmlFor="task-title" className="text-sm font-medium text-fg-muted">

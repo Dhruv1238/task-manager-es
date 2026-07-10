@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import type { Project, User } from '../../types/models'
 import type { CustomFieldDef } from '../../types/workflow'
 import ProjectStatusPill from '../workflow/ProjectStatusPill'
@@ -8,6 +9,11 @@ import StagePill from './StagePill'
 import WorkflowBadge from './WorkflowBadge'
 import { useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { formatDeadline, submissionDeadline, isOverdue } from './projectListUtils'
+
+// Server-sortable columns (stored fields with a Firestore orderBy). Deadline is
+// derived (submissionDate ?? deadline) and sorts client-side over loaded rows.
+export type ProjectSortField = 'createdAt' | 'titleLower' | 'status'
+export type ProjectTableSort = { field: ProjectSortField | 'deadline'; dir: 'asc' | 'desc' }
 
 interface Props {
   projects: Project[]
@@ -22,6 +28,80 @@ interface Props {
   // surfaces, unioned across the visible projects' pinned workflows by the
   // parent. Rendered blank where a project's workflow lacks the field.
   listColumnFields: CustomFieldDef[]
+  sort?: ProjectTableSort
+  onSort?: (field: ProjectSortField | 'deadline') => void
+  // Firestore forbids orderBy on an equality-filtered field, so the Status
+  // header goes inert while a status filter is active.
+  statusSortDisabled?: boolean
+  // Search owns the orderBy (titleLower prefix scan) — all header sorts inert.
+  searching?: boolean
+}
+
+function SortableHeader({
+  label,
+  field,
+  sort,
+  onSort,
+  disabled,
+  disabledTitle,
+  title,
+  className = 'px-4 py-3',
+}: {
+  label: string
+  field: ProjectSortField | 'deadline'
+  sort?: ProjectTableSort
+  onSort?: (field: ProjectSortField | 'deadline') => void
+  disabled?: boolean
+  disabledTitle?: string
+  title?: string
+  className?: string
+}) {
+  const active = sort?.field === field
+  const ariaSort = active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined
+  if (!onSort) {
+    return (
+      <th scope="col" className={className}>
+        {label}
+      </th>
+    )
+  }
+  return (
+    <th scope="col" className={className} aria-sort={ariaSort}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onSort(field)}
+        title={disabled ? disabledTitle : title}
+        className={`inline-flex items-center gap-1 uppercase tracking-wider transition ${
+          disabled
+            ? 'cursor-not-allowed text-fg-faint'
+            : active
+              ? 'text-fg'
+              : 'text-fg-subtle hover:text-fg'
+        }`}
+      >
+        {label}
+        {active &&
+          (sort!.dir === 'asc' ? (
+            <ChevronUp size={12} aria-hidden />
+          ) : (
+            <ChevronDown size={12} aria-hidden />
+          ))}
+      </button>
+    </th>
+  )
+}
+
+// Narrow short-date for the Created column — gives the createdAt sort a
+// visible home in the table.
+function formatCreated(p: Project): string {
+  const seconds = p.createdAt?.seconds
+  if (typeof seconds !== 'number' || seconds === 0) return '—'
+  return new Date(seconds * 1000).toLocaleDateString(undefined, {
+    year: '2-digit',
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 export default function ProjectsTable({
@@ -31,8 +111,14 @@ export default function ProjectsTable({
   chatLastReadAt,
   showWorkflowColumn,
   listColumnFields,
+  sort,
+  onSort,
+  statusSortDisabled,
+  searching,
 }: Props) {
   const navigate = useNavigate()
+  const sortHandler = searching ? undefined : onSort
+  const sortState = searching ? undefined : sort
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-card">
@@ -40,12 +126,21 @@ export default function ProjectsTable({
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-line bg-fill-2 text-[11px] font-medium uppercase tracking-wider text-fg-subtle">
             <tr>
-              <th scope="col" className="px-5 py-3">
-                Project
-              </th>
-              <th scope="col" className="px-4 py-3">
-                Status
-              </th>
+              <SortableHeader
+                label="Project"
+                field="titleLower"
+                sort={sortState}
+                onSort={sortHandler}
+                className="px-5 py-3"
+              />
+              <SortableHeader
+                label="Status"
+                field="status"
+                sort={sortState}
+                onSort={sortHandler}
+                disabled={statusSortDisabled}
+                disabledTitle="Clear the status filter to sort by status"
+              />
               {showWorkflowColumn && (
                 <th scope="col" className="px-4 py-3">
                   Workflow
@@ -59,9 +154,21 @@ export default function ProjectsTable({
                   {f.label}
                 </th>
               ))}
-              <th scope="col" className="px-4 py-3 whitespace-nowrap">
-                Deadline
-              </th>
+              <SortableHeader
+                label="Created"
+                field="createdAt"
+                sort={sortState}
+                onSort={sortHandler}
+                className="px-4 py-3 whitespace-nowrap"
+              />
+              <SortableHeader
+                label="Deadline"
+                field="deadline"
+                sort={sortState}
+                onSort={sortHandler}
+                title="Sorts the loaded projects only"
+                className="px-4 py-3 whitespace-nowrap"
+              />
               <th scope="col" className="px-4 py-3 text-right">
                 Teams
               </th>
@@ -164,6 +271,10 @@ export default function ProjectsTable({
                       />
                     </td>
                   ))}
+
+                  <td className="px-4 py-3 align-middle whitespace-nowrap">
+                    <span className="text-xs text-fg-muted">{formatCreated(p)}</span>
+                  </td>
 
                   <td className="px-4 py-3 align-middle whitespace-nowrap">
                     <span

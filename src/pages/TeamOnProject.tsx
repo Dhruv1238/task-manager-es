@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import {  onSnapshot } from 'firebase/firestore'
 import type { Timestamp } from 'firebase/firestore'
 import { tenantDoc } from '../lib/firestore'
+import { useFeature } from '../contexts/AppConfigContext'
+import { effectiveKind } from '../lib/taskKind'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useTeamProjectTasks } from '../hooks/useTeamProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
@@ -13,6 +15,11 @@ import TaskFilters, {
   applyFilters,
   type TaskFilterState,
 } from '../components/tasks/TaskFilters'
+import {
+  readStoredFilters,
+  teamBoardFiltersKey,
+  writeStoredFilters,
+} from '../components/tasks/taskFilterStorage'
 import ViewToggle, { type TaskView } from '../components/tasks/ViewToggle'
 import { getEffectiveAssignee } from '../lib/effectiveAssignee'
 import type {
@@ -174,8 +181,29 @@ export default function TeamOnProject() {
   const [notFound, setNotFound] = useState(false)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [view, setView] = useState<TaskView>('list')
-  const [filters, setFilters] = useState<TaskFilterState>(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<TaskFilterState>(() =>
+    projectId && teamId
+      ? readStoredFilters(teamBoardFiltersKey(projectId, teamId))
+      : EMPTY_FILTERS,
+  )
   const { users } = useAllUsers()
+  const hierarchyOn = useFeature('taskHierarchy')
+
+  // Same non-remount navigation caveat as ProjectBoard: re-hydrate when the
+  // route params change and only persist filters that belong to the current
+  // project/team key (see taskFilterStorage.ts).
+  const storageKey = projectId && teamId ? teamBoardFiltersKey(projectId, teamId) : null
+  const hydratedKeyRef = useRef<string | null>(storageKey)
+  useEffect(() => {
+    if (!storageKey) return
+    if (hydratedKeyRef.current === storageKey) return
+    setFilters(readStoredFilters(storageKey))
+    hydratedKeyRef.current = storageKey
+  }, [storageKey])
+  useEffect(() => {
+    if (!storageKey || hydratedKeyRef.current !== storageKey) return
+    writeStoredFilters(storageKey, filters)
+  }, [filters, storageKey])
   const { tasks, loading: tasksLoading, error: tasksError } = useTeamProjectTasks(
     projectId,
     teamId,
@@ -222,6 +250,26 @@ export default function TeamOnProject() {
     }
   }, [projectId, teamId])
 
+  // Drop a persisted assignee filter that no longer belongs to this team so a
+  // stale saved value can't blank the list (mirrors ProjectBoard's guard).
+  useEffect(() => {
+    if (!team || users.length === 0) return
+    setFilters((f) => {
+      if (f.assigneeId === null) return f
+      const memberSet = new Set([team.leadId, ...team.memberIds])
+      if (memberSet.has(f.assigneeId)) return f
+      return { ...f, assigneeId: null }
+    })
+  }, [team, users.length])
+
+  // The Type (kind) filter is only reachable while hierarchy is on. If the org
+  // turns it off, clear any persisted kinds so a now-hidden filter can't keep
+  // silently narrowing the list (same intent as the stale-value guard above).
+  useEffect(() => {
+    if (hierarchyOn) return
+    setFilters((f) => (f.kinds.size === 0 ? f : { ...f, kinds: new Set() }))
+  }, [hierarchyOn])
+
   const userById = useMemo(() => {
     const m = new Map<string, User>()
     for (const u of users) m.set(u.uid, u)
@@ -261,6 +309,7 @@ export default function TeamOnProject() {
       tasks.map((t) => ({
         status: t.status,
         priority: t.priority,
+        kind: effectiveKind(t),
         effectiveAssigneeId: effectiveAssigneeById.get(t.id) ?? null,
       })),
       filters,
@@ -314,8 +363,12 @@ export default function TeamOnProject() {
     }))
 
     for (const o of orphans) {
+      // Fall back to the denormalized parentTitle when the parent isn't in this
+      // team's loaded set (e.g. a cross-team subtask whose parent is elsewhere).
       const parentTitle =
-        (o.parentTaskId && tasksById.get(o.parentTaskId)?.title) ?? '(parent filtered out)'
+        (o.parentTaskId && tasksById.get(o.parentTaskId)?.title) ??
+        o.parentTitle ??
+        '(parent filtered out)'
       groups.push({ parent: null, subtasks: [o], parentTitle })
     }
 
@@ -425,6 +478,7 @@ export default function TeamOnProject() {
           onChange={setFilters}
           members={members}
           showStatus={view === 'list'}
+          showKind={hierarchyOn}
         />
       </div>
 

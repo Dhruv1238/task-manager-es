@@ -13,13 +13,20 @@ import type {
   AuditAction,
   AuditTargetType,
   GlobalRole,
+  NotificationType,
   Project,
   ProjectStatus,
+  Task,
+  TaskKind,
+  TaskLink,
+  TaskLinkRelation,
   TaskPriority,
   TaskStatus,
   User,
   WorkType,
 } from '../types/models'
+import { childKind, effectiveKind } from './taskKind'
+import { INVERSE_RELATION } from './taskLinks'
 import type {
   FieldUpdatedEvent,
   ProjectHistoryEvent,
@@ -46,6 +53,7 @@ import {
   getDocs,
   increment,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -280,6 +288,109 @@ export function recordAuditEvent(input: RecordAuditEventInput): Promise<void> | 
     return
   }
   return setDoc(ref, data)
+}
+
+// --- Notifications (features.notifications) ----------------------------------
+// In-app fan-out. Joins the triggering mutation's batch so the notification is
+// atomic with the action. Write-always: we never read the recipient's prefs
+// here (that would mean N extra reads + races) — each client filters by its own
+// notificationPrefs at display time, making mutes retroactive (Discord-style).
+export interface QueueNotificationInput {
+  recipientId: string
+  type: NotificationType
+  actorId: string
+  actorName: string
+  taskId: string
+  projectId: string
+  taskTitle: string
+  snippet?: string
+}
+
+export function queueNotification(batch: WriteBatch, input: QueueNotificationInput): void {
+  // Never notify someone about their own action.
+  if (input.recipientId === input.actorId) return
+  // NOTE: intentionally NOT gated on isFeatureEnabled here. That gate read the
+  // writer's *cached* appConfig, so a client with a stale cache (e.g. one that
+  // loaded before an admin enabled notifications) would silently write nothing —
+  // the recipient never got notified. Display is already gated (the bell only
+  // renders when the feature is on), so always writing is safe; when the feature
+  // is off the docs are simply never shown and get pruned.
+  const ref = doc(tenantCol('notifications'))
+  batch.set(ref, {
+    recipientId: input.recipientId,
+    type: input.type,
+    actorId: input.actorId,
+    actorName: input.actorName,
+    taskId: input.taskId,
+    projectId: input.projectId,
+    taskTitle: input.taskTitle,
+    ...(input.snippet ? { snippet: input.snippet } : {}),
+    resolved: false,
+    createdAt: serverTimestamp(),
+  })
+}
+
+// Fan out one notification per recipient in the set, minus the actor. Used by
+// status-change paths where creator + assignee may both need notifying.
+function queueNotificationFanout(
+  batch: WriteBatch,
+  recipients: (string | null | undefined)[],
+  base: Omit<QueueNotificationInput, 'recipientId'>,
+): void {
+  const set = new Set<string>()
+  for (const r of recipients) {
+    if (r && r !== base.actorId) set.add(r)
+  }
+  for (const recipientId of set) {
+    queueNotification(batch, { ...base, recipientId })
+  }
+}
+
+// Mark specific notifications resolved/unresolved (per-row toggle). Chunks at
+// the 500-op batch limit.
+export async function resolveNotifications(ids: string[], resolved = true): Promise<void> {
+  for (let i = 0; i < ids.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const id of ids.slice(i, i + 500)) {
+      batch.update(tenantDoc('notifications', id), { resolved })
+    }
+    await batch.commit()
+  }
+}
+
+// "Mark all as resolved" — resolves every unresolved notification for the user.
+// Queries by recipientId only (single-field index) and filters unresolved
+// client-side, so no extra composite index is needed.
+export async function resolveAllNotifications(uid: string): Promise<void> {
+  const snap = await getDocs(query(tenantCol('notifications'), where('recipientId', '==', uid)))
+  const docs = snap.docs.filter((d) => (d.data() as { resolved?: boolean }).resolved !== true)
+  for (let i = 0; i < docs.length; i += 500) {
+    const batch = writeBatch(db)
+    for (const d of docs.slice(i, i + 500)) batch.update(d.ref, { resolved: true })
+    await batch.commit()
+  }
+}
+
+// Best-effort prune of the viewer's notifications older than 30 days. No TTL
+// without Cloud Functions, so this runs fire-and-forget on panel open. Queries
+// by recipientId only (single-field index) and filters by age client-side, so
+// the notifications collection needs no composite index at all. Swallows errors.
+export async function pruneOldNotifications(uid: string): Promise<void> {
+  try {
+    const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const snap = await getDocs(query(tenantCol('notifications'), where('recipientId', '==', uid)))
+    const old = snap.docs.filter((d) => {
+      const ts = (d.data() as { createdAt?: Timestamp }).createdAt
+      return ts?.toMillis ? ts.toMillis() < cutoffMs : false
+    })
+    for (let i = 0; i < old.length; i += 500) {
+      const batch = writeBatch(db)
+      for (const d of old.slice(i, i + 500)) batch.delete(d.ref)
+      await batch.commit()
+    }
+  } catch {
+    // ignore — pruning is opportunistic
+  }
 }
 
 // --- Teams (Sprint 2 — Flow 1) -------------------------------------------------
@@ -1147,6 +1258,9 @@ export interface AddTeamTaskInput {
   workType?: WorkType
   assigneeId?: string | null
   assigneeName?: string | null
+  // Hierarchy: the tier of this top-level item (epic/story/task). Defaults to
+  // 'task' when the feature is off or unset. 'subtask' is never created here.
+  kind?: TaskKind
 }
 
 export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
@@ -1197,6 +1311,9 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     attachments: [],
     reviewerId: null,
     ...(input.workType ? { workType: input.workType } : {}),
+    // Always written explicitly so new docs never depend on the read-side
+    // fallback; a plain top-level task is 'task'.
+    kind: input.kind ?? 'task',
     createdBy: input.createdBy,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -1244,6 +1361,19 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     },
     batch,
   })
+
+  // Assignment notification (features.notifications).
+  if (input.assigneeId) {
+    queueNotification(batch, {
+      recipientId: input.assigneeId,
+      type: 'assignment',
+      actorId: input.createdBy,
+      actorName: input.actorName,
+      taskId: taskRef.id,
+      projectId: input.projectId,
+      taskTitle: input.title,
+    })
+  }
 
   // Auto-advance: only when the workflow snapshot is available AND the
   // workflow doc has a `confirm_setup` action at the current stage. Anything
@@ -1301,20 +1431,54 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
 export interface AddSubtaskInput {
   parentTaskId: string
   projectId: string
+  // The CHOSEN team for this child — may differ from the parent's team
+  // (cross-team subtasks). teamName matches teamId.
   teamId: string
+  teamName: string
+  // The parent's own team + hierarchy tier + title, for the auto-attach
+  // short-circuit, child-kind derivation, and denormalized breadcrumb.
+  parentTeamId: string
+  parentKind: TaskKind
+  parentTitle: string
   title: string
   description?: string
   priority: TaskPriority
   dueDate?: Timestamp
   assigneeId: string
   assigneeName: string
-  teamName: string
   projectTitle: string
   createdBy: string
   actorName: string
 }
 
 export async function addSubtask(input: AddSubtaskInput): Promise<string> {
+  // Derive the child's tier from the parent — never chosen by the caller.
+  // Null means the parent is a leaf (subtask): the UI never offers an add
+  // control there, but guard anyway (defense in depth behind the depth cap).
+  const kind = childKind(input.parentKind)
+  if (!kind) throw new Error('Subtasks cannot have children.')
+
+  // Cross-team only: check whether the chosen team is attached to the project
+  // and needs the same auto-attach dance addTeamTask does. The parent's own
+  // team is guaranteed attached (its parent task lives on the project), so the
+  // common same-team path skips both reads.
+  const crossTeam = input.teamId !== input.parentTeamId
+  let needsAttach = false
+  let teamLeadId: string | null = null
+  if (crossTeam) {
+    const projectSnap = await getDoc(tenantDoc('projects', input.projectId))
+    const teamIds: string[] = projectSnap.exists()
+      ? ((projectSnap.data() as { teamIds?: string[] }).teamIds ?? [])
+      : []
+    needsAttach = !teamIds.includes(input.teamId)
+    if (needsAttach) {
+      const teamSnap = await getDoc(tenantDoc('teams', input.teamId))
+      teamLeadId = teamSnap.exists()
+        ? ((teamSnap.data() as { leadId?: string }).leadId ?? null)
+        : null
+    }
+  }
+
   const batch = writeBatch(db)
   const subtaskRef = doc(tenantCol('tasks'))
 
@@ -1335,6 +1499,8 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
     subtaskDoneCount: 0,
     attachments: [],
     reviewerId: null,
+    kind,
+    parentTitle: input.parentTitle,
     createdBy: input.createdBy,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -1345,11 +1511,24 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
     updatedAt: serverTimestamp(),
   })
 
-  // The subtask assignee gains task-based access to the project (additive).
-  batch.update(tenantDoc('projects', input.projectId), {
-    accessKeys: arrayUnion(input.assigneeId),
-    updatedAt: serverTimestamp(),
-  })
+  if (needsAttach) {
+    // Attach the chosen team to the project (mirrors addTeamTask): grant the
+    // assignee + the new team's lead project access, and back-link the team.
+    batch.update(tenantDoc('projects', input.projectId), {
+      teamIds: arrayUnion(input.teamId),
+      accessKeys: arrayUnion(input.assigneeId, ...(teamLeadId ? [teamLeadId] : [])),
+      updatedAt: serverTimestamp(),
+    })
+    batch.update(tenantDoc('teams', input.teamId), {
+      projectIds: arrayUnion(input.projectId),
+    })
+  } else {
+    // The subtask assignee gains task-based access to the project (additive).
+    batch.update(tenantDoc('projects', input.projectId), {
+      accessKeys: arrayUnion(input.assigneeId),
+      updatedAt: serverTimestamp(),
+    })
+  }
 
   recordAuditEvent({
     actorId: input.createdBy,
@@ -1360,12 +1539,51 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
     targetTitle: input.title,
     projectId: input.projectId,
     teamId: input.teamId,
-    payload: { parentTaskId: input.parentTaskId, assigneeId: input.assigneeId },
+    payload: {
+      parentTaskId: input.parentTaskId,
+      assigneeId: input.assigneeId,
+      ...(crossTeam ? { crossTeam: true, teamAttached: needsAttach } : {}),
+    },
     batch,
+  })
+
+  // Assignment notification (features.notifications): notify the assignee that
+  // a subtask was assigned to them.
+  queueNotification(batch, {
+    recipientId: input.assigneeId,
+    type: 'assignment',
+    actorId: input.createdBy,
+    actorName: input.actorName,
+    taskId: subtaskRef.id,
+    projectId: input.projectId,
+    taskTitle: input.title,
   })
 
   await batch.commit()
   return subtaskRef.id
+}
+
+// Link enforcement: a task can't be completed while any task that BLOCKS it
+// (its `blocked_by` links) is still open. The `blocks` direction and advisory
+// relations (relates_to/duplicates) never gate. Client-enforced — same trust
+// model as the rest of the task domain (a Firestore rule can't read other docs).
+// A blocker that no longer exists is treated as unblocked (stale-link tolerant).
+async function assertBlockersComplete(links: TaskLink[] | undefined): Promise<void> {
+  const blockerIds = Array.from(
+    new Set((links ?? []).filter((l) => l.relation === 'blocked_by').map((l) => l.taskId)),
+  )
+  if (blockerIds.length === 0) return
+  const snaps = await Promise.all(blockerIds.map((id) => getDoc(tenantDoc('tasks', id))))
+  const openBlockers = snaps
+    .filter((s) => s.exists() && (s.data() as { status?: TaskStatus }).status !== 'done')
+    .map((s) => (s.data() as { title?: string }).title ?? 'a task')
+  if (openBlockers.length > 0) {
+    throw new Error(
+      openBlockers.length === 1
+        ? `Can't complete this task — it's blocked by "${openBlockers[0]}", which isn't done yet.`
+        : `Can't complete this task — it's blocked by ${openBlockers.length} unfinished tasks: ${openBlockers.join(', ')}.`,
+    )
+  }
 }
 
 // Updates a task's status. If the task is a subtask that just crossed the "done" boundary
@@ -1387,8 +1605,13 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
     title?: string
     projectId?: string
     teamId?: string
+    createdBy?: string
+    assigneeId?: string | null
+    links?: TaskLink[]
   }
   if (task.status === input.status) return
+  // Gate completion on open blockers (see assertBlockersComplete).
+  if (input.status === 'done') await assertBlockersComplete(task.links)
 
   const batch = writeBatch(db)
   batch.update(ref, {
@@ -1420,6 +1643,20 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
     payload: { from: task.status, to: input.status },
     batch,
   })
+
+  // Status-update notification (features.notifications): the task's creator and
+  // assignee — minus whoever made the change.
+  if (task.projectId) {
+    queueNotificationFanout(batch, [task.createdBy, task.assigneeId], {
+      type: 'status_update',
+      actorId: input.actorId,
+      actorName: input.actorName,
+      taskId: input.taskId,
+      projectId: task.projectId,
+      taskTitle: task.title ?? 'a task',
+      snippet: `${task.status} → ${input.status}`,
+    })
+  }
 
   await batch.commit()
 }
@@ -1561,17 +1798,55 @@ export interface AddCommentInput {
   authorName: string
   content: string
   attachments?: Attachment[]
+  // @mention support (features.notifications). projectId + taskTitle enrich the
+  // mention notifications; mentionedUids drives the fan-out.
+  mentionedUids?: string[]
+  projectId?: string
+  taskTitle?: string
 }
 
 export async function addComment(input: AddCommentInput): Promise<string> {
-  const ref = await addDoc(tenantCol('tasks', input.taskId, 'comments'), {
+  const mentioned = Array.from(new Set(input.mentionedUids ?? []))
+  // Bare addDoc is fine when there's nothing to fan out; otherwise batch the
+  // comment + mention notifications so they commit atomically.
+  if (mentioned.length === 0 || !input.projectId) {
+    const ref = await addDoc(tenantCol('tasks', input.taskId, 'comments'), {
+      taskId: input.taskId,
+      authorId: input.authorId,
+      authorName: input.authorName,
+      content: input.content,
+      attachments: input.attachments ?? [],
+      ...(mentioned.length ? { mentionedUids: mentioned } : {}),
+      createdAt: serverTimestamp(),
+    })
+    return ref.id
+  }
+
+  const batch = writeBatch(db)
+  const ref = doc(tenantCol('tasks', input.taskId, 'comments'))
+  batch.set(ref, {
     taskId: input.taskId,
     authorId: input.authorId,
     authorName: input.authorName,
     content: input.content,
     attachments: input.attachments ?? [],
+    mentionedUids: mentioned,
     createdAt: serverTimestamp(),
   })
+  const snippet = input.content.trim().slice(0, 140)
+  for (const uid of mentioned) {
+    queueNotification(batch, {
+      recipientId: uid,
+      type: 'mention',
+      actorId: input.authorId,
+      actorName: input.authorName,
+      taskId: input.taskId,
+      projectId: input.projectId,
+      taskTitle: input.taskTitle ?? 'a task',
+      snippet,
+    })
+  }
+  await batch.commit()
   return ref.id
 }
 
@@ -1702,7 +1977,12 @@ export async function transitionTaskFromReview(
     assigneeName?: string
     title?: string
     projectId?: string
+    createdBy?: string
+    links?: TaskLink[]
   }
+
+  // Approving moves the task to done — same completion gate as setTaskStatus.
+  if (input.decision === 'approve') await assertBlockersComplete(task.links)
 
   const batch = writeBatch(db)
 
@@ -1742,6 +2022,18 @@ export async function transitionTaskFromReview(
       payload: trimmed ? { note: trimmed } : {},
       batch,
     })
+    // Status-update notification: creator + assignee, minus the reviewer.
+    if (task.projectId) {
+      queueNotificationFanout(batch, [task.createdBy, task.assigneeId], {
+        type: 'status_update',
+        actorId: input.authorId,
+        actorName: input.authorName,
+        taskId: input.taskId,
+        projectId: task.projectId,
+        taskTitle: task.title ?? 'a task',
+        snippet: 'in_review → done',
+      })
+    }
   } else {
     const nextAssigneeId = input.newAssigneeId ?? task.assigneeId ?? null
     const nextAssigneeName = input.newAssigneeName ?? task.assigneeName ?? null
@@ -1804,6 +2096,19 @@ export async function transitionTaskFromReview(
         batch,
       })
     }
+    // Status-update notification: creator + the (possibly new) assignee, minus
+    // the reviewer.
+    if (task.projectId) {
+      queueNotificationFanout(batch, [task.createdBy, nextAssigneeId], {
+        type: 'status_update',
+        actorId: input.authorId,
+        actorName: input.authorName,
+        taskId: input.taskId,
+        projectId: task.projectId,
+        taskTitle: task.title ?? 'a task',
+        snippet: 'in_review → in_progress',
+      })
+    }
   }
 
   await batch.commit()
@@ -1822,4 +2127,336 @@ export async function transitionTaskFromReview(
       })
     }
   }
+}
+
+// --- Task linking (features.taskLinking) -------------------------------------
+// Same-project links only. A link is stored on BOTH docs (target carries the
+// inverse relation) so either side renders it. Titles are denormalized and
+// immutable, so no join is needed to display a link.
+
+export interface LinkTasksInput {
+  sourceTaskId: string
+  sourceTitle: string
+  targetTaskId: string
+  targetTitle: string
+  relation: TaskLinkRelation
+  projectId: string
+  actorId: string
+  actorName: string
+}
+
+export async function linkTasks(input: LinkTasksInput): Promise<void> {
+  if (input.sourceTaskId === input.targetTaskId) {
+    throw new Error('A task cannot be linked to itself.')
+  }
+  // arrayUnion can't dedupe TaskLink objects (createdAt differs per attempt),
+  // so guard against a double-link with a read.
+  const sourceRef = tenantDoc('tasks', input.sourceTaskId)
+  const sourceSnap = await getDoc(sourceRef)
+  if (!sourceSnap.exists()) throw new Error('Task not found')
+  const existing = (sourceSnap.data() as { links?: TaskLink[] }).links ?? []
+  if (existing.some((l) => l.taskId === input.targetTaskId)) {
+    throw new Error('These tasks are already linked.')
+  }
+
+  const now = Timestamp.now()
+  const batch = writeBatch(db)
+  const sourceLink: TaskLink = {
+    taskId: input.targetTaskId,
+    title: input.targetTitle,
+    relation: input.relation,
+    createdAt: now,
+    createdBy: input.actorId,
+  }
+  const targetLink: TaskLink = {
+    taskId: input.sourceTaskId,
+    title: input.sourceTitle,
+    relation: INVERSE_RELATION[input.relation],
+    createdAt: now,
+    createdBy: input.actorId,
+  }
+  batch.update(sourceRef, { links: arrayUnion(sourceLink), updatedAt: serverTimestamp() })
+  batch.update(tenantDoc('tasks', input.targetTaskId), {
+    links: arrayUnion(targetLink),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.linked',
+    targetType: 'task',
+    targetId: input.sourceTaskId,
+    targetTitle: input.sourceTitle,
+    projectId: input.projectId,
+    payload: { linkedTaskId: input.targetTaskId, relation: input.relation },
+    batch,
+  })
+  await batch.commit()
+}
+
+export interface UnlinkTasksInput {
+  sourceTaskId: string
+  targetTaskId: string
+  projectId: string
+  actorId: string
+  actorName: string
+}
+
+export async function unlinkTasks(input: UnlinkTasksInput): Promise<void> {
+  // arrayRemove can't match TaskLink objects (createdAt etc.), so we read+filter
+  // the arrays. That read-modify-write must be atomic: a plain batch would lose
+  // a concurrent linkTasks (arrayUnion) that landed after our read, leaving the
+  // two docs asymmetric. A transaction re-reads and retries on contention, so
+  // any concurrently-added link survives. Tolerate a missing target (still clean
+  // the source side — defensive against stale links).
+  const sourceRef = tenantDoc('tasks', input.sourceTaskId)
+  const targetRef = tenantDoc('tasks', input.targetTaskId)
+
+  await runTransaction(db, async (tx) => {
+    const [sourceSnap, targetSnap] = await Promise.all([tx.get(sourceRef), tx.get(targetRef)])
+    if (sourceSnap.exists()) {
+      const links = (sourceSnap.data() as { links?: TaskLink[] }).links ?? []
+      tx.update(sourceRef, {
+        links: links.filter((l) => l.taskId !== input.targetTaskId),
+        updatedAt: serverTimestamp(),
+      })
+    }
+    if (targetSnap.exists()) {
+      const links = (targetSnap.data() as { links?: TaskLink[] }).links ?? []
+      tx.update(targetRef, {
+        links: links.filter((l) => l.taskId !== input.sourceTaskId),
+        updatedAt: serverTimestamp(),
+      })
+    }
+  })
+
+  // Audit outside the transaction (a new doc, no contention) so a transaction
+  // retry can't write duplicate audit rows.
+  await recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.unlinked',
+    targetType: 'task',
+    targetId: input.sourceTaskId,
+    projectId: input.projectId,
+    payload: { unlinkedTaskId: input.targetTaskId },
+  })
+}
+
+// --- Task duplication (features.taskDuplication) -----------------------------
+// Dedicated write (not addTeamTask) so we keep parentTaskId/kind/workType and
+// avoid addTeamTask's task_setup auto-advance + attach dance. Everything needed
+// is on the source Task the caller already holds — no pre-reads.
+
+export async function duplicateTask(
+  source: Task,
+  actor: { uid: string; displayName: string },
+  overrides?: {
+    title?: string
+    description?: string
+    // Explicit assignee override. Presence of the key wins (incl. `null` to
+    // unassign); absent → copy the source's assignee. `assigneeName` should be
+    // passed alongside so the copy carries the denormalized display name.
+    assigneeId?: string | null
+    assigneeName?: string | null
+    // Optional team retarget (cross-team duplication). Absent → keep the source's
+    // team. Pass `teamName` alongside for the denormalized caption. If the chosen
+    // team isn't attached to the project, it's auto-attached (mirrors addSubtask).
+    teamId?: string
+    teamName?: string
+  },
+): Promise<string> {
+  const title = overrides?.title?.trim() || `Copy of ${source.title}`
+  const description = overrides?.description ?? source.description ?? ''
+  const assigneeId =
+    overrides && 'assigneeId' in overrides ? overrides.assigneeId ?? null : source.assigneeId ?? null
+  const assigneeName =
+    overrides && 'assigneeName' in overrides
+      ? overrides.assigneeName ?? null
+      : source.assigneeName ?? null
+  const teamId = overrides?.teamId ?? source.teamId
+  const teamName = overrides?.teamName ?? source.teamName ?? ''
+
+  // Cross-team retarget: check whether the chosen team is attached to the project
+  // and needs the same auto-attach dance addSubtask/addTeamTask do. Same-team
+  // duplication (the common path) skips both reads.
+  const crossTeam = teamId !== source.teamId
+  let needsAttach = false
+  let teamLeadId: string | null = null
+  if (crossTeam) {
+    const projectSnap = await getDoc(tenantDoc('projects', source.projectId))
+    const teamIds: string[] = projectSnap.exists()
+      ? ((projectSnap.data() as { teamIds?: string[] }).teamIds ?? [])
+      : []
+    needsAttach = !teamIds.includes(teamId)
+    if (needsAttach) {
+      const teamSnap = await getDoc(tenantDoc('teams', teamId))
+      teamLeadId = teamSnap.exists()
+        ? ((teamSnap.data() as { leadId?: string }).leadId ?? null)
+        : null
+    }
+  }
+
+  const batch = writeBatch(db)
+  const newRef = doc(tenantCol('tasks'))
+
+  batch.set(newRef, {
+    projectId: source.projectId,
+    teamId,
+    parentTaskId: source.parentTaskId ?? null,
+    ...(source.parentTitle ? { parentTitle: source.parentTitle } : {}),
+    kind: effectiveKind(source),
+    title,
+    description,
+    assigneeId,
+    ...(assigneeName ? { assigneeName } : {}),
+    status: 'todo',
+    priority: source.priority,
+    ...(source.dueDate ? { dueDate: source.dueDate } : {}),
+    ...(teamName ? { teamName } : {}),
+    ...(source.projectTitle ? { projectTitle: source.projectTitle } : {}),
+    ...(source.workType ? { workType: source.workType } : {}),
+    subtaskCount: 0,
+    subtaskDoneCount: 0,
+    attachments: [], // refs share external storage objects — don't copy
+    reviewerId: null,
+    reviewerName: null,
+    // no links (would be asymmetric), no completedAt
+    createdBy: actor.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+
+  // The copy sits beside the source under the same parent, if any.
+  if (source.parentTaskId) {
+    batch.update(tenantDoc('tasks', source.parentTaskId), {
+      subtaskCount: increment(1),
+      updatedAt: serverTimestamp(),
+    })
+  }
+
+  if (needsAttach) {
+    // Attach the chosen team to the project (mirrors addSubtask): grant the
+    // assignee (if any) + the new team's lead project access, back-link the team.
+    const grants = [
+      ...(assigneeId ? [assigneeId] : []),
+      ...(teamLeadId ? [teamLeadId] : []),
+    ]
+    batch.update(tenantDoc('projects', source.projectId), {
+      teamIds: arrayUnion(teamId),
+      ...(grants.length ? { accessKeys: arrayUnion(...grants) } : {}),
+      updatedAt: serverTimestamp(),
+    })
+    batch.update(tenantDoc('teams', teamId), {
+      projectIds: arrayUnion(source.projectId),
+    })
+  } else if (assigneeId) {
+    // Preserve the access invariant for the (possibly reassigned) assignee (idempotent).
+    batch.update(tenantDoc('projects', source.projectId), {
+      accessKeys: arrayUnion(assigneeId),
+      updatedAt: serverTimestamp(),
+    })
+  }
+
+  recordAuditEvent({
+    actorId: actor.uid,
+    actorName: actor.displayName,
+    action: 'task.duplicated',
+    targetType: 'task',
+    targetId: newRef.id,
+    targetTitle: title,
+    projectId: source.projectId,
+    teamId,
+    payload: {
+      sourceTaskId: source.id,
+      ...(crossTeam ? { crossTeam: true, teamAttached: needsAttach } : {}),
+    },
+    batch,
+  })
+
+  // Notify the assignee (features.notifications), minus the actor.
+  if (assigneeId) {
+    queueNotification(batch, {
+      recipientId: assigneeId,
+      type: 'assignment',
+      actorId: actor.uid,
+      actorName: actor.displayName,
+      taskId: newRef.id,
+      projectId: source.projectId,
+      taskTitle: title,
+    })
+  }
+
+  await batch.commit()
+  return newRef.id
+}
+
+// Edit a task's title/description (task creator + anyone with update rights).
+// Titles are denormalized in a few places (children's parentTitle for board
+// captions, the inverse TaskLink.title on linked docs) — so a title change
+// propagates to keep those captions from going stale. Navigation always uses
+// ids, so this is caption-consistency, not correctness-critical.
+export interface UpdateTaskDetailsInput {
+  taskId: string
+  title: string
+  description: string
+  actorId: string
+  actorName: string
+}
+
+export async function updateTaskDetails(input: UpdateTaskDetailsInput): Promise<void> {
+  const title = input.title.trim()
+  if (!title) throw new Error('Title is required.')
+
+  const ref = tenantDoc('tasks', input.taskId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('Task not found')
+  const task = snap.data() as {
+    title?: string
+    projectId?: string
+    teamId?: string
+    links?: TaskLink[]
+  }
+  const titleChanged = (task.title ?? '') !== title
+
+  // Read the propagation targets BEFORE opening the batch (Firestore batches
+  // can't read). Children carry a denormalized parentTitle; each linked doc
+  // carries an inverse link whose title points back at this task.
+  let childDocs: Awaited<ReturnType<typeof getDocs>>['docs'] = []
+  const linkedUpdates: { ref: DocumentReference; links: TaskLink[] }[] = []
+  if (titleChanged) {
+    const childrenSnap = await getDocs(
+      query(tenantCol('tasks'), where('parentTaskId', '==', input.taskId)),
+    )
+    childDocs = childrenSnap.docs
+    for (const link of task.links ?? []) {
+      const otherSnap = await getDoc(tenantDoc('tasks', link.taskId))
+      if (!otherSnap.exists()) continue
+      const otherLinks = (otherSnap.data() as { links?: TaskLink[] }).links ?? []
+      linkedUpdates.push({
+        ref: otherSnap.ref,
+        links: otherLinks.map((l) => (l.taskId === input.taskId ? { ...l, title } : l)),
+      })
+    }
+  }
+
+  const batch = writeBatch(db)
+  batch.update(ref, { title, description: input.description, updatedAt: serverTimestamp() })
+  if (titleChanged) {
+    for (const c of childDocs) batch.update(c.ref, { parentTitle: title })
+    for (const u of linkedUpdates) batch.update(u.ref, { links: u.links })
+  }
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.updated',
+    targetType: 'task',
+    targetId: input.taskId,
+    targetTitle: title,
+    ...(task.projectId ? { projectId: task.projectId } : {}),
+    ...(task.teamId ? { teamId: task.teamId } : {}),
+    payload: { titleChanged },
+    batch,
+  })
+  await batch.commit()
 }

@@ -5,6 +5,9 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import Logo from './Logo'
 import { lazy, Suspense } from 'react'
 import ThemeToggle from './ThemeToggle'
+import NotificationBell from './NotificationBell'
+import NavbarAdminMenu, { type AdminNavItem } from './NavbarAdminMenu'
+import NavbarAccountMenu from './NavbarAccountMenu'
 
 // Sandbox slots — lazy-loaded so production bundles never fetch them.
 const SandboxMenu = __IS_SANDBOX__
@@ -26,7 +29,7 @@ function initialsFor(user: { displayName?: string | null; email?: string | null 
 }
 
 const navLinkCls = ({ isActive }: { isActive: boolean }) =>
-  `rounded-md px-3 py-1.5 text-sm font-medium transition ${
+  `whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition ${
     isActive
       ? 'bg-fill-4 text-fg'
       : 'text-fg-muted hover:bg-fill-2 hover:text-fg-strong'
@@ -50,6 +53,14 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 
+  // Admin destinations collapse into a single "Admin" dropdown on desktop; only
+  // the ones this user can reach are listed, and the group hides entirely if none.
+  const adminItems: AdminNavItem[] = [
+    canViewMembers && { to: '/admin/members', label: 'Members' },
+    canViewReports && { to: '/admin', end: true, label: 'Admin Analytics' },
+    canViewSettings && { to: '/admin/config', label: 'Configuration' },
+  ].filter(Boolean) as AdminNavItem[]
+
   useEffect(() => {
     setMobileOpen(false)
   }, [location.pathname])
@@ -66,17 +77,20 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-6">
-          <Link to="/" className="flex items-center gap-3 text-fg transition hover:opacity-90">
+        <div className="flex min-w-0 items-center gap-6">
+          <Link
+            to="/"
+            className="flex shrink-0 items-center gap-3 text-fg transition hover:opacity-90"
+          >
             <Logo height={26} />
             <span className="hidden h-6 w-px bg-line-strong sm:block" />
-            <span className="hidden text-sm font-medium tracking-tight text-fg-strong sm:block">
+            <span className="hidden whitespace-nowrap text-sm font-medium tracking-tight text-fg-strong sm:block">
               {APP_NAME}
             </span>
           </Link>
 
           {user && (
-            <nav className="hidden items-center gap-1 md:flex">
+            <nav className="hidden items-center gap-1.5 lg:flex">
               <NavLink to="/" end className={navLinkCls}>
                 Home
               </NavLink>
@@ -89,56 +103,10 @@ export default function Navbar() {
               <NavLink to="/teams" className={navLinkCls}>
                 Teams
               </NavLink>
-              {canViewMembers && (
-                <NavLink to="/admin/members" className={navLinkCls}>
-                  Members
-                </NavLink>
-              )}
-              {canViewReports && (
-                <NavLink to="/admin" end className={navLinkCls}>
-                  Admin Analytics
-                </NavLink>
-              )}
-              {/* RELEASE(kpi-reports): uncomment to restore the KPI Reports
-                  navbar entry (icon-only; the label span surfaces on
-                  hover/focus to keep the crowded navbar compact). Also restore
-                  the TrendingUp import + canViewKpiReports flag above.
-              {canViewKpiReports && (
-                <NavLink
-                  to="/admin/reports"
-                  aria-label="KPI Reports"
-                  className={(args) => `group relative ${navLinkCls(args)}`}
-                >
-                  <TrendingUp size={16} aria-hidden />
-                  <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md border border-line bg-elevated px-2 py-1 text-xs text-fg opacity-0 shadow-md transition group-hover:opacity-100 group-focus-visible:opacity-100">
-                    KPI Reports
-                  </span>
-                </NavLink>
-              )}
-              */}
-              {canViewSettings && (
-                <NavLink
-                  to="/admin/config"
-                  className={navLinkCls}
-                  aria-label="Configuration"
-                  title="Configuration"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden
-                  >
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06A2 2 0 1 1 4.2 16.96l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06A2 2 0 1 1 7.04 4.2l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
-                </NavLink>
-              )}
+              {/* RELEASE(kpi-reports): to restore the KPI Reports entry, add
+                  `canViewKpiReports && { to: '/admin/reports', label: 'KPI Reports' }`
+                  to the `adminItems` array above and restore the flag. */}
+              {adminItems.length > 0 && <NavbarAdminMenu items={adminItems} />}
             </nav>
           )}
         </div>
@@ -150,52 +118,46 @@ export default function Navbar() {
                 <SandboxMenu />
               </Suspense>
             ) : null}
-            <ThemeToggle />
+            <NotificationBell />
 
             {SandboxIdentityPill ? (
-              <Suspense fallback={null}>
-                <SandboxIdentityPill />
-              </Suspense>
+              /* Sandbox build keeps its dedicated identity switcher + inline
+                 controls — not consolidated into the account menu. */
+              <>
+                <ThemeToggle />
+                <Suspense fallback={null}>
+                  <SandboxIdentityPill />
+                </Suspense>
+                <button
+                  onClick={() => signOut()}
+                  className="hidden rounded-md border border-line bg-fill-2 px-3 py-1.5 text-sm text-fg-muted transition hover:bg-fill-3 hover:text-fg lg:inline-flex"
+                >
+                  Sign out
+                </button>
+              </>
             ) : (
               <>
-                <div className="hidden items-center gap-3 rounded-full border border-line bg-fill-2 py-1.5 pl-1.5 pr-3 sm:flex">
-                  <div
-                    aria-hidden
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-gradient-br text-[11px] font-semibold text-white"
-                  >
-                    {initialsFor(user)}
-                  </div>
-                  <span
-                    className="max-w-45 truncate text-sm text-fg-muted"
-                    title={user.email ?? undefined}
-                  >
-                    {user.email}
-                  </span>
-                </div>
-
-                <div
-                  aria-hidden
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gradient-br text-xs font-semibold text-white sm:hidden"
-                  title={user.email ?? undefined}
-                >
-                  {initialsFor(user)}
-                </div>
+                {/* Mobile: one-tap theme (on desktop it lives in the account menu). */}
+                <span className="lg:hidden">
+                  <ThemeToggle />
+                </span>
+                {/* Desktop: identity + theme + sign out consolidated behind the avatar. */}
+                <NavbarAccountMenu
+                  className="hidden lg:block"
+                  displayName={profile?.displayName}
+                  email={user.email}
+                  initials={initialsFor(user)}
+                  onSignOut={signOut}
+                />
               </>
             )}
-
-            <button
-              onClick={() => signOut()}
-              className="hidden rounded-md border border-line bg-fill-2 px-3 py-1.5 text-sm text-fg-muted transition hover:bg-fill-3 hover:text-fg md:inline-flex"
-            >
-              Sign out
-            </button>
 
             <button
               type="button"
               onClick={() => setMobileOpen((o) => !o)}
               aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={mobileOpen}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-fill-2 text-fg-muted transition hover:bg-fill-3 hover:text-fg md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line bg-fill-2 text-fg-muted transition hover:bg-fill-3 hover:text-fg lg:hidden"
             >
               {mobileOpen ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -215,7 +177,7 @@ export default function Navbar() {
       </div>
 
       {user && mobileOpen && (
-        <div className="md:hidden">
+        <div className="lg:hidden">
           <div
             className="fixed inset-0 top-16 z-30 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}

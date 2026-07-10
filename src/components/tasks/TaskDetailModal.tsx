@@ -18,7 +18,11 @@ export default function TaskDetailModal() {
       size="xl"
     >
       {task ? (
-        <TaskDetailContent task={task} />
+        // key by task id so per-task state (duplicating flag, approve error,
+        // etc.) resets when navigating between tasks in-place — this modal is a
+        // single persistent overlay route, so without a key React would reuse
+        // the instance and carry stale state (e.g. a stuck "Duplicating…").
+        <TaskDetailContent key={task.id} task={task} />
       ) : loading ? (
         <div className="py-10 text-center text-sm text-fg-subtle">Loading task…</div>
       ) : (

@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { getEffectiveAssignee } from '../../lib/effectiveAssignee'
+import { useFeature } from '../../contexts/AppConfigContext'
+import { KIND_STYLES, effectiveKind } from '../../lib/taskKind'
 import type { Task, TaskPriority, Team, User } from '../../types/models'
 
 interface Props {
@@ -41,6 +43,8 @@ function formatShortDate(ts: Timestamp | undefined): string | null {
 
 export default function TaskCard({ task, users, teams, parentTitle }: Props) {
   const location = useLocation()
+  const showDescription = useFeature('descriptionPreview')
+  const hierarchyOn = useFeature('taskHierarchy')
   const assignee = getEffectiveAssignee(task, users, teams)
   const priority = PRIORITY_STYLES[task.priority]
   const due = formatShortDate(task.dueDate)
@@ -49,6 +53,10 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
     task.status !== 'done' &&
     task.dueDate.toDate().getTime() < Date.now()
   const isSubtask = Boolean(task.parentTaskId)
+  const kind = effectiveKind(task)
+  // Fall back to the denormalized parentTitle when the bucketing layer couldn't
+  // resolve the parent (e.g. My-Tasks-fed boards where the parent isn't loaded).
+  const parentCaption = parentTitle ?? task.parentTitle ?? null
 
   return (
     <Link
@@ -56,14 +64,26 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
       state={{ backgroundLocation: location }}
       className="group block rounded-lg border border-line bg-card p-3 transition hover:border-line-strong hover:bg-fill-3"
     >
-      {isSubtask && parentTitle && (
+      {isSubtask && parentCaption && (
         <div className="mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider text-fg-faint">
           <span aria-hidden>↳</span>
-          <span className="truncate">{parentTitle}</span>
+          <span className="truncate">{parentCaption}</span>
+        </div>
+      )}
+
+      {hierarchyOn && kind !== 'task' && (
+        <div
+          className={`mb-1 inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${KIND_STYLES[kind].cls}`}
+        >
+          {KIND_STYLES[kind].label}
         </div>
       )}
 
       <div className="line-clamp-2 text-sm font-medium text-fg">{task.title}</div>
+
+      {showDescription && task.description?.trim() && (
+        <div className="mt-0.5 line-clamp-1 text-xs text-fg-subtle">{task.description}</div>
+      )}
 
       <div className="mt-2 flex items-center gap-2 text-xs">
         <span className={`inline-flex items-center gap-1 ${priority.cls}`}>

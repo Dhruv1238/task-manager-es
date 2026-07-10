@@ -4,9 +4,9 @@ import {  onSnapshot, Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useAllTeams } from '../hooks/useAllTeams'
-import { useProjectTasks } from '../hooks/useProjectTasks'
+import { useAllProjectTasks } from '../hooks/useAllProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
-import { useLeadRoleName, useProjectWorkflow } from '../contexts/AppConfigContext'
+import { useLeadRoleName, useProjectWorkflow, useFeature } from '../contexts/AppConfigContext'
 import { uploadAsset } from '../lib/uploadAsset'
 import { addProjectAttachment, tenantDoc } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
@@ -23,7 +23,12 @@ import ProgressRing from '../components/charts/ProgressRing'
 import PerTeamProgress from '../components/charts/PerTeamProgress'
 import OverdueTasksList from '../components/charts/OverdueTasksList'
 import StatusDonut from '../components/charts/StatusDonut'
-import { aggregateProgress, formatPercent } from '../lib/progress'
+import {
+  aggregateDeepProgress,
+  aggregateProgress,
+  buildChildrenIndex,
+  formatPercent,
+} from '../lib/progress'
 import type { Project, Task, Team, User } from '../types/models'
 import { isProjectClosed } from '../lib/projectStatus'
 
@@ -61,11 +66,15 @@ function TeamCard({
   projectId,
   users,
   teamTasks,
+  childrenIndex,
+  hierarchyOn,
 }: {
   team: Team
   projectId: string
   users: Map<string, User>
   teamTasks: Task[]
+  childrenIndex: Map<string, Task[]>
+  hierarchyOn: boolean
 }) {
   const lead = users.get(team.leadId)
   const others = team.memberIds
@@ -75,7 +84,9 @@ function TeamCard({
   const visible = others.slice(0, 3)
   const extra = Math.max(0, others.length - visible.length)
 
-  const progress = aggregateProgress(teamTasks)
+  const progress = hierarchyOn
+    ? aggregateDeepProgress(teamTasks, childrenIndex)
+    : aggregateProgress(teamTasks)
   const openCount = teamTasks.filter((t) => t.status !== 'done').length
 
   return (
@@ -159,7 +170,16 @@ export default function ProjectDetail() {
   const [tab, setTab] = useState<ProjectTab>('overview')
   const { users } = useAllUsers()
   const { teams } = useAllTeams()
-  const { tasks: projectTasks } = useProjectTasks(projectId)
+  // Full task set (includes subtasks) so hierarchy-aware progress can roll up
+  // grandchildren. topLevel preserves the previous top-level-only semantics
+  // for team buckets, counts and lists. Same query ProjectBoard already mounts.
+  const { tasks: allProjectTasks } = useAllProjectTasks(projectId)
+  const hierarchyOn = useFeature('taskHierarchy')
+  const projectTasks = useMemo(
+    () => allProjectTasks.filter((t) => !t.parentTaskId),
+    [allProjectTasks],
+  )
+  const childrenIndex = useMemo(() => buildChildrenIndex(allProjectTasks), [allProjectTasks])
   const {
     isAdmin,
     isSuperAdmin,
@@ -226,8 +246,11 @@ export default function ProjectDetail() {
   }, [projectTasks])
 
   const overallProgress = useMemo(
-    () => aggregateProgress(projectTasks),
-    [projectTasks],
+    () =>
+      hierarchyOn
+        ? aggregateDeepProgress(projectTasks, childrenIndex)
+        : aggregateProgress(projectTasks),
+    [hierarchyOn, projectTasks, childrenIndex],
   )
 
   if (loading) {
@@ -491,6 +514,8 @@ export default function ProjectDetail() {
                   projectId={project.id}
                   users={userById}
                   teamTasks={tasksByTeam.get(t.id) ?? []}
+                  childrenIndex={childrenIndex}
+                  hierarchyOn={hierarchyOn}
                 />
               ))}
             </div>

@@ -56,6 +56,7 @@ const COLLECTIONS_TO_WIPE = [
   'teams',
   'workflows',
   'auditEvents',
+  'notifications',
 ] as const
 
 // Doc paths under /config/. We delete instead of overwriting so the wizard's
@@ -113,6 +114,7 @@ const COLLECTIONS_TO_WIPE_KEEPING_PEOPLE = [
   'tasks',
   'auditEvents',
   'workflows',
+  'notifications',
 ] as const
 
 /**
@@ -213,10 +215,6 @@ function clearLocalStorage(): void {
   if (typeof window === 'undefined') return
   // Known fixed keys.
   const FIXED_KEYS = [
-    'appConfig:v1',
-    // appConfig cache key was bumped to v2 (chat-default flip); clear both so a
-    // stale v2 cache doesn't survive a reset.
-    'appConfig:v2',
     'orgStructure:v1',
     'workflowRegistry:v1',
     'projects:viewMode',
@@ -232,10 +230,17 @@ function clearLocalStorage(): void {
   // chatSync:v1:{uid}, workflowDraft:{uid}:v1 (future). Walk the keystore
   // and remove anything that matches.
   const PREFIX_PATTERNS = [
+    // Match every appConfig cache version (v1/v2/v3/…) so a bump to STORAGE_KEY
+    // can never again drift out of sync with this reset (previously v3 was left
+    // behind, booting a "fresh" tenant with the old tenant's feature toggles).
+    /^appConfig:v\d+$/,
     /^workflow:.+:v1$/,
     /^orgSetupWizard:v1:.+$/,
     /^chatSync:v1:.+$/,
     /^workflowDraft:.+:v1$/,
+    // Per-project/team board filters (feature: board filter persistence).
+    /^boardFilters:.+$/,
+    /^teamBoardFilters:.+$/,
   ]
   const toRemove: string[] = []
   for (let i = 0; i < window.localStorage.length; i += 1) {

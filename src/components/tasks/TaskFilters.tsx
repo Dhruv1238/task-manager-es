@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Team, TaskPriority, TaskStatus, User } from '../../types/models'
+import type { Team, TaskKind, TaskPriority, TaskStatus, User } from '../../types/models'
 
 export interface TaskFilterState {
   statuses: Set<TaskStatus>
   priorities: Set<TaskPriority>
+  kinds: Set<TaskKind>
   assigneeId: string | null
   teamId: string | null
 }
@@ -11,6 +12,7 @@ export interface TaskFilterState {
 export const EMPTY_FILTERS: TaskFilterState = {
   statuses: new Set(),
   priorities: new Set(),
+  kinds: new Set(),
   assigneeId: null,
   teamId: null,
 }
@@ -18,6 +20,7 @@ export const EMPTY_FILTERS: TaskFilterState = {
 export interface TaskFilterable {
   status: TaskStatus
   priority: TaskPriority
+  kind?: TaskKind
   effectiveAssigneeId: string | null
   teamId?: string | null
 }
@@ -29,6 +32,8 @@ export function applyFilters(
   return tasks.map((t) => {
     if (filters.statuses.size > 0 && !filters.statuses.has(t.status)) return false
     if (filters.priorities.size > 0 && !filters.priorities.has(t.priority)) return false
+    // Kind filter: tasks with no kind read as 'task' (matches effectiveKind).
+    if (filters.kinds.size > 0 && !filters.kinds.has(t.kind ?? 'task')) return false
     if (filters.assigneeId !== null && t.effectiveAssigneeId !== filters.assigneeId)
       return false
     if (filters.teamId !== null && (t.teamId ?? null) !== filters.teamId) return false
@@ -48,6 +53,13 @@ const PRIORITY_PILLS: { value: TaskPriority; label: string; activeCls: string }[
   { value: 'low', label: 'Low', activeCls: 'bg-fill-4 text-fg' },
   { value: 'medium', label: 'Medium', activeCls: 'bg-tone-warn-bg text-tone-warn-fg' },
   { value: 'high', label: 'High', activeCls: 'bg-tone-danger-bg text-tone-danger-fg' },
+]
+
+const KIND_PILLS: { value: TaskKind; label: string; activeCls: string }[] = [
+  { value: 'epic', label: 'Epic', activeCls: 'bg-brand-soft text-brand' },
+  { value: 'story', label: 'Story', activeCls: 'bg-tone-info-bg text-tone-info-fg' },
+  { value: 'task', label: 'Task', activeCls: 'bg-fill-4 text-fg' },
+  { value: 'subtask', label: 'Subtask', activeCls: 'bg-fill-4 text-fg' },
 ]
 
 function toggle<T>(set: Set<T>, value: T): Set<T> {
@@ -289,6 +301,7 @@ interface Props {
   onChange: (next: TaskFilterState) => void
   members: User[]
   showStatus?: boolean
+  showKind?: boolean
   teams?: Team[]
 }
 
@@ -297,11 +310,13 @@ export default function TaskFilters({
   onChange,
   members,
   showStatus = true,
+  showKind = false,
   teams,
 }: Props) {
   const hasAny =
     value.statuses.size > 0 ||
     value.priorities.size > 0 ||
+    value.kinds.size > 0 ||
     value.assigneeId !== null ||
     value.teamId !== null
 
@@ -356,6 +371,29 @@ export default function TaskFilters({
           )
         })}
       </div>
+
+      {showKind && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs uppercase tracking-wider text-fg-subtle">Type</span>
+          {KIND_PILLS.map((p) => {
+            const active = value.kinds.has(p.value)
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => onChange({ ...value, kinds: toggle(value.kinds, p.value) })}
+                className={
+                  active
+                    ? `${basePill} border-transparent ${p.activeCls}`
+                    : `${basePill} border-line bg-fill-1 text-fg-subtle hover:bg-fill-2`
+                }
+              >
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <span className="text-xs uppercase tracking-wider text-fg-subtle">Assignee</span>

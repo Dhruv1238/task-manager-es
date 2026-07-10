@@ -9,7 +9,7 @@ import {
 } from 'react'
 import {   getDoc, getDocs, onSnapshot, Timestamp } from 'firebase/firestore'
 import { tenantCol, tenantDoc } from '../lib/firestore'
-import type { AppConfig, OrgStructure } from '../types/models'
+import type { AppConfig, FeatureKey, OrgStructure } from '../types/models'
 import { DEFAULT_ORG_STRUCTURE } from '../types/models'
 import type { Workflow, WorkflowRegistry } from '../types/workflow'
 import { WORKFLOW_REGISTRY_ID } from '../types/workflow'
@@ -18,10 +18,27 @@ import { useAuth } from './AuthContext'
 // Bumped v1→v2 when chat became enabled-by-default: invalidates any cached
 // appConfig still holding the old `features.chat: false`, so the new default
 // takes effect on the next load instead of waiting out the 24h cache TTL.
-const STORAGE_KEY = 'appConfig:v2'
+// Bumped v2→v3 when the org-wide feature toggles landed (FEATURE_DEFAULTS):
+// forces a fresh fetch so cached configs without the new keys re-sync.
+const STORAGE_KEY = 'appConfig:v3'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const REGISTRY_STORAGE_KEY = 'workflowRegistry:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+// Per-feature fallbacks when the key is missing from the appConfig doc.
+// NOT a blanket default: pre-existing capabilities must stay on for tenants
+// whose doc predates the key (taskHierarchy — subtasks already exist in prod),
+// while genuinely new surfaces stay off until an admin enables them.
+// notifications additionally requires its composite index to be built before
+// it is flipped on (see useMyNotifications).
+export const FEATURE_DEFAULTS: Record<FeatureKey, boolean> = {
+  taskHierarchy: true,
+  descriptionPreview: true,
+  notifications: false,
+  taskLinking: false,
+  taskDuplication: false,
+  crossTeamSubtasks: false,
+}
 
 // Default config — used when no Firestore doc exists yet AND no localStorage
 // snapshot has been captured.
@@ -34,6 +51,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     // always on (useChatEnabled() returns true unconditionally) and the Firestore
     // rules no longer gate on it. Nothing reads this value anymore.
     chat: true,
+    ...FEATURE_DEFAULTS,
   },
 }
 
@@ -666,6 +684,21 @@ export function useChatEnabled(): boolean {
   // Firestore gate). Per-project visibility is still enforced via
   // canViewProjectChat; this just stops gating the whole feature on a flag.
   return true
+}
+
+// Org-wide feature toggle, flipped by super_admins on /admin/config.
+// Missing key → FEATURE_DEFAULTS fallback (docs predating the key need no
+// migration). Gates creation affordances only — never hide existing data.
+export function useFeature(key: FeatureKey): boolean {
+  const { config } = useAppConfigContext()
+  return config.features?.[key] ?? FEATURE_DEFAULTS[key]
+}
+
+// Non-React variant for lib code (e.g. queueNotification in lib/firestore.ts).
+// Reads the cached snapshot, so a flag flipped elsewhere can lag up to the
+// cache TTL — callers must treat this as best-effort and gate display too.
+export function isFeatureEnabled(key: FeatureKey): boolean {
+  return getAppConfigSnapshot().features?.[key] ?? FEATURE_DEFAULTS[key]
 }
 
 // Live-onSnapshot variant for the admin screen ONLY. Mounts a listener while

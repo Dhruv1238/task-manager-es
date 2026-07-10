@@ -10,6 +10,9 @@ type SingleProps = {
   mode: 'single'
   value: string | null
   onChange: (uid: string | null) => void
+  // When true, a clear (×) control appears on the trigger while a user is
+  // selected, letting single-mode callers reset to null (e.g. "Unassigned").
+  clearable?: boolean
 }
 type MultiProps = {
   mode: 'multi'
@@ -245,6 +248,22 @@ export default function UserPicker(props: Props) {
               ))
             )}
           </div>
+          {props.mode === 'single' && props.clearable && props.value && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                props.onChange(null)
+              }}
+              className="shrink-0 rounded p-0.5 text-fg-subtle transition hover:bg-fill-4 hover:text-fg"
+              aria-label="Clear selection"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
           <svg
             width="16"
             height="16"

@@ -64,6 +64,13 @@ export interface User {
   // project.chatLastMessageAt to render unread dots on the projects list and to
   // compute the in-project unread count.
   chatLastReadAt?: { [projectId: string]: Timestamp }
+  // Discord-style per-type notification opt-outs (features.notifications). A
+  // missing key means opted IN — the bell filters by these at display time.
+  notificationPrefs?: {
+    mention?: boolean
+    assignment?: boolean
+    statusUpdate?: boolean
+  }
   // Account activation state. Optional → a missing field means active (no
   // backfill of existing docs required). A 'deactivated' user is bounced at
   // sign-in (AuthContext) and denied all data by the isActive() Firestore rule.
@@ -202,6 +209,25 @@ export interface Attachment {
   uploadedAt: Timestamp
 }
 
+// Where a task sits in the Epic → Story → Task → Subtask hierarchy. This is an
+// attribute, not a separate entity — everything is still a `tasks` doc with a
+// parentTaskId. Legacy docs have no `kind`: read them via effectiveKind()
+// (taskKind.ts), which treats a missing value as 'task' (or 'subtask' when
+// parentTaskId is set). Only surfaces when features.taskHierarchy is on.
+export type TaskKind = 'epic' | 'story' | 'task' | 'subtask'
+
+// A directional relation between two same-project tasks. Stored on BOTH docs
+// (the target carries the inverse relation) so either side renders the link.
+export type TaskLinkRelation = 'relates_to' | 'blocks' | 'blocked_by' | 'duplicates'
+
+export interface TaskLink {
+  taskId: string
+  title: string // denormalized; task titles are immutable so it can't go stale
+  relation: TaskLinkRelation
+  createdAt: Timestamp // Timestamp.now() — serverTimestamp() is illegal in arrays
+  createdBy: string
+}
+
 export interface Task {
   id: string
   projectId: string
@@ -233,6 +259,13 @@ export interface Task {
   workType?: WorkType
   reviewerId?: string | null
   reviewerName?: string | null
+
+  // Hierarchy (features.taskHierarchy). kind is the tier; parentTitle is
+  // denormalized from the parent at creation for breadcrumbs/board captions.
+  kind?: TaskKind
+  parentTitle?: string
+  // Same-project task links (features.taskLinking).
+  links?: TaskLink[]
 }
 
 export interface Comment {
@@ -244,6 +277,33 @@ export interface Comment {
   attachments: Attachment[]
   createdAt: Timestamp
   editedAt?: Timestamp
+  // UIDs @mentioned in this comment (features.notifications). Drives per-user
+  // mention notifications; missing/empty on legacy comments.
+  mentionedUids?: string[]
+}
+
+// In-app notification (features.notifications). Named AppNotification to avoid
+// clashing with the DOM `Notification` global. Stored at tenantCol('notifications').
+// Write-always / filter-at-display: the fan-out never reads recipient prefs
+// (queueNotification just skips the actor); each client filters by its own
+// notificationPrefs at render time, so muting is retroactive (Discord-style).
+export type NotificationType = 'mention' | 'assignment' | 'status_update'
+
+export interface AppNotification {
+  id: string
+  recipientId: string
+  type: NotificationType
+  actorId: string
+  actorName: string
+  taskId: string
+  projectId: string
+  taskTitle: string
+  snippet?: string // mention: comment excerpt; status_update: "todo → done"
+  // User-driven "done" flag. The bell badge counts UNRESOLVED notifications;
+  // resolving is an explicit action (per-row check or "mark all"), never
+  // automatic on open.
+  resolved: boolean
+  createdAt: Timestamp
 }
 
 // Task template config doc shape (Firestore at /config/taskTemplates).
@@ -265,6 +325,19 @@ export interface TaskTemplateConfig {
 // Phase 2b retired `pipeline.enabled` — workflow selection lives in
 // /workflows/_registry. The migration script writes deleteField() to strip
 // the legacy key from existing docs.
+// Org-wide feature switches. Flipped by super_admins on /admin/config.
+// Toggles gate creation affordances only, never data visibility — data written
+// while a flag was on stays readable after it turns off (no zombie states).
+// Missing keys fall back per-feature via FEATURE_DEFAULTS (AppConfigContext),
+// so existing appConfig docs keep working without a migration.
+export type FeatureKey =
+  | 'taskHierarchy'
+  | 'taskLinking'
+  | 'taskDuplication'
+  | 'notifications'
+  | 'descriptionPreview'
+  | 'crossTeamSubtasks'
+
 export interface AppConfig {
   // Monotonic counter bumped on every save. Drives cache invalidation when the
   // admin screen pushes an update — clients compare to localStorage and refresh.
@@ -273,7 +346,7 @@ export interface AppConfig {
   updatedBy: string
   features: {
     chat: boolean
-  }
+  } & Partial<Record<FeatureKey, boolean>>
 }
 
 // Org-structure singleton doc shape (Firestore at /config/orgStructure).
@@ -371,6 +444,10 @@ export type AuditAction =
   | 'task.review_rejected'
   | 'task.attachment_added'
   | 'task.attachment_removed'
+  | 'task.duplicated'
+  | 'task.linked'
+  | 'task.unlinked'
+  | 'task.updated'
   // Admin-sensitive
   | 'user.created'
   | 'user.role_changed'
