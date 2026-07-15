@@ -4,6 +4,7 @@ import { Timestamp } from 'firebase/firestore'
 import type { Project, User } from '../../types/models'
 import type {
   ActionInput,
+  DetailsUpdatedEvent,
   FieldUpdatedEvent,
   ProjectHistoryEvent,
   RoleAssignedEvent,
@@ -370,6 +371,8 @@ export default function ProjectHistorySidePanel({ open, onClose, project }: Prop
                         userById={userById}
                       />
                     )
+                  case 'details_updated':
+                    return <DetailsUpdatedRow key={idx} event={e} userById={userById} />
                 }
               })}
             </ul>
@@ -535,6 +538,45 @@ function FieldUpdatedRow({
           <span className="text-fg-strong">{formatPayloadValue(event.value)}</span>
         )}
       </div>
+      <div className="mt-1 text-xs text-fg-subtle">by {actor?.displayName ?? 'system'}</div>
+    </li>
+  )
+}
+
+function DetailsUpdatedRow({
+  event,
+  userById,
+}: {
+  event: DetailsUpdatedEvent
+  userById: Map<string, User>
+}) {
+  const actor = userById.get(event.updatedBy)
+  const fmtDate = (ms: number | null) =>
+    typeof ms === 'number' ? new Date(ms).toLocaleDateString() : 'none'
+  const { changes } = event
+  const lines: string[] = []
+  if (changes.title) lines.push(`Title: "${changes.title.from}" → "${changes.title.to}"`)
+  if (changes.description) lines.push('Description edited')
+  if (changes.deadline) lines.push(`Deadline: ${fmtDate(changes.deadline.from)} → ${fmtDate(changes.deadline.to)}`)
+  if (changes.submissionDate)
+    lines.push(`Submission: ${fmtDate(changes.submissionDate.from)} → ${fmtDate(changes.submissionDate.to)}`)
+  if (changes.presentationDate)
+    lines.push(`Presentation: ${fmtDate(changes.presentationDate.from)} → ${fmtDate(changes.presentationDate.to)}`)
+
+  return (
+    <li className="rounded-xl border border-line bg-fill-1 p-4">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium pill-cool border">
+          <span className="h-1.5 w-1.5 rounded-full bg-cool-dot" aria-hidden />
+          Details updated
+        </span>
+        <span className="ml-auto text-[11px] text-fg-subtle">→ {fmtRelative(event.updatedAt)}</span>
+      </div>
+      <ul className="mt-2 space-y-0.5 text-sm text-fg">
+        {lines.map((l, i) => (
+          <li key={i}>{l}</li>
+        ))}
+      </ul>
       <div className="mt-1 text-xs text-fg-subtle">by {actor?.displayName ?? 'system'}</div>
     </li>
   )

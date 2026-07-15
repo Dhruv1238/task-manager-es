@@ -368,12 +368,31 @@ export interface FieldUpdatedEvent {
   updatedBy: string
 }
 
+// Core project details (title/description/flow dates) edited via
+// updateProjectDetails. Only changed keys are present. Dates are epoch millis
+// (or null when cleared) — never Timestamp instances — so the array stays lean
+// and renderers stay dumb. `description` is a flag only (no text blob stored).
+export interface DetailsUpdatedEvent {
+  kind: 'details_updated'
+  changes: {
+    title?: { from: string; to: string }
+    description?: true
+    deadline?: { from: number | null; to: number | null }
+    submissionDate?: { from: number | null; to: number | null }
+    presentationDate?: { from: number | null; to: number | null }
+  }
+  // Timestamp.now() — serverTimestamp() is illegal inside array elements.
+  updatedAt: Timestamp
+  updatedBy: string
+}
+
 export type ProjectHistoryEvent =
   | StageEvent
   | WorkflowAssignmentEvent
   | WorkflowChangeEvent
   | RoleAssignedEvent
   | FieldUpdatedEvent
+  | DetailsUpdatedEvent
 
 // Thrown by workflowEvaluator.performAction when inputs fail validation or the
 // caller lacks permission. UI surfaces .message; engine code reads .code.

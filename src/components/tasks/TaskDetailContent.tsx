@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import type { Timestamp } from 'firebase/firestore'
+import { Timestamp } from 'firebase/firestore'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { useSubtasks } from '../../hooks/useSubtasks'
@@ -24,6 +24,7 @@ import LinkedTasksSection from './LinkedTasksSection'
 import StatusMenu from './StatusMenu'
 import TaskAttachmentsSection from './TaskAttachmentsSection'
 import CommentsSection from './CommentsSection'
+import TaskActivitySection from './TaskActivitySection'
 import SubmitForReviewModal from '../workflow/SubmitForReviewModal'
 import SendBackModal from '../workflow/SendBackModal'
 import type { Task, TaskPriority, TaskStatus, Team, User } from '../../types/models'
@@ -69,6 +70,19 @@ function formatDate(ts: Timestamp | undefined): string {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+  })
+}
+
+// Due dates are stored as UTC midnight (date-only) and the picker prefills in
+// UTC — format them in UTC so the display matches what was entered (no ±1-day
+// drift for users west of UTC). Use formatDate for real event timestamps.
+function formatDueDate(ts: Timestamp | undefined): string {
+  if (!ts) return '—'
+  return ts.toDate().toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
   })
 }
 
@@ -139,7 +153,7 @@ function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
         <span className={`font-medium ${priority.cls}`}>{priority.label}</span>
         <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
           {overdue ? 'Overdue · ' : ''}
-          {formatDate(task.dueDate)}
+          {formatDueDate(task.dueDate)}
         </span>
       </div>
     </Link>
@@ -170,10 +184,13 @@ export default function TaskDetailContent({ task }: Props) {
   const [statusError, setStatusError] = useState<string | null>(null)
   const [duplicateOpen, setDuplicateOpen] = useState(false)
 
-  // Inline title/description editing.
+  // Inline title/description/due-date editing.
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(task.title)
   const [editDescription, setEditDescription] = useState(task.description)
+  // 'YYYY-MM-DD' (empty = no due date). Parsed/formatted in UTC to round-trip
+  // symmetrically with creation (Timestamp.fromDate(new Date('YYYY-MM-DD'))).
+  const [editDueDate, setEditDueDate] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -227,6 +244,7 @@ export default function TaskDetailContent({ task }: Props) {
   function startEditing() {
     setEditTitle(task.title)
     setEditDescription(task.description)
+    setEditDueDate(task.dueDate ? task.dueDate.toDate().toISOString().slice(0, 10) : '')
     setEditError(null)
     setEditing(true)
   }
@@ -244,6 +262,7 @@ export default function TaskDetailContent({ task }: Props) {
         taskId: task.id,
         title: editTitle,
         description: editDescription,
+        dueDate: editDueDate ? Timestamp.fromDate(new Date(editDueDate)) : null,
         actorId: user.uid,
         actorName: profile.displayName,
       })
@@ -412,12 +431,17 @@ export default function TaskDetailContent({ task }: Props) {
         <span className={`font-medium ${priority.cls}`}>{priority.label} priority</span>
         <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-muted'}>
           {overdue ? 'Overdue · ' : ''}
-          {task.dueDate ? `Due ${formatDate(task.dueDate)}` : 'No deadline'}
+          {task.dueDate ? `Due ${formatDueDate(task.dueDate)}` : 'No deadline'}
         </span>
         <span className="text-fg-subtle">
           {task.teamName ?? team?.name ?? '—'}
           <span className="mx-2 text-fg-faint">·</span>
           {task.projectTitle ?? '—'}
+        </span>
+        <span className="text-fg-subtle">
+          Created by {userById.get(task.createdBy)?.displayName ?? '—'}
+          <span className="mx-2 text-fg-faint">·</span>
+          {formatDate(task.createdAt)}
         </span>
         <Link
           to={`/projects/${task.projectId}/boards`}
@@ -492,6 +516,29 @@ export default function TaskDetailContent({ task }: Props) {
               rows={4}
               className="w-full resize-none rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
             />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="edit-task-due" className="text-xs font-medium uppercase tracking-wider text-fg-subtle">
+              Due date
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="edit-task-due"
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                className="scheme-dark rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
+              />
+              {editDueDate && (
+                <button
+                  type="button"
+                  onClick={() => setEditDueDate('')}
+                  className="rounded-md px-2 py-1 text-xs text-fg-subtle transition hover:bg-fill-3 hover:text-fg"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
           {editError && (
             <div role="alert" className="rounded-lg border border-tone-danger-bd bg-tone-danger-bg px-3 py-2 text-xs text-tone-danger-fg">
@@ -586,6 +633,8 @@ export default function TaskDetailContent({ task }: Props) {
         projectId={task.projectId}
         taskTitle={task.title}
       />
+
+      <TaskActivitySection taskId={task.id} />
 
       <SubmitForReviewModal
         open={submitReviewOpen}

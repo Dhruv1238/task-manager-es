@@ -12,6 +12,7 @@ import { addProjectAttachment, tenantDoc } from '../lib/firestore'
 import FileBadge, { formatFileSize } from '../components/ui/FileBadge'
 import ProgressBar from '../components/ui/ProgressBar'
 import ManageTeamsModal from '../components/admin/ManageTeamsModal'
+import EditProjectModal from '../components/admin/EditProjectModal'
 import ProjectRolesSection from '../components/project/ProjectRolesSection'
 import ProjectFieldsSection from '../components/project/ProjectFieldsSection'
 import SubtasksPanel from '../components/tasks/SubtasksPanel'
@@ -165,6 +166,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [manageOpen, setManageOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [statusUpdateOpen, setStatusUpdateOpen] = useState(false)
   const [tab, setTab] = useState<ProjectTab>('overview')
@@ -447,6 +449,15 @@ export default function ProjectDetail() {
               Manage Teams
             </button>
           )}
+          {canEditProjectMeta && (
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="rounded-lg border border-line bg-fill-2 px-4 py-2 text-sm font-medium text-fg-strong transition hover:bg-fill-4 hover:text-fg"
+            >
+              Edit
+            </button>
+          )}
         </div>
       </div>
 
@@ -713,6 +724,12 @@ export default function ProjectDetail() {
       <UpdateProjectStatusModal
         open={statusUpdateOpen}
         onClose={() => setStatusUpdateOpen(false)}
+        project={project}
+      />
+
+      <EditProjectModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
         project={project}
       />
     </div>

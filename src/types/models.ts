@@ -126,6 +126,10 @@ export interface Project {
   // ProjectStatus stays the canonical-value type for seeds, legacy data, and
   // isProjectClosed()'s closing set. Resolve display via resolveStatusDisplay().
   status: ProjectStatus | string
+  // Denormalized lowercase title for prefix search/sort (Projects list +
+  // ProjectPicker). Written at creation and recomputed by updateProjectDetails
+  // on rename — must stay in sync with `title` or search/sort silently drops it.
+  titleLower?: string
   deadline?: Timestamp
   teamIds: string[]
   // Denormalized visibility array (Phase 2d redefinition): role-holder uids ∪
@@ -434,6 +438,8 @@ export type AuditAction =
   // Phase 2d: project-role assignment + custom-field edits.
   | 'project.role_assigned'
   | 'project.field_updated'
+  // Core details (title/description/flow dates) edited via updateProjectDetails.
+  | 'project.updated'
   // Task lifecycle
   | 'task.created'
   | 'subtask.created'

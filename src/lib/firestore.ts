@@ -28,6 +28,7 @@ import type {
 import { childKind, effectiveKind } from './taskKind'
 import { INVERSE_RELATION } from './taskLinks'
 import type {
+  DetailsUpdatedEvent,
   FieldUpdatedEvent,
   ProjectHistoryEvent,
   RoleAssignedEvent,
@@ -48,6 +49,7 @@ import {
   arrayUnion,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -976,6 +978,130 @@ export async function updateProjectStatus(input: UpdateProjectStatusInput): Prom
     batch,
   })
   await batch.commit()
+}
+
+// Edit a project's core details (title/description/flow dates). Deliberately
+// touches NOTHING workflow-engine-owned (status, currentStageId, workflowId,
+// pinnedWorkflow, leadUid, counters, outcomeLog, stageEnteredAt) — those have
+// their own paths. Recomputes `titleLower` on rename (drives Projects search/
+// sort + ProjectPicker) and propagates the new title to every task's
+// denormalized `projectTitle` (caption-consistency, non-atomic by design —
+// navigation is id-based). Dates are presence-keyed: undefined = untouched,
+// null = clear.
+export interface UpdateProjectDetailsInput {
+  projectId: string
+  title: string
+  description: string
+  deadline?: Timestamp | null
+  submissionDate?: Timestamp | null
+  presentationDate?: Timestamp | null
+  actorId: string
+  actorName: string
+}
+
+export async function updateProjectDetails(input: UpdateProjectDetailsInput): Promise<void> {
+  const title = input.title.trim()
+  if (!title) throw new Error('Title is required.')
+
+  const ref = tenantDoc('projects', input.projectId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('Project not found')
+  const project = snap.data() as {
+    title?: string
+    description?: string
+    deadline?: Timestamp
+    submissionDate?: Timestamp
+    presentationDate?: Timestamp
+  }
+
+  // Diff → changes (dates as millis|null). Only changed keys are recorded.
+  const dateDiff = (
+    key: 'deadline' | 'submissionDate' | 'presentationDate',
+  ): { from: number | null; to: number | null } | undefined => {
+    const next = input[key]
+    if (next === undefined) return undefined
+    const fromMs = project[key]?.toMillis() ?? null
+    const toMs = next?.toMillis() ?? null
+    return fromMs === toMs ? undefined : { from: fromMs, to: toMs }
+  }
+
+  const titleChanged = (project.title ?? '') !== title
+  const descriptionChanged = (project.description ?? '') !== input.description
+  const deadlineChange = dateDiff('deadline')
+  const submissionChange = dateDiff('submissionDate')
+  const presentationChange = dateDiff('presentationDate')
+
+  const changes: DetailsUpdatedEvent['changes'] = {
+    ...(titleChanged ? { title: { from: project.title ?? '', to: title } } : {}),
+    ...(descriptionChanged ? { description: true as const } : {}),
+    ...(deadlineChange ? { deadline: deadlineChange } : {}),
+    ...(submissionChange ? { submissionDate: submissionChange } : {}),
+    ...(presentationChange ? { presentationDate: presentationChange } : {}),
+  }
+  // Nothing actually changed — don't write audit/history noise.
+  if (Object.keys(changes).length === 0) return
+
+  // Read the rename-propagation targets BEFORE the batch (batches can't read).
+  let taskDocs: Awaited<ReturnType<typeof getDocs>>['docs'] = []
+  if (titleChanged) {
+    const tasksSnap = await getDocs(
+      query(tenantCol('tasks'), where('projectId', '==', input.projectId)),
+    )
+    taskDocs = tasksSnap.docs
+  }
+
+  const event: DetailsUpdatedEvent = {
+    kind: 'details_updated',
+    changes,
+    updatedAt: Timestamp.now(),
+    updatedBy: input.actorId,
+  }
+
+  const batch = writeBatch(db)
+  batch.update(ref, {
+    title,
+    ...(titleChanged ? { titleLower: title.toLowerCase() } : {}),
+    description: input.description,
+    ...(input.deadline !== undefined ? { deadline: input.deadline ?? deleteField() } : {}),
+    ...(input.submissionDate !== undefined
+      ? { submissionDate: input.submissionDate ?? deleteField() }
+      : {}),
+    ...(input.presentationDate !== undefined
+      ? { presentationDate: input.presentationDate ?? deleteField() }
+      : {}),
+    projectHistory: arrayUnion(event),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'project.updated',
+    targetType: 'project',
+    targetId: input.projectId,
+    targetTitle: title,
+    projectId: input.projectId,
+    payload: { changes },
+    batch,
+  })
+  await batch.commit()
+
+  // Propagate the rename to every task's denormalized projectTitle. Chunked at
+  // the 500-op batch limit; non-atomic with the rename on purpose (caption
+  // freshness, not correctness — see updateTaskDetails). Best-effort: a failed
+  // chunk is swallowed so it neither aborts the remaining chunks nor fails the
+  // already-committed rename. Any stragglers show the old caption (navigation is
+  // id-based, so harmless) and heal on the next rename.
+  if (titleChanged && taskDocs.length > 0) {
+    for (let i = 0; i < taskDocs.length; i += 500) {
+      const b = writeBatch(db)
+      for (const d of taskDocs.slice(i, i + 500)) b.update(d.ref, { projectTitle: title })
+      try {
+        await b.commit()
+      } catch {
+        // ignore — cosmetic caption sync, retried on the next rename
+      }
+    }
+  }
 }
 
 export interface SetProjectTeamsInput {
@@ -2400,6 +2526,8 @@ export interface UpdateTaskDetailsInput {
   taskId: string
   title: string
   description: string
+  // Presence-keyed: undefined = leave untouched; null = clear; Timestamp = set.
+  dueDate?: Timestamp | null
   actorId: string
   actorName: string
 }
@@ -2413,11 +2541,22 @@ export async function updateTaskDetails(input: UpdateTaskDetailsInput): Promise<
   if (!snap.exists()) throw new Error('Task not found')
   const task = snap.data() as {
     title?: string
+    description?: string
     projectId?: string
     teamId?: string
+    dueDate?: Timestamp
+    assigneeId?: string | null
+    createdBy?: string
     links?: TaskLink[]
   }
   const titleChanged = (task.title ?? '') !== title
+  const descriptionChanged = (task.description ?? '') !== input.description
+  const dueDateChanged =
+    input.dueDate !== undefined &&
+    (task.dueDate?.toMillis() ?? null) !== (input.dueDate?.toMillis() ?? null)
+  // No-op save (edit card opened and saved untouched) — skip the write so the
+  // Activity timeline isn't polluted with empty "edited the task" rows.
+  if (!titleChanged && !descriptionChanged && !dueDateChanged) return
 
   // Read the propagation targets BEFORE opening the batch (Firestore batches
   // can't read). Children carry a denormalized parentTitle; each linked doc
@@ -2441,7 +2580,12 @@ export async function updateTaskDetails(input: UpdateTaskDetailsInput): Promise<
   }
 
   const batch = writeBatch(db)
-  batch.update(ref, { title, description: input.description, updatedAt: serverTimestamp() })
+  batch.update(ref, {
+    title,
+    description: input.description,
+    ...(dueDateChanged ? { dueDate: input.dueDate ?? deleteField() } : {}),
+    updatedAt: serverTimestamp(),
+  })
   if (titleChanged) {
     for (const c of childDocs) batch.update(c.ref, { parentTitle: title })
     for (const u of linkedUpdates) batch.update(u.ref, { links: u.links })
@@ -2455,8 +2599,37 @@ export async function updateTaskDetails(input: UpdateTaskDetailsInput): Promise<
     targetTitle: title,
     ...(task.projectId ? { projectId: task.projectId } : {}),
     ...(task.teamId ? { teamId: task.teamId } : {}),
-    payload: { titleChanged },
+    // Millis, not Timestamp instances — matches the {from,to} plain-value
+    // convention and keeps the Activity renderer trivial.
+    payload: {
+      titleChanged,
+      ...(dueDateChanged
+        ? {
+            dueDate: {
+              from: task.dueDate?.toMillis() ?? null,
+              to: input.dueDate?.toMillis() ?? null,
+            },
+          }
+        : {}),
+    },
     batch,
   })
+  // Notify the creator + assignee (minus the actor) of a due-date change, so a
+  // moved deadline surfaces in their bell. Reuses the status_update channel.
+  if (dueDateChanged && task.projectId) {
+    // Due dates are stored as UTC midnight (date-only) — format in UTC so the
+    // snippet matches the picker/display instead of shifting a day west of UTC.
+    const fmtDue = (ts: Timestamp | null | undefined) =>
+      ts ? ts.toDate().toLocaleDateString(undefined, { timeZone: 'UTC' }) : 'none'
+    queueNotificationFanout(batch, [task.createdBy, task.assigneeId], {
+      type: 'status_update',
+      actorId: input.actorId,
+      actorName: input.actorName,
+      taskId: input.taskId,
+      projectId: task.projectId,
+      taskTitle: title,
+      snippet: `Due date: ${fmtDue(task.dueDate)} → ${fmtDue(input.dueDate)}`,
+    })
+  }
   await batch.commit()
 }
