@@ -64,6 +64,9 @@ export interface User {
   // project.chatLastMessageAt to render unread dots on the projects list and to
   // compute the in-project unread count.
   chatLastReadAt?: { [projectId: string]: Timestamp }
+  // Per-project "last opened the project" high-water marks for the corrigendum
+  // section — compared against project.corrigendumLastUploadAt for the unread badge.
+  corrigendumSeenAt?: { [projectId: string]: Timestamp }
   // Discord-style per-type notification opt-outs (features.notifications). A
   // missing key means opted IN — the bell filters by these at display time.
   notificationPrefs?: {
@@ -172,6 +175,10 @@ export interface Project {
   // project form gates their visibility on flowType, and ProjectDetail reads
   // them defensively (optional).
   submissionDate?: Timestamp
+  // True when submissionDate carries a meaningful time-of-day (stored as a local
+  // instant). Absent/false → date-only, stored at UTC midnight — format with
+  // timeZone:'UTC'. Lets the submission deadline optionally include a time.
+  submissionHasTime?: boolean
   presentationDate?: Timestamp
   // ─── Project roles + custom fields (Phase 2d) ────────────────────────────
   // Maps workflow.projectRoles[].id → assigned uid (single role) or uid[]
@@ -193,6 +200,9 @@ export interface Project {
   // Chat: denormalized "latest activity" timestamp, bumped in the same writeBatch
   // as every chat mutation so the projects-list unread dot needs zero extra reads.
   chatLastMessageAt?: Timestamp
+  // High-water mark for the corrigendum attachments section — bumped on every
+  // corrigendum upload; drives the per-user unread badge on the project list.
+  corrigendumLastUploadAt?: Timestamp
   // ─── Phase 3 additions (additive; legacy readers ignore) ─────────────────
   // Append-only log of outcome selections, written by executeOutcome. The v2
   // analogue of projectHistory stage events for branching rules.
@@ -211,6 +221,9 @@ export interface Attachment {
   sizeBytes: number
   uploadedBy: string
   uploadedAt: Timestamp
+  // Which project attachments section this belongs to. Absent = the general
+  // section; 'corrigendum' = the admin-named extra section (feature-gated).
+  section?: 'corrigendum'
 }
 
 // Where a task sits in the Epic → Story → Task → Subtask hierarchy. This is an
@@ -341,6 +354,9 @@ export type FeatureKey =
   | 'notifications'
   | 'descriptionPreview'
   | 'crossTeamSubtasks'
+  // A second, admin-named attachments section on projects (default "Corrigendum")
+  // with new-upload badges on the project list.
+  | 'corrigendumSection'
 
 export interface AppConfig {
   // Monotonic counter bumped on every save. Drives cache invalidation when the
@@ -351,6 +367,8 @@ export interface AppConfig {
   features: {
     chat: boolean
   } & Partial<Record<FeatureKey, boolean>>
+  // Display name for the corrigendumSection feature's section (absent → "Corrigendum").
+  corrigendumSectionName?: string
 }
 
 // Org-structure singleton doc shape (Firestore at /config/orgStructure).

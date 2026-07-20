@@ -7,6 +7,7 @@ import { useMyTasks } from '../hooks/useMyTasks'
 import { useMyLedTeamTasks } from '../hooks/useMyLedTeamTasks'
 import { useMyReviewQueue } from '../hooks/useMyReviewQueue'
 import { useProjectsAwaitingMyAction } from '../hooks/useProjectsAwaitingMyAction'
+import { useAllProjects } from '../hooks/useAllProjects'
 import StatusDonut from '../components/charts/StatusDonut'
 import PriorityBar from '../components/charts/PriorityBar'
 import UpcomingDeadlines from '../components/charts/UpcomingDeadlines'
@@ -248,8 +249,13 @@ function ReviewQueueSection({ tasks }: { tasks: Task[] }) {
   )
 }
 
-function ProjectsAwaitingActionSection() {
-  const { projects } = useProjectsAwaitingMyAction()
+function ProjectsAwaitingActionSection({ showSubmitted }: { showSubmitted: boolean }) {
+  const { projects: allActionable } = useProjectsAwaitingMyAction()
+  // Hide submitted projects unless the "Show submitted" toggle is on — same
+  // filter the task lists use, so the whole page hides/reveals in lockstep.
+  const projects = showSubmitted
+    ? allActionable
+    : allActionable.filter((a) => a.project.status !== 'submitted')
   if (projects.length === 0) return null
   return (
     <section className="mb-10" data-tour-id="projects-awaiting-action">
@@ -326,38 +332,62 @@ export default function Me() {
   } = useMyLedTeamTasks(lensUid)
   const { tasks: reviewQueue } = useMyReviewQueue(lensUid)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [showSubmitted, setShowSubmitted] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true)
 
+  // Project status by id — used to hide tasks whose project has been submitted
+  // (the work is off the assignee's plate). Fail open: a task whose project
+  // isn't in the map yet (loading / deleted) stays visible.
+  const { projects: allProjects } = useAllProjects()
+  const statusById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of allProjects) m.set(p.id, p.status)
+    return m
+  }, [allProjects])
+
+  // Submitted filter runs UPSTREAM of the completed filter so both the lists and
+  // the header stats agree on what's visible.
+  const visibleMine = useMemo(
+    () =>
+      showSubmitted ? myTasks : myTasks.filter((t) => statusById.get(t.projectId) !== 'submitted'),
+    [myTasks, showSubmitted, statusById],
+  )
+  const visibleLed = useMemo(
+    () =>
+      showSubmitted ? ledTasks : ledTasks.filter((t) => statusById.get(t.projectId) !== 'submitted'),
+    [ledTasks, showSubmitted, statusById],
+  )
+
   const filteredMine = useMemo(
-    () => (showCompleted ? myTasks : myTasks.filter((t) => t.status !== 'done')),
-    [myTasks, showCompleted],
+    () => (showCompleted ? visibleMine : visibleMine.filter((t) => t.status !== 'done')),
+    [visibleMine, showCompleted],
   )
   const filteredLed = useMemo(
-    () => (showCompleted ? ledTasks : ledTasks.filter((t) => t.status !== 'done')),
-    [ledTasks, showCompleted],
+    () => (showCompleted ? visibleLed : visibleLed.filter((t) => t.status !== 'done')),
+    [visibleLed, showCompleted],
   )
 
   const groupedMine = useMemo(() => groupByProjectTeam(filteredMine), [filteredMine])
   const groupedLed = useMemo(() => groupByProjectTeam(filteredLed), [filteredLed])
 
   const openCount = useMemo(
-    () => myTasks.filter((t) => t.status !== 'done').length,
-    [myTasks],
+    () => visibleMine.filter((t) => t.status !== 'done').length,
+    [visibleMine],
   )
-  const doneCount = myTasks.length - openCount
+  const doneCount = visibleMine.length - openCount
   const overdueCount = useMemo(
     () =>
-      [...myTasks, ...ledTasks].filter(
+      [...visibleMine, ...visibleLed].filter(
         (t) =>
           t.status !== 'done' &&
           t.dueDate &&
           t.dueDate.toDate().getTime() < Date.now(),
       ).length,
-    [myTasks, ledTasks],
+    [visibleMine, visibleLed],
   )
   const ledOpenCount = useMemo(
-    () => ledTasks.filter((t) => t.status !== 'done').length,
-    [ledTasks],
+    () => visibleLed.filter((t) => t.status !== 'done').length,
+    [visibleLed],
   )
 
   const firstName = lensProfile?.displayName?.split(/\s+/)[0] ?? ''
@@ -390,19 +420,30 @@ export default function Me() {
           </div>
         </div>
 
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            checked={showCompleted}
-            onChange={(e) => setShowCompleted(e.target.checked)}
-            className="h-4 w-4 rounded border-line-strong bg-fill-2 text-brand accent-brand"
-          />
-          Show completed
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-fg-muted">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(e) => setShowCompleted(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong bg-fill-2 text-brand accent-brand"
+            />
+            Show completed
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-fg-muted">
+            <input
+              type="checkbox"
+              checked={showSubmitted}
+              onChange={(e) => setShowSubmitted(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong bg-fill-2 text-brand accent-brand"
+            />
+            Show submitted
+          </label>
+        </div>
       </div>
 
       <ReviewQueueSection tasks={reviewQueue} />
-      <ProjectsAwaitingActionSection />
+      <ProjectsAwaitingActionSection showSubmitted={showSubmitted} />
 
       <section className="mb-10">
         <div className="mb-3">
@@ -435,7 +476,9 @@ export default function Me() {
             <p className="mt-2 text-sm text-fg-subtle">
               {myTasks.length === 0
                 ? 'When a team lead delegates a subtask to you, it will show up here.'
-                : 'Toggle "Show completed" to see what you finished.'}
+                : !showSubmitted && visibleMine.length < myTasks.length
+                  ? 'Some tasks are hidden because their project has been submitted — turn on "Show submitted" to see them.'
+                  : 'Toggle "Show completed" to see what you finished.'}
             </p>
           </div>
         ) : (
@@ -507,6 +550,9 @@ export default function Me() {
           </button>
 
           {showDashboard && (
+            // Analytics deliberately reflect ALL your tasks, independent of the
+            // Show completed / Show submitted view toggles (which only scope the
+            // lists above) — the charts are a full-picture overview.
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <StatusDonut
                 tasks={[...myTasks, ...ledTasks]}

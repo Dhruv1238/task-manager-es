@@ -551,15 +551,33 @@ function DetailsUpdatedRow({
   userById: Map<string, User>
 }) {
   const actor = userById.get(event.updatedBy)
+  // Date-only values are UTC-midnight → format in UTC (no ±1-day drift).
   const fmtDate = (ms: number | null) =>
-    typeof ms === 'number' ? new Date(ms).toLocaleDateString() : 'none'
+    typeof ms === 'number'
+      ? new Date(ms).toLocaleDateString(undefined, { timeZone: 'UTC' })
+      : 'none'
+  // Timed values are real local instants → include time, local zone.
+  const fmtDateTime = (ms: number | null) =>
+    typeof ms === 'number'
+      ? new Date(ms).toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : 'none'
   const { changes } = event
   const lines: string[] = []
   if (changes.title) lines.push(`Title: "${changes.title.from}" → "${changes.title.to}"`)
   if (changes.description) lines.push('Description edited')
   if (changes.deadline) lines.push(`Deadline: ${fmtDate(changes.deadline.from)} → ${fmtDate(changes.deadline.to)}`)
-  if (changes.submissionDate)
-    lines.push(`Submission: ${fmtDate(changes.submissionDate.from)} → ${fmtDate(changes.submissionDate.to)}`)
+  if (changes.submissionDate) {
+    const s = changes.submissionDate
+    const from = s.fromHasTime ? fmtDateTime(s.from) : fmtDate(s.from)
+    const to = s.toHasTime ? fmtDateTime(s.to) : fmtDate(s.to)
+    lines.push(`Submission: ${from} → ${to}`)
+  }
   if (changes.presentationDate)
     lines.push(`Presentation: ${fmtDate(changes.presentationDate.from)} → ${fmtDate(changes.presentationDate.to)}`)
 

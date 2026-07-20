@@ -12,10 +12,21 @@ interface Props {
   project: Project
 }
 
-// Dates round-trip in UTC (toISOString slice / Timestamp.fromDate(new Date(str)))
-// to match creation and avoid a ±1-day drift for non-UTC users.
+// Date-only values are UTC-midnight; round-trip them in UTC to avoid ±1-day
+// drift for non-UTC users (matches creation).
 function toDateInput(ts: Timestamp | undefined): string {
   return ts ? ts.toDate().toISOString().slice(0, 10) : ''
+}
+
+// A timed submission value is a real LOCAL instant — prefill from local date/time
+// parts so the round-trip is stable (UTC slicing would shift it for non-UTC users).
+function toLocalDateInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+function toLocalTimeInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 // Edit a project's core details (title, description, and the flow-appropriate
@@ -35,6 +46,7 @@ export default function EditProjectModal({ open, onClose, project }: Props) {
   const [description, setDescription] = useState('')
   const [deadline, setDeadline] = useState('')
   const [submissionDate, setSubmissionDate] = useState('')
+  const [submissionTime, setSubmissionTime] = useState('')
   const [presentationDate, setPresentationDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,7 +56,15 @@ export default function EditProjectModal({ open, onClose, project }: Props) {
       setTitle(project.title)
       setDescription(project.description ?? '')
       setDeadline(toDateInput(project.deadline))
-      setSubmissionDate(toDateInput(project.submissionDate))
+      // A timed submission prefills from local parts; a date-only one from UTC.
+      if (project.submissionDate && project.submissionHasTime) {
+        const d = project.submissionDate.toDate()
+        setSubmissionDate(toLocalDateInput(d))
+        setSubmissionTime(toLocalTimeInput(d))
+      } else {
+        setSubmissionDate(toDateInput(project.submissionDate))
+        setSubmissionTime('')
+      }
       setPresentationDate(toDateInput(project.presentationDate))
       setError(null)
       setSubmitting(false)
@@ -63,6 +83,12 @@ export default function EditProjectModal({ open, onClose, project }: Props) {
     setError(null)
     setSubmitting(true)
     const toTs = (v: string): Timestamp | null => (v ? Timestamp.fromDate(new Date(v)) : null)
+    // With a time, parse as a LOCAL instant; without, UTC-midnight date-only.
+    const submissionTs = submissionDate
+      ? Timestamp.fromDate(
+          new Date(submissionTime ? `${submissionDate}T${submissionTime}` : submissionDate),
+        )
+      : null
     try {
       await updateProjectDetails({
         projectId: project.id,
@@ -71,7 +97,11 @@ export default function EditProjectModal({ open, onClose, project }: Props) {
         // Only pass the date keys relevant to this flow; omitted keys are left
         // untouched. While the workflow is still loading, edit only text.
         ...(showDates && isCollab
-          ? { submissionDate: toTs(submissionDate), presentationDate: toTs(presentationDate) }
+          ? {
+              submissionDate: submissionTs,
+              submissionHasTime: !!(submissionDate && submissionTime),
+              presentationDate: toTs(presentationDate),
+            }
           : {}),
         ...(showDates && !isCollab ? { deadline: toTs(deadline) } : {}),
         actorId: user.uid,
@@ -137,15 +167,25 @@ export default function EditProjectModal({ open, onClose, project }: Props) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label htmlFor="edit-project-submission" className={labelCls}>
-                Submission date
+                Submission date <span className="font-normal text-fg-subtle">(time optional)</span>
               </label>
-              <input
-                id="edit-project-submission"
-                type="date"
-                value={submissionDate}
-                onChange={(e) => setSubmissionDate(e.target.value)}
-                className={`${inputCls} scheme-dark`}
-              />
+              <div className="flex gap-2">
+                <input
+                  id="edit-project-submission"
+                  type="date"
+                  value={submissionDate}
+                  onChange={(e) => setSubmissionDate(e.target.value)}
+                  className={`${inputCls} scheme-dark flex-1`}
+                />
+                <input
+                  type="time"
+                  aria-label="Submission time (optional)"
+                  value={submissionTime}
+                  onChange={(e) => setSubmissionTime(e.target.value)}
+                  disabled={!submissionDate}
+                  className={`${inputCls} scheme-dark w-32 disabled:opacity-50`}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="edit-project-presentation" className={labelCls}>

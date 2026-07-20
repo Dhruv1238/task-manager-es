@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ShieldCheck, ArrowRight } from 'lucide-react'
-import {  serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
+import { serverTimestamp, setDoc, Timestamp } from 'firebase/firestore'
 import { tenantDoc } from '../lib/firestore'
 import { useAuth } from '../contexts/AuthContext'
 import { isDevConfigUser } from '../components/DevConfigRoute'
@@ -234,6 +234,10 @@ const FEATURE_META: Record<FeatureKey, { label: string; hint: string }> = {
     label: 'Card description preview',
     hint: 'First line of the task description on board cards.',
   },
+  corrigendumSection: {
+    label: 'Extra attachments section',
+    hint: 'A second, named attachments section on projects (e.g. Corrigendum) with new-upload badges on the project list.',
+  },
 }
 
 const FEATURE_ORDER: FeatureKey[] = [
@@ -243,6 +247,7 @@ const FEATURE_ORDER: FeatureKey[] = [
   'taskDuplication',
   'notifications',
   'descriptionPreview',
+  'corrigendumSection',
 ]
 
 function effectiveFeatures(config: AppConfig): Record<FeatureKey, boolean> {
@@ -260,12 +265,15 @@ function FeatureToggle({
   label,
   hint,
   disabled,
+  children,
 }: {
   checked: boolean
   onChange: (next: boolean) => void
   label: string
   hint: string
   disabled?: boolean
+  // Optional sub-config rendered under the hint (aligned with the text column).
+  children?: ReactNode
 }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-line bg-card p-4">
@@ -289,6 +297,7 @@ function FeatureToggle({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-fg">{label}</div>
         <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>
+        {children && <div className="mt-3">{children}</div>}
       </div>
     </div>
   )
@@ -297,6 +306,7 @@ function FeatureToggle({
 function FeaturesSection({ baseline, adminUid }: { baseline: AppConfig; adminUid: string | null }) {
   const { setConfigOptimistic } = useAppConfigContext()
   const [draft, setDraft] = useState<Record<FeatureKey, boolean>>(() => effectiveFeatures(baseline))
+  const [corrigendumName, setCorrigendumName] = useState(baseline.corrigendumSectionName ?? '')
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -305,27 +315,42 @@ function FeaturesSection({ baseline, adminUid }: { baseline: AppConfig; adminUid
   // the switches reflect the server state, not a stale first render.
   useEffect(() => {
     setDraft(effectiveFeatures(baseline))
+    setCorrigendumName(baseline.corrigendumSectionName ?? '')
   }, [baseline.version]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const current = effectiveFeatures(baseline)
-  const dirty = FEATURE_ORDER.some((k) => draft[k] !== current[k])
+  const dirty =
+    FEATURE_ORDER.some((k) => draft[k] !== current[k]) ||
+    corrigendumName.trim() !== (baseline.corrigendumSectionName ?? '').trim()
 
   async function handleSave() {
     if (!adminUid || saving) return
     setSaving(true)
     setSaveError(null)
+    const trimmedName = corrigendumName.trim()
+    // Persist the section name only when the feature is on and a name is set;
+    // otherwise omit the key so the default label applies.
+    const useName = draft.corrigendumSection && !!trimmedName
     const next: AppConfig = {
       ...baseline,
       features: { ...baseline.features, ...draft },
+      corrigendumSectionName: useName ? trimmedName : undefined,
       version: baseline.version + 1,
       updatedBy: adminUid,
       updatedAt: Timestamp.now(),
     }
     try {
-      await setDoc(tenantDoc('config', 'appConfig'), {
+      // Full-document (non-merge) setDoc: a dropped key IS a deletion. Build the
+      // payload and remove corrigendumSectionName when clearing — writing
+      // undefined (Firestore rejects it) or deleteField() (illegal without merge)
+      // both throw here.
+      const payload: Record<string, unknown> = {
         ...next,
         updatedAt: serverTimestamp(),
-      })
+      }
+      if (useName) payload.corrigendumSectionName = trimmedName
+      else delete payload.corrigendumSectionName
+      await setDoc(tenantDoc('config', 'appConfig'), payload)
       setConfigOptimistic(next)
       setSavedAt(Date.now())
     } catch (e) {
@@ -351,7 +376,24 @@ function FeaturesSection({ baseline, adminUid }: { baseline: AppConfig; adminUid
             label={FEATURE_META[key].label}
             hint={FEATURE_META[key].hint}
             disabled={saving}
-          />
+          >
+            {key === 'corrigendumSection' && draft.corrigendumSection && (
+              <div className="space-y-1.5">
+                <label htmlFor="corrigendum-name" className="block text-xs font-medium text-fg-muted">
+                  Section name
+                </label>
+                <input
+                  id="corrigendum-name"
+                  type="text"
+                  value={corrigendumName}
+                  onChange={(e) => setCorrigendumName(e.target.value)}
+                  placeholder="Corrigendum"
+                  disabled={saving}
+                  className="w-full max-w-xs rounded-lg border border-line bg-fill-2 px-3 py-2 text-sm text-fg placeholder:text-fg-faint outline-none transition focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
+                />
+              </div>
+            )}
+          </FeatureToggle>
         ))}
       </div>
       {saveError && (

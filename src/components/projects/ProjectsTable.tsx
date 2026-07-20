@@ -4,11 +4,13 @@ import type { Project, User } from '../../types/models'
 import type { CustomFieldDef } from '../../types/workflow'
 import ProjectStatusPill from '../workflow/ProjectStatusPill'
 import UnreadChatBadge from './UnreadChatBadge'
+import CorrigendumBadge from './CorrigendumBadge'
 import FieldValue from '../fields/FieldValue'
 import StagePill from './StagePill'
+import ProjectHeadsCell from './ProjectHeadsCell'
 import WorkflowBadge from './WorkflowBadge'
 import { useProjectWorkflow } from '../../contexts/AppConfigContext'
-import { formatDeadline, submissionDeadline, isOverdue } from './projectListUtils'
+import { formatDeadline, submissionDeadline, deadlineHasTime, isOverdue } from './projectListUtils'
 
 // Server-sortable columns (stored fields with a Firestore orderBy). Deadline is
 // derived (submissionDate ?? deadline) and sorts client-side over loaded rows.
@@ -20,6 +22,10 @@ interface Props {
   userById: Map<string, User>
   chatEnabled: boolean
   chatLastReadAt: User['chatLastReadAt']
+  // The extra "corrigendum" section feature — its unread badge + the user's seen marks.
+  corrigendumEnabled: boolean
+  corrigendumSectionName: string
+  corrigendumSeenAt: User['corrigendumSeenAt']
   // Phase 2b: parent computes whether the workflow column adds signal. When a
   // single workflow is active (e.g. basic-only tenant), the column is
   // redundant and the table omits it.
@@ -109,6 +115,9 @@ export default function ProjectsTable({
   userById,
   chatEnabled,
   chatLastReadAt,
+  corrigendumEnabled,
+  corrigendumSectionName,
+  corrigendumSeenAt,
   showWorkflowColumn,
   listColumnFields,
   sort,
@@ -148,6 +157,9 @@ export default function ProjectsTable({
               )}
               <th scope="col" className="px-4 py-3">
                 Stage
+              </th>
+              <th scope="col" className="px-4 py-3">
+                Heads
               </th>
               {listColumnFields.map((f) => (
                 <th key={f.id} scope="col" className="px-4 py-3 whitespace-nowrap">
@@ -222,6 +234,13 @@ export default function ProjectsTable({
                           lastReadAt={chatLastReadAt?.[p.id]}
                         />
                       )}
+                      {corrigendumEnabled && (
+                        <CorrigendumBadge
+                          corrigendumLastUploadAt={p.corrigendumLastUploadAt}
+                          seenAt={corrigendumSeenAt?.[p.id]}
+                          label={corrigendumSectionName}
+                        />
+                      )}
                       <div className="min-w-0">
                         <a
                           href={href}
@@ -260,6 +279,9 @@ export default function ProjectsTable({
                   <td className="px-4 py-3 align-middle">
                     <StagePill project={p} />
                   </td>
+                  <td className="px-4 py-3 align-middle">
+                    <ProjectHeadsCell project={p} userById={userById} />
+                  </td>
 
                   {listColumnFields.map((f) => (
                     <td key={f.id} className="px-4 py-3 align-middle text-xs">
@@ -283,7 +305,7 @@ export default function ProjectsTable({
                       }`}
                     >
                       {overdue ? 'Overdue · ' : ''}
-                      {formatDeadline(submissionDeadline(p))}
+                      {formatDeadline(submissionDeadline(p), deadlineHasTime(p))}
                     </span>
                   </td>
 

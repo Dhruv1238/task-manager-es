@@ -28,6 +28,10 @@ interface Props {
   // Override the trigger label when the selected `value` doesn't map 1:1 to
   // an option's label (e.g. multi-select states rendered as "3 workflows").
   displayValue?: string
+  // Opt-in: show a filter input at the top of the menu (case-insensitive match
+  // on option label). Useful for long lists like a person picker.
+  searchable?: boolean
+  searchPlaceholder?: string
 }
 
 const GAP = 6
@@ -51,11 +55,22 @@ export default function Dropdown({
   align = 'left',
   menuClassName,
   displayValue,
+  searchable = false,
+  searchPlaceholder = 'Search…',
 }: Props) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<MenuPos | null>(null)
+
+  // Reset the filter each time the menu closes so it reopens clean.
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
+  const norm = query.trim().toLowerCase()
+  const matches = (o: DropdownOption) => !norm || o.label.toLowerCase().includes(norm)
 
   // Flattened option list — used for the trigger label lookup and height estimate
   // whether the menu is flat or grouped.
@@ -63,7 +78,9 @@ export default function Dropdown({
 
   // Estimate menu height for the flip decision (rows are ~36px, capped at the
   // menu's max-height of 288px) so we flip before the browser clips it.
-  const estHeight = Math.min(allOptions.length * 36 + (groups ? groups.length * 28 : 0) + 8, 288)
+  const estHeight =
+    Math.min(allOptions.length * 36 + (groups ? groups.length * 28 : 0) + 8, 288) +
+    (searchable ? 44 : 0)
 
   useLayoutEffect(() => {
     if (!open) {
@@ -168,6 +185,18 @@ export default function Dropdown({
             style={menuStyle}
             className={`overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl ${menuClassName ?? ''}`}
           >
+            {searchable && (
+              <div className="border-b border-line p-1.5">
+                <input
+                  autoFocus
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full rounded-md border border-line bg-fill-2 px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-faint outline-none focus:border-brand-edge focus:bg-fill-3 focus:ring-2 focus:ring-brand-ring"
+                />
+              </div>
+            )}
             <div className="max-h-72 overflow-y-auto">
               {(() => {
                 const renderOption = (opt: DropdownOption) => {
@@ -207,18 +236,30 @@ export default function Dropdown({
                   )
                 }
                 if (groups) {
-                  return groups
+                  const filteredGroups = groups
+                    .map((g) => ({ ...g, options: g.options.filter(matches) }))
                     .filter((g) => g.options.length)
-                    .map((g) => (
-                      <div key={g.label}>
-                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
-                          {g.label}
-                        </div>
-                        {g.options.map(renderOption)}
+                  if (filteredGroups.length === 0) {
+                    return (
+                      <div className="px-3 py-4 text-center text-xs text-fg-subtle">No matches.</div>
+                    )
+                  }
+                  return filteredGroups.map((g) => (
+                    <div key={g.label}>
+                      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
+                        {g.label}
                       </div>
-                    ))
+                      {g.options.map(renderOption)}
+                    </div>
+                  ))
                 }
-                return (options ?? []).map(renderOption)
+                const flat = (options ?? []).filter(matches)
+                if (flat.length === 0) {
+                  return (
+                    <div className="px-3 py-4 text-center text-xs text-fg-subtle">No matches.</div>
+                  )
+                }
+                return flat.map(renderOption)
               })()}
             </div>
           </div>,

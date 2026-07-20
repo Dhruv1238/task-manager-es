@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import ChartCard from './ChartCard'
 import { stageTone } from '../workflow/stageStyle'
-import { isProjectLive } from '../../lib/projectStatus'
+import { submissionGateOpen } from '../projects/projectListUtils'
 import type { Project } from '../../types/models'
 import type { Workflow } from '../../types/workflow'
 
@@ -26,7 +26,9 @@ export default function AtRiskBySubmission({ projects, workflow }: Props) {
       .filter(
         (p) =>
           p.workflowId === workflow.id &&
-          isProjectLive(p.status) &&
+          // Only projects still working toward submission — drops submitted/
+          // awarded/closed (a submitted project is no longer "at risk").
+          submissionGateOpen(p) &&
           p.currentStageId !== 'delivered' &&
           p.submissionDate,
       )

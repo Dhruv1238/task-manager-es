@@ -38,6 +38,7 @@ export const FEATURE_DEFAULTS: Record<FeatureKey, boolean> = {
   taskLinking: false,
   taskDuplication: false,
   crossTeamSubtasks: false,
+  corrigendumSection: false,
 }
 
 // Default config — used when no Firestore doc exists yet AND no localStorage
@@ -729,6 +730,11 @@ export function useOrgStructure(): OrgStructure {
 
 export function useLeadRoleName(): string {
   return useAppConfigContext().orgStructure.leadRoleName
+}
+
+// Admin-configured display name for the corrigendumSection feature (absent → "Corrigendum").
+export function useCorrigendumSectionName(): string {
+  return useAppConfigContext().config.corrigendumSectionName?.trim() || 'Corrigendum'
 }
 
 export function useHasCoordinator(): boolean {

@@ -378,7 +378,14 @@ export interface DetailsUpdatedEvent {
     title?: { from: string; to: string }
     description?: true
     deadline?: { from: number | null; to: number | null }
-    submissionDate?: { from: number | null; to: number | null }
+    // submissionDate may carry an optional time; fromHasTime/toHasTime tell the
+    // renderer whether each end is a datetime (local) or a date-only (UTC) value.
+    submissionDate?: {
+      from: number | null
+      to: number | null
+      fromHasTime?: boolean
+      toHasTime?: boolean
+    }
     presentationDate?: { from: number | null; to: number | null }
   }
   // Timestamp.now() — serverTimestamp() is illegal inside array elements.

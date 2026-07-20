@@ -59,6 +59,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [submissionDate, setSubmissionDate] = useState('')
+  const [submissionTime, setSubmissionTime] = useState('')
   const [presentationDate, setPresentationDate] = useState('')
   const [deadline, setDeadline] = useState('')
   // Phase 2d: per-role assignments (owner retired) + custom-field values.
@@ -82,6 +83,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
       setTitle('')
       setDescription('')
       setSubmissionDate('')
+      setSubmissionTime('')
       setPresentationDate('')
       setDeadline('')
       setRoleAssignments({})
@@ -287,9 +289,14 @@ export default function NewProjectModal({ open, onClose }: Props) {
         workflowId: pickedWorkflow.id,
         ...(pickedWorkflow.flowType === 'collaborative'
           ? {
+              // With a time, parse "YYYY-MM-DDTHH:mm" (LOCAL instant); date-only
+              // parses "YYYY-MM-DD" (UTC midnight). submissionHasTime tracks which.
               submissionDate: submissionDate
-                ? Timestamp.fromDate(new Date(submissionDate))
+                ? Timestamp.fromDate(
+                    new Date(submissionTime ? `${submissionDate}T${submissionTime}` : submissionDate),
+                  )
                 : undefined,
+              submissionHasTime: !!(submissionDate && submissionTime),
               presentationDate: presentationDate
                 ? Timestamp.fromDate(new Date(presentationDate))
                 : undefined,
@@ -487,13 +494,24 @@ export default function NewProjectModal({ open, onClose }: Props) {
                 <label htmlFor="project-submission" className="text-sm font-medium text-fg-muted">
                   Submission date <span className="font-normal text-fg-subtle">(to client)</span>
                 </label>
-                <input
-                  id="project-submission"
-                  type="date"
-                  value={submissionDate}
-                  onChange={(e) => setSubmissionDate(e.target.value)}
-                  className={`${inputCls} scheme-dark`}
-                />
+                <div className="flex gap-2">
+                  <input
+                    id="project-submission"
+                    type="date"
+                    value={submissionDate}
+                    onChange={(e) => setSubmissionDate(e.target.value)}
+                    className={`${inputCls} scheme-dark flex-1`}
+                  />
+                  <input
+                    type="time"
+                    aria-label="Submission time (optional)"
+                    value={submissionTime}
+                    onChange={(e) => setSubmissionTime(e.target.value)}
+                    disabled={!submissionDate}
+                    className={`${inputCls} scheme-dark w-32 disabled:opacity-50`}
+                  />
+                </div>
+                <p className="text-xs text-fg-subtle">Time is optional.</p>
               </div>
 
               <div className="space-y-1.5">

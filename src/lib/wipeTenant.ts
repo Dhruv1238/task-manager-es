@@ -198,6 +198,7 @@ async function resetUserDocs(): Promise<number> {
     batch.update(d.ref, {
       teamIds: [],
       chatLastReadAt: {},
+      corrigendumSeenAt: {},
     })
     inBatch += 1
     count += 1

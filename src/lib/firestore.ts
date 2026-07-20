@@ -738,6 +738,7 @@ export interface AddProjectInput {
   // 'collaborative' — the form's CollaborativeFields subcomponent surfaces
   // these inputs and omits them for other flow types.
   submissionDate?: Timestamp
+  submissionHasTime?: boolean
   presentationDate?: Timestamp
   // Auto-allocation hook: when the picked workflow's first-stage first action
   // is an `assign_lead` and the form supplied a lead uid, the project is
@@ -842,6 +843,7 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     projectHistory,
     // Collab-flow denormalisations (only present when supplied).
     ...(input.submissionDate ? { submissionDate: input.submissionDate } : {}),
+    ...(input.submissionDate && input.submissionHasTime ? { submissionHasTime: true } : {}),
     ...(input.presentationDate ? { presentationDate: input.presentationDate } : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -994,6 +996,7 @@ export interface UpdateProjectDetailsInput {
   description: string
   deadline?: Timestamp | null
   submissionDate?: Timestamp | null
+  submissionHasTime?: boolean
   presentationDate?: Timestamp | null
   actorId: string
   actorName: string
@@ -1011,6 +1014,7 @@ export async function updateProjectDetails(input: UpdateProjectDetailsInput): Pr
     description?: string
     deadline?: Timestamp
     submissionDate?: Timestamp
+    submissionHasTime?: boolean
     presentationDate?: Timestamp
   }
 
@@ -1030,12 +1034,26 @@ export async function updateProjectDetails(input: UpdateProjectDetailsInput): Pr
   const deadlineChange = dateDiff('deadline')
   const submissionChange = dateDiff('submissionDate')
   const presentationChange = dateDiff('presentationDate')
+  // The time flag can flip with equal millis (e.g. a UTC user setting 00:00) —
+  // diff it separately so a flag-only change isn't swallowed by the no-op guard.
+  const fromHasTime = project.submissionHasTime ?? false
+  const toHasTime = input.submissionHasTime ?? false
+  const hasTimeChanged = input.submissionDate !== undefined && fromHasTime !== toHasTime
+  const submissionEntry =
+    submissionChange || hasTimeChanged
+      ? {
+          from: project.submissionDate?.toMillis() ?? null,
+          to: input.submissionDate?.toMillis() ?? null,
+          fromHasTime,
+          toHasTime,
+        }
+      : undefined
 
   const changes: DetailsUpdatedEvent['changes'] = {
     ...(titleChanged ? { title: { from: project.title ?? '', to: title } } : {}),
     ...(descriptionChanged ? { description: true as const } : {}),
     ...(deadlineChange ? { deadline: deadlineChange } : {}),
-    ...(submissionChange ? { submissionDate: submissionChange } : {}),
+    ...(submissionEntry ? { submissionDate: submissionEntry } : {}),
     ...(presentationChange ? { presentationDate: presentationChange } : {}),
   }
   // Nothing actually changed — don't write audit/history noise.
@@ -1064,7 +1082,13 @@ export async function updateProjectDetails(input: UpdateProjectDetailsInput): Pr
     description: input.description,
     ...(input.deadline !== undefined ? { deadline: input.deadline ?? deleteField() } : {}),
     ...(input.submissionDate !== undefined
-      ? { submissionDate: input.submissionDate ?? deleteField() }
+      ? {
+          submissionDate: input.submissionDate ?? deleteField(),
+          // Keep the flag in lockstep: set only when a date+time is present;
+          // otherwise remove it (date-only, or the date was cleared).
+          submissionHasTime:
+            input.submissionDate && input.submissionHasTime ? true : deleteField(),
+        }
       : {}),
     ...(input.presentationDate !== undefined
       ? { presentationDate: input.presentationDate ?? deleteField() }
@@ -1796,9 +1820,12 @@ export interface AddProjectAttachmentInput {
 }
 
 export async function addProjectAttachment(input: AddProjectAttachmentInput): Promise<void> {
+  const isCorrigendum = input.attachment.section === 'corrigendum'
   const batch = writeBatch(db)
   batch.update(tenantDoc('projects', input.projectId), {
     attachments: arrayUnion(input.attachment),
+    // Bump the corrigendum high-water mark so the per-user unread badge lights up.
+    ...(isCorrigendum ? { corrigendumLastUploadAt: serverTimestamp() } : {}),
     updatedAt: serverTimestamp(),
   })
   recordAuditEvent({
@@ -1814,10 +1841,19 @@ export async function addProjectAttachment(input: AddProjectAttachmentInput): Pr
       name: input.attachment.name,
       mimeType: input.attachment.mimeType,
       sizeBytes: input.attachment.sizeBytes,
+      ...(input.attachment.section ? { section: input.attachment.section } : {}),
     },
     batch,
   })
   await batch.commit()
+}
+
+// Mark the corrigendum section "seen" for this user on this project — clears the
+// unread badge. Dot-path write touches one key only (mirrors markChatRead).
+export async function markCorrigendumSeen(uid: string, projectId: string): Promise<void> {
+  await updateDoc(tenantDoc('users', uid), {
+    [`corrigendumSeenAt.${projectId}`]: serverTimestamp(),
+  })
 }
 
 export interface AddTaskAttachmentInput {

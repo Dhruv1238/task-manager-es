@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  and,
   limit,
+  or,
   orderBy,
   query,
   startAfter,
   where,
   type QueryDocumentSnapshot,
   type DocumentData,
+  type QueryFieldFilterConstraint,
+  type QueryNonFilterConstraint,
 } from 'firebase/firestore'
 import { tenantCol } from '../lib/firestore'
 import { useAllUsers } from '../hooks/useAllUsers'
@@ -17,6 +21,8 @@ import {
   useCreateProjectLabel,
   useProjectWorkflow,
   useWorkflow,
+  useFeature,
+  useCorrigendumSectionName,
 } from '../contexts/AppConfigContext'
 import { usePaginatedQuery } from '../hooks/usePaginatedQuery'
 import AdminActionBar from '../components/admin/AdminActionBar'
@@ -24,7 +30,9 @@ import SearchInput from '../components/ui/SearchInput'
 import Dropdown, { type DropdownOption } from '../components/ui/Dropdown'
 import ProjectStatusPill from '../components/workflow/ProjectStatusPill'
 import UnreadChatBadge from '../components/projects/UnreadChatBadge'
+import CorrigendumBadge from '../components/projects/CorrigendumBadge'
 import ProjectsTable, { type ProjectSortField } from '../components/projects/ProjectsTable'
+import ProjectHeadsCell from '../components/projects/ProjectHeadsCell'
 import ProjectFilterBar from '../components/projects/ProjectFilterBar'
 import {
   hasActiveFilters,
@@ -35,6 +43,7 @@ import StagePill from '../components/projects/StagePill'
 import WorkflowBadge from '../components/projects/WorkflowBadge'
 import {
   formatDeadline,
+  deadlineHasTime,
   isOverdue,
   submissionDeadline,
 } from '../components/projects/projectListUtils'
@@ -212,13 +221,32 @@ export default function Projects() {
     )
   }
 
+  // Filter by project "head" (Vertical Head OR Admin Head), a uid. Not validated
+  // against `users` — that list loads async, so validating would transiently drop
+  // a valid filter on refresh; a stale uid just yields the head-aware empty state.
+  const headFilter = searchParams.get('head')
+
+  function setHeadFilter(next: string) {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev)
+        if (next === 'all') params.delete('head')
+        else params.set('head', next)
+        return params
+      },
+      { replace: true },
+    )
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(VIEW_MODE_KEY, viewMode)
   }, [viewMode])
-  const { users } = useAllUsers()
+  const { users, loading: usersLoading } = useAllUsers()
   const { profile } = useAuth()
   const chatEnabled = useChatEnabled()
+  const corrigendumEnabled = useFeature('corrigendumSection')
+  const corrigendumSectionName = useCorrigendumSectionName()
   const createLabel = useCreateProjectLabel()
   const isAdmin = profile?.globalRole === 'admin' || profile?.globalRole === 'super_admin'
 
@@ -238,25 +266,31 @@ export default function Projects() {
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {
       if (!profile) return null
       const projectsRef = tenantCol('projects')
-      const constraints = []
+      // Field filters (where) and non-filter constraints (orderBy/startAfter/
+      // limit) are kept apart: the composite-filter query overload requires
+      // every where() inside and(), with the rest outside it.
+      const filters: QueryFieldFilterConstraint[] = []
+      const tail: QueryNonFilterConstraint[] = []
       if (!isAdmin) {
         if (!accessUid) return null
-        constraints.push(where('accessKeys', 'array-contains', accessUid))
+        filters.push(where('accessKeys', 'array-contains', accessUid))
       }
       if (statusFilter !== 'all') {
-        constraints.push(where('status', '==', statusFilter))
+        filters.push(where('status', '==', statusFilter))
       }
       // Workflow filter — server-side when narrowed, no filter when "all".
       if (!allSelected && selectedWorkflowIds.length > 0) {
         if (selectedWorkflowIds.length === 1) {
-          constraints.push(where('workflowId', '==', selectedWorkflowIds[0]))
+          filters.push(where('workflowId', '==', selectedWorkflowIds[0]))
           if (stageFilter !== 'all') {
-            constraints.push(where('currentStageId', '==', stageFilter))
+            filters.push(where('currentStageId', '==', stageFilter))
           }
         } else {
-          // Firestore `in` caps at 30; ten active workflows is the soft cap
-          // by design so this is fine.
-          constraints.push(where('workflowId', 'in', selectedWorkflowIds.slice(0, 30)))
+          // Firestore caps at 30 disjunctions after normalization. When the head
+          // filter is active its or(2) multiplies the workflow `in` (2 × k), so
+          // halve the slice to 15. Ten active workflows is the soft cap by
+          // design, so neither bound bites.
+          filters.push(where('workflowId', 'in', selectedWorkflowIds.slice(0, headFilter ? 15 : 30)))
         }
       }
       if (debouncedSearch) {
@@ -264,25 +298,48 @@ export default function Projects() {
         // covers every title starting with the query. (The upper bound was
         // previously `debouncedSearch + ''` — an empty-string sentinel that
         // made search exact-match-only.)
-        constraints.push(where('titleLower', '>=', debouncedSearch))
-        constraints.push(where('titleLower', '<=', debouncedSearch + '\uf8ff'))
-        constraints.push(orderBy('titleLower'))
+        filters.push(where('titleLower', '>=', debouncedSearch))
+        filters.push(where('titleLower', '<=', debouncedSearch + '\uf8ff'))
+        tail.push(orderBy('titleLower'))
       } else {
         // Firestore forbids orderBy on an equality-filtered field, so sorting
         // by status falls back to createdAt while a status filter is active
         // (the Status header is disabled in that state too).
         const effectiveSortField =
           sortField === 'status' && statusFilter !== 'all' ? 'createdAt' : sortField
-        constraints.push(orderBy(effectiveSortField, sortDir))
+        tail.push(orderBy(effectiveSortField, sortDir))
       }
-      if (cursor) constraints.push(startAfter(cursor))
-      constraints.push(limit(PAGE_SIZE))
-      return query(projectsRef, ...constraints)
+      if (cursor) tail.push(startAfter(cursor))
+      tail.push(limit(PAGE_SIZE))
+      if (headFilter) {
+        // "Head" = Vertical Head (leadUid, scalar) OR Admin Head
+        // (roleAssignments.admin_head). We match admin_head by scalar equality:
+        // it's single-cardinality in the seeded workflow (multiple:false), so
+        // this covers all real data. If an author reconfigures admin_head to
+        // multiple, array-valued holders won't match here \u2014 a documented
+        // limitation, not fixable with array-contains because accessKeys already
+        // uses the query's one-and-only array clause (a second would be illegal).
+        // accessKeys' array-contains distributes legally into each OR branch.
+        // Every where() must sit inside and(); the tail stays outside.
+        return query(
+          projectsRef,
+          and(
+            or(
+              where('leadUid', '==', headFilter),
+              where('roleAssignments.admin_head', '==', headFilter),
+            ),
+            ...filters,
+          ),
+          ...tail,
+        )
+      }
+      return query(projectsRef, ...filters, ...tail)
     },
     [
       accessUid,
       allSelected,
       debouncedSearch,
+      headFilter,
       isAdmin,
       profile,
       selectedWorkflowIds,
@@ -299,6 +356,7 @@ export default function Projects() {
     [
       isAdmin,
       debouncedSearch,
+      headFilter,
       statusFilter,
       sortDir,
       sortField,
@@ -322,6 +380,20 @@ export default function Projects() {
       })),
     ],
     [],
+  )
+
+  // Head filter: matches projects where the user is Vertical Head or Admin Head.
+  // Members are already in memory (zero extra reads); "All heads" is the reset.
+  const headOptions: DropdownOption[] = useMemo(
+    () => [
+      { value: 'all', label: 'All heads' },
+      ...users.map((u) => ({
+        value: u.uid,
+        label: u.displayName || u.email,
+        leading: <Avatar user={u} size={16} />,
+      })),
+    ],
+    [users],
   )
 
   // Workflow filter dropdown options. The first option toggles between "All
@@ -480,6 +552,19 @@ export default function Projects() {
           className="sm:w-44"
         />
         <Dropdown
+          value={headFilter ?? 'all'}
+          displayValue={
+            // Don't flash "Unknown user" for a valid uid while the users list
+            // is still loading (e.g. a shared/refreshed ?head= URL).
+            headFilter && !usersLoading && !userById.has(headFilter) ? 'Unknown user' : undefined
+          }
+          onChange={setHeadFilter}
+          options={headOptions}
+          searchable
+          searchPlaceholder="Search people…"
+          className="sm:w-44"
+        />
+        <Dropdown
           value={deadlineSort ? 'deadline' : `${sortField}:${sortDir}`}
           displayValue={
             deadlineSort
@@ -518,7 +603,31 @@ export default function Projects() {
           Couldn't load projects. {error.message}
         </div>
       ) : items.length === 0 ? (
-        debouncedSearch ? (
+        headFilter ? (
+          <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
+            {debouncedSearch
+              ? // Both filters active — don't claim the person heads nothing; the
+                // search may be what excluded them.
+                `No projects match your search where ${
+                  userById.get(headFilter)?.displayName ?? 'this person'
+                } is a head.`
+              : `No projects where ${
+                  userById.get(headFilter)?.displayName ?? 'this person'
+                } is a head.`}{' '}
+            <button
+              type="button"
+              onClick={() => {
+                // Clear both so the list can actually come back (clearing head
+                // alone would leave a still-empty search result).
+                setHeadFilter('all')
+                setSearch('')
+              }}
+              className="text-brand transition hover:underline"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : debouncedSearch ? (
           <div className="rounded-2xl border border-line bg-card p-12 text-center text-fg-subtle">
             No projects match your search.
           </div>
@@ -572,6 +681,9 @@ export default function Projects() {
               showWorkflowColumn={activeWorkflows.length > 1}
               chatEnabled={chatEnabled}
               chatLastReadAt={profile?.chatLastReadAt}
+              corrigendumEnabled={corrigendumEnabled}
+              corrigendumSectionName={corrigendumSectionName}
+              corrigendumSeenAt={profile?.corrigendumSeenAt}
               listColumnFields={listColumnFields}
               sort={
                 deadlineSort
@@ -601,6 +713,13 @@ export default function Projects() {
                         <UnreadChatBadge
                           chatLastMessageAt={p.chatLastMessageAt}
                           lastReadAt={profile?.chatLastReadAt?.[p.id]}
+                        />
+                      )}
+                      {corrigendumEnabled && (
+                        <CorrigendumBadge
+                          corrigendumLastUploadAt={p.corrigendumLastUploadAt}
+                          seenAt={profile?.corrigendumSeenAt?.[p.id]}
+                          label={corrigendumSectionName}
                         />
                       )}
                       <ProjectStatusPill status={p.status} workflow={p.pinnedWorkflow} size="sm" />
@@ -635,10 +754,12 @@ export default function Projects() {
                     )}
                   </div>
 
+                  <ProjectHeadsCell project={p} userById={userById} className="mt-2" />
+
                   <div className="mt-5 flex items-center justify-between border-t border-line-subtle pt-4 text-xs">
                     <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
                       {overdue ? 'Overdue · ' : ''}
-                      {formatDeadline(submissionDeadline(p))}
+                      {formatDeadline(submissionDeadline(p), deadlineHasTime(p))}
                     </span>
                     <div className="flex items-center gap-3 text-fg-subtle">
                       {p.attachments && p.attachments.length > 0 && (
