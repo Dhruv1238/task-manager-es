@@ -640,3 +640,165 @@ html.theme-switching *::after {
 [data-sandbox="true"] .driver-popover.sandbox-tour-popover .driver-popover-arrow-side-right {
   border-color: transparent var(--color-elevated) transparent transparent;
 }
+
+
+/* ── Print / Save-as-PDF ────────────────────────────────────────────────────
+   Report pages print through the browser's own PDF writer (no capture
+   library — text stays selectable and charts stay vector).
+
+   Sheet: A4 landscape, NO page margin. The shell's tinted canvas and gradient
+   orbs bleed to the paper edge; breathing room is padding on <main>, so the
+   report is never banded in white.
+
+   STRATEGY — the dashboard-export approach. Rather than reflowing cards to fit
+   the sheet, the page is laid out at a fixed desktop width (--print-w) so every
+   card keeps its natural proportions, then the whole thing is zoomed down onto
+   the paper. This matters because Recharts renders its <svg> at a size taken
+   from a JS measurement: shrinking a card via CSS leaves the chart at its old
+   height and the card clips it. `zoom` scales card and chart by the same
+   factor, so nothing can ever mismatch. Output is small but complete, and a
+   PDF zooms.
+
+   Vertical budget at --print-w: ~148 header + ~156 tiles + 656 charts (two
+   rows) + 64 padding ≈ 1024px, × 0.7 ≈ 717px into the 794px sheet.
+   Horizontal: 1600 × 0.7 = 1120px into 1123px.
+
+   Two things live outside this block:
+   - hooks/usePrintable forces the light palette and opens every <details>.
+   - `html.printing` reproduces the paper layout on-screen for one beat before
+     the dialog opens, so Recharts re-measures at --print-w. Column counts are
+     pinned in BOTH passes: Tailwind's lg: breakpoint keys off the viewport,
+     which is the user's window during the pre-measure and the sheet during
+     printing — unpinned, the two passes would disagree.
+
+   Mark on-screen-only controls with `no-print`. */
+:root {
+  /* Layout width both passes agree on, and the factor that fits it to a
+     297mm-wide sheet (1123px at 96dpi). Change one, recompute the other. */
+  --print-w: 1600px;
+  --print-zoom: 0.7;
+  /* Usable height of one sheet in layout units: 794px (210mm) ÷ zoom, less
+     main's 32px padding top and bottom, minus a couple of px of headroom so
+     rounding can't spill a blank sheet. Used to pin each sheet's footer to the
+     paper's bottom edge. */
+  --print-sheet-h: 1068px;
+}
+
+/* Print-only content (per-sheet footers). Kept out of the on-screen report. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  /* App chrome and on-screen-only controls (demo toggle, print button). */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Card borders, chart strokes, status tints and the canvas gradient all
+     carry meaning or brand here, so opt out of the browser's default
+     "drop the colours" behaviour. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  main {
+    width: var(--print-w) !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 32px !important;
+    zoom: var(--print-zoom);
+  }
+
+  /* Card surfaces (stat tiles, chart cards, definitions) all use bg-card, so
+     this keeps each one whole rather than splitting it across sheets. */
+  .bg-card {
+    break-inside: avoid;
+  }
+
+  .kpi-print-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+  /* Two columns: charts 1 and 2 share the first row and the third drops
+     beneath chart 1 at the same width — plain grid auto-placement. */
+  .kpi-print-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  /* The definitions panel always takes a fresh sheet, which also guarantees it
+     can never push a chart row off sheet 1. padding-top (not margin-top) gives
+     it its gap: a margin is dropped at a page break, padding is not. */
+  .kpi-print-defs {
+    break-before: page;
+    padding-top: 36px;
+  }
+  .kpi-print-defs > details {
+    margin-top: 0 !important;
+  }
+
+  /* Each sheet is a full-height column so its footer can be pushed to the
+     paper's bottom edge instead of floating under the last card. */
+  .kpi-print-sheet,
+  .kpi-print-defs {
+    display: flex;
+    flex-direction: column;
+    min-height: var(--print-sheet-h);
+  }
+  .print-only {
+    display: flex;
+  }
+  .kpi-print-footer {
+    margin-top: auto;
+  }
+
+  /* Safety net for Ctrl/Cmd-P, which skips the pre-measure pass: scale an
+     oversized chart down rather than letting the card clip it. */
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* The month pickers are inert on paper — render the chosen value as plain
+     text rather than an empty-looking form control. */
+  select {
+    appearance: none;
+    border: 0 !important;
+    background: none !important;
+    padding: 0 !important;
+    color: inherit;
+  }
+
+  details summary {
+    break-after: avoid;
+  }
+  li {
+    break-inside: avoid;
+  }
+}
+
+/* Pre-measure pass: the paper layout, unzoomed, held on screen just long
+   enough for Recharts to re-measure. Must mirror the @media print geometry
+   above exactly. */
+html.printing main {
+  width: var(--print-w) !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 32px !important;
+}
+html.printing .kpi-print-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+html.printing .kpi-print-charts {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+/* --print-w is wider than most viewports; don't flash a scrollbar during the
+   ~150ms the measurement takes. */
+html.printing body {
+  overflow: hidden;
+}

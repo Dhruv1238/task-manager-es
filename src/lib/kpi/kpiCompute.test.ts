@@ -6,9 +6,12 @@ import {
   cycleTime,
   flowEfficiency,
   isWin,
+  monthBounds,
+  monthKeysInRange,
   onHoldIntervals,
   statusChangeEvents,
   throughputSeries,
+  userStats,
   winRateSeries,
 } from './kpiCompute'
 import type { AuditEvent } from '../../types/models'
@@ -259,6 +262,70 @@ describe('v2 outcomeLog path (authored workflows)', () => {
     const { activeMs, totalMs } = flowEfficiency(p, 6 * DAY)
     expect(activeMs).toBe(4 * DAY) // build only
     expect(totalMs).toBe(6 * DAY) // intake 2d (waiting) + build 4d
+  })
+})
+
+describe('userStats month scoping', () => {
+  const auditEv = (actorId: string, at: number) =>
+    ({ id: 'e', actorId, createdAt: ts(at) }) as unknown as AuditEvent
+
+  const jan = new Date(2026, 0, 1).getTime()
+  const may = new Date(2026, 4, 1).getTime()
+  const users = [
+    { uid: 'u1', createdAt: ts(jan) },
+    { uid: 'u2', createdAt: ts(jan) },
+    { uid: 'u3', createdAt: ts(may) }, // onboarded later
+  ]
+  const events = [
+    auditEv('u1', new Date(2026, 2, 10).getTime()), // Mar
+    auditEv('u1', new Date(2026, 2, 20).getTime()), // Mar, same actor → counts once
+    auditEv('u2', new Date(2026, 3, 5).getTime()), // Apr
+    auditEv('u3', new Date(2026, 5, 5).getTime()), // Jun
+    auditEv('ghost', new Date(2026, 2, 11).getTime()), // no user doc → ignored
+  ]
+
+  it('counts only activity inside the selected month', () => {
+    const mar = monthBounds('2026-03')
+    expect(userStats(users, events, mar.startMs, mar.endMs).active).toBe(1)
+    const apr = monthBounds('2026-04')
+    expect(userStats(users, events, apr.startMs, apr.endMs).active).toBe(1)
+    const feb = monthBounds('2026-02')
+    expect(userStats(users, events, feb.startMs, feb.endMs).active).toBe(0)
+  })
+
+  it('measures against the headcount as it stood that month', () => {
+    const mar = monthBounds('2026-03')
+    expect(userStats(users, events, mar.startMs, mar.endMs).total).toBe(2) // u3 not yet onboarded
+    const jun = monthBounds('2026-06')
+    const j = userStats(users, events, jun.startMs, jun.endMs)
+    expect(j.total).toBe(3)
+    expect(j.active).toBe(1)
+    expect(j.rate).toBeCloseTo(1 / 3)
+  })
+
+  it('defaults to an open-ended window and counts createdAt-less users as onboarded', () => {
+    const legacy = [...users, { uid: 'u4' }]
+    const s = userStats(legacy, events, jan)
+    expect(s.total).toBe(4)
+    expect(s.active).toBe(3) // u1, u2, u3 across the whole span
+  })
+})
+
+describe('month picker range', () => {
+  it('enumerates whole months from the window start through now', () => {
+    const start = new Date(2026, 3, 1).getTime()
+    const now = new Date(2026, 6, 20).getTime()
+    expect(monthKeysInRange(start, now)).toEqual(['2026-04', '2026-05', '2026-06', '2026-07'])
+  })
+
+  it('spans a year boundary', () => {
+    const keys = monthKeysInRange(new Date(2025, 10, 1).getTime(), new Date(2026, 1, 3).getTime())
+    expect(keys).toEqual(['2025-11', '2025-12', '2026-01', '2026-02'])
+  })
+
+  it('monthBounds is half-open and matches the next month start', () => {
+    expect(monthBounds('2026-02').endMs).toBe(monthBounds('2026-03').startMs)
+    expect(monthBounds('2026-12').endMs).toBe(monthBounds('2027-01').startMs)
   })
 })
 

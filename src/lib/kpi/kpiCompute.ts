@@ -210,6 +210,30 @@ export function monthKey(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// 'YYYY-MM' → the half-open local-time interval [startMs, endMs) it covers.
+export function monthBounds(key: string): { startMs: number; endMs: number } {
+  const [y, m] = key.split('-').map(Number)
+  return {
+    startMs: new Date(y, m - 1, 1).getTime(),
+    endMs: new Date(y, m, 1).getTime(),
+  }
+}
+
+// Every month key the reporting window covers, oldest → newest. Bounds the
+// month picker: audit events are only read from windowStartMs, so an earlier
+// month would render a false zero rather than "no data".
+export function monthKeysInRange(windowStartMs: number, nowMs: number): string[] {
+  const out: string[] = []
+  const cursor = new Date(windowStartMs)
+  cursor.setDate(1)
+  cursor.setHours(0, 0, 0, 0)
+  while (cursor.getTime() <= nowMs) {
+    out.push(monthKey(cursor.getTime()))
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+  return out
+}
+
 function median(nums: number[]): number | null {
   if (!nums.length) return null
   const s = [...nums].sort((a, b) => a - b)
@@ -396,25 +420,32 @@ export interface UserStats {
   rate: number // 0..1
 }
 
-// #7 Total vs active users (current month).
-// active = distinct auditEvents.actorId since monthStartMs that map to a real
-// user doc.
+// #7 Total vs active users over one month.
+//  - active = distinct auditEvents.actorId inside [monthStartMs, monthEndMs)
+//    that map to a real user doc.
+//  - total  = users onboarded before monthEndMs, so a past month is measured
+//    against the headcount as it stood then rather than today's. Users with no
+//    parsable createdAt count as always-onboarded (unknown ⇒ pre-existing),
+//    which keeps the current month identical to a plain users.length.
+// monthEndMs defaults to open-ended (current month, running to now).
 export function userStats(
-  users: Array<{ uid: string }>,
+  users: Array<{ uid: string; createdAt?: unknown }>,
   audit: AuditEvent[],
   monthStartMs: number,
+  monthEndMs = Infinity,
 ): UserStats {
   const uids = new Set(users.map((u) => u.uid))
   const active = new Set<string>()
   for (const e of audit) {
     const at = tsToMs(e.createdAt)
-    if (at != null && at >= monthStartMs && uids.has(e.actorId)) active.add(e.actorId)
+    if (at != null && at >= monthStartMs && at < monthEndMs && uids.has(e.actorId))
+      active.add(e.actorId)
   }
-  return {
-    total: users.length,
-    active: active.size,
-    rate: users.length ? active.size / users.length : 0,
-  }
+  const total = users.filter((u) => {
+    const ms = tsToMs(u.createdAt)
+    return ms == null || ms < monthEndMs
+  }).length
+  return { total, active: active.size, rate: total ? active.size / total : 0 }
 }
 
 export interface ActiveUsersPoint {

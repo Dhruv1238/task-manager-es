@@ -8,6 +8,9 @@ import { buildKpiDemoData } from '../lib/kpi/demoData'
 import {
   activeUsersSeries,
   cycleTimeSeries,
+  monthBounds,
+  monthKey,
+  monthKeysInRange,
   onTimeSeries,
   reworkSeries,
   teamFlowEfficiency,
@@ -16,16 +19,22 @@ import {
   winRateSeries,
 } from '../lib/kpi/kpiCompute'
 
+// Earliest month the per-tile month pickers offer. The audit window reaches
+// further back (6 quarters), but the portal has no meaningful activity before
+// this — those months would render a confident zero rather than "no data".
+// Raise it if the data floor ever moves; the pickers and the definitions notes
+// both read from here.
+const REPORT_MONTH_FLOOR = '2026-05'
+
 // Anchors captured once at mount so the windowed audit query + all buckets stay
 // stable across renders (a changing windowStart would refire the getDocs read).
 function computeAnchors() {
   const nowMs = Date.now()
   const now = new Date(nowMs)
-  const monthStartMs = new Date(now.getFullYear(), now.getMonth(), 1).getTime()
   // Start of the quarter 6 quarters ago → the default reporting window.
   const q = Math.floor(now.getMonth() / 3)
   const windowStartMs = new Date(now.getFullYear(), q * 3 - 15, 1).getTime()
-  return { nowMs, monthStartMs, windowStartMs }
+  return { nowMs, windowStartMs }
 }
 
 export interface UseKpiOptions {
@@ -34,12 +43,36 @@ export interface UseKpiOptions {
   // Demo mode: swap all inputs for the deterministic in-memory dataset
   // (lib/kpi/demoData). Same compute pipeline, zero Firestore writes.
   demoMode?: boolean
+  // Month ('YYYY-MM') the active-users tile reports on. Defaults to the current
+  // month, and anything outside the offered range falls back to it.
+  userMonth?: string
 }
+
+// Everything the KPI surfaces need from one hook call. Both report pages pass
+// this object straight to the shared tile row / definitions, so the Firestore
+// listeners are opened once per page rather than once per component.
+export type KpiData = ReturnType<typeof useKpiMetrics>
 
 export function useKpiMetrics(opts: UseKpiOptions = {}) {
   const includeEscalations = opts.includeEscalations ?? false
   const demoMode = opts.demoMode ?? false
-  const [{ nowMs, monthStartMs, windowStartMs }] = useState(computeAnchors)
+  const [{ nowMs, windowStartMs }] = useState(computeAnchors)
+
+  // Selectable months, newest first — the current month heads the list. Shared
+  // by every month-scoped tile so the page reads one range. Floored at
+  // REPORT_MONTH_FLOOR but never past `now`, so the list always offers at least
+  // the current month even if the floor is later moved forward.
+  const reportMonths = useMemo(() => {
+    const floorMs = Math.max(windowStartMs, monthBounds(REPORT_MONTH_FLOOR).startMs)
+    return monthKeysInRange(Math.min(floorMs, nowMs), nowMs).reverse()
+  }, [windowStartMs, nowMs])
+  const currentMonth = monthKey(nowMs)
+  const userMonth =
+    opts.userMonth && reportMonths.includes(opts.userMonth) ? opts.userMonth : currentMonth
+  const { startMs: monthStartMs, endMs: monthEndMs } = useMemo(
+    () => monthBounds(userMonth),
+    [userMonth],
+  )
 
   const { projects, loading: projectsLoading } = useAllProjects()
   const { users, loading: usersLoading } = useAllUsers()
@@ -72,17 +105,32 @@ export function useKpiMetrics(opts: UseKpiOptions = {}) {
       rework: reworkSeries(collabProjects, includeEscalations),
       winRate: winRateSeries(collabProjects),
       teamFlow: teamFlowEfficiency(collabProjects, effTeams, nowMs),
-      users: userStats(effUsers, effEvents, monthStartMs),
+      users: userStats(effUsers, effEvents, monthStartMs, monthEndMs),
       activeUsers: activeUsersSeries(effUsers, effEvents, windowStartMs, nowMs),
     }),
-    [collabProjects, effEvents, effUsers, effTeams, includeEscalations, nowMs, monthStartMs, windowStartMs],
+    [
+      collabProjects,
+      effEvents,
+      effUsers,
+      effTeams,
+      includeEscalations,
+      nowMs,
+      monthStartMs,
+      monthEndMs,
+      windowStartMs,
+    ],
   )
 
   return {
     metrics,
     loading: demoMode ? false : projectsLoading || usersLoading || teamsLoading || auditLoading,
     windowStartMs,
+    // Bounds of the month the users tile reports on (the selected one).
     monthStartMs,
+    monthEndMs,
+    userMonth,
+    reportMonths,
+    currentMonth,
     collabProjectCount: collabProjects.length,
   }
 }

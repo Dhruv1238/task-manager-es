@@ -8,6 +8,7 @@ import ProjectLayout from './layouts/ProjectLayout'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminMembers from './pages/AdminMembers'
 import KpiReports from './pages/KpiReports'
+import UsageAnalytics from './pages/UsageAnalytics'
 import AppConfigPage from './pages/AppConfigPage'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -90,14 +91,16 @@ function App() {
           <Route element={<RequireAccess module="reports" />}>
             <Route path="/admin" element={<AdminDashboard />} />
           </Route>
-          {/* KPI Reports — pushed but NOT yet released to the client. No nav
-            * entry, no permission column; the route stays live so reviewers
-            * can reach it by direct URL, super-admins only.
+          {/* KPI Reports + Usage Analytics — pushed but NOT yet released to the
+            * client. No nav entry, no permission column; the routes stay live
+            * so reviewers can reach them by direct URL, super-admins only. The
+            * two pages cross-link to each other in their headers.
             * RELEASE(kpi-reports): swap SuperAdminRoute back to
             * <RequireAccess module="kpi_reports" /> and uncomment the module id
             * in types/v2.ts + the Navbar entries. */}
           <Route element={<SuperAdminRoute />}>
             <Route path="/admin/reports" element={<KpiReports />} />
+            <Route path="/admin/usage" element={<UsageAnalytics />} />
           </Route>
           <Route element={<RequireAccess module="members" />}>
             <Route path="/admin/members" element={<AdminMembers />} />
