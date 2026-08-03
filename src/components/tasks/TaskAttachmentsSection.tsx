@@ -14,7 +14,7 @@ interface Props {
   canEdit: boolean
 }
 
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB per file
 
 export default function TaskAttachmentsSection({
   taskId,
@@ -36,7 +36,7 @@ export default function TaskAttachmentsSection({
 
     const oversize = files.find((f) => f.size > MAX_FILE_SIZE_BYTES)
     if (oversize) {
-      setError(`${oversize.name} exceeds 10 MB.`)
+      setError(`${oversize.name} exceeds 2 GB.`)
       return
     }
 
