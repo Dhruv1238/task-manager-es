@@ -37,7 +37,8 @@ import type {
   WorkflowAssignmentEvent,
 } from '../types/workflow'
 import { getWorkflowSnapshot, getRolesSnapshot, getOrgStructureSnapshot } from '../contexts/AppConfigContext'
-import { getCurrentStage, performAction } from './workflowEvaluator'
+import { getCurrentStage, performAction, resolveEntryStage } from './workflowEvaluator'
+import type { AllocationHop } from './creationAllocation'
 import { executeOutcome } from './rules/executeOutcome'
 import { readActors, readOutcomes } from './rules/outcomeAdapter'
 import { computeEffectivePermissions, resolveRoleHolders } from './permissions/effectivePermissions'
@@ -302,7 +303,9 @@ export interface QueueNotificationInput {
   type: NotificationType
   actorId: string
   actorName: string
-  taskId: string
+  // Omit for project-scoped notifications (role_assignment): the bell routes
+  // those to the project instead of a task.
+  taskId?: string
   projectId: string
   taskTitle: string
   snippet?: string
@@ -323,7 +326,8 @@ export function queueNotification(batch: WriteBatch, input: QueueNotificationInp
     type: input.type,
     actorId: input.actorId,
     actorName: input.actorName,
-    taskId: input.taskId,
+    // Firestore rejects an explicit undefined, so omit the key entirely.
+    ...(input.taskId ? { taskId: input.taskId } : {}),
     projectId: input.projectId,
     taskTitle: input.taskTitle,
     ...(input.snippet ? { snippet: input.snippet } : {}),
@@ -345,6 +349,56 @@ function queueNotificationFanout(
   }
   for (const recipientId of set) {
     queueNotification(batch, { ...base, recipientId })
+  }
+}
+
+// The tenant-facing label for a workflow project-role slot. Falls back to the
+// raw id so a notification is never blank for a role the workflow snapshot
+// doesn't know about (e.g. a role deleted after assignment).
+export function projectRoleLabel(workflow: Workflow | undefined, roleId: string): string {
+  return (workflow?.projectRoles ?? []).find((r) => r.id === roleId)?.label || roleId
+}
+
+// The tenant-facing label for the pipeline lead slot. Same resolution order the
+// rest of the app uses: per-workflow override → org-wide → literal.
+export function leadRoleLabel(workflow: Workflow | undefined): string {
+  return workflow?.leadRoleName || getOrgStructureSnapshot().leadRoleName || 'Project Lead'
+}
+
+// Tell people they've been given a role on a project — a workflow project-role
+// slot (Admin Head, Functional Head, …) or the pipeline lead (Vertical Head).
+// Project-scoped, so no taskId: the bell routes these to the project page.
+//
+// Joins the caller's batch, so the notification is atomic with the assignment.
+// Callers pass only NEWLY added holders — re-saving a picker without changing it
+// must not re-notify. The actor is dropped by queueNotification (nobody gets a
+// notification for assigning themselves).
+export function queueRoleAssignmentNotifications(
+  batch: WriteBatch,
+  input: {
+    recipientIds: (string | null | undefined)[]
+    roleLabel: string
+    projectId: string
+    projectTitle: string
+    actorId: string
+    actorName: string
+  },
+): void {
+  const set = new Set<string>()
+  for (const r of input.recipientIds) {
+    if (r && r !== input.actorId) set.add(r)
+  }
+  for (const recipientId of set) {
+    queueNotification(batch, {
+      recipientId,
+      type: 'role_assignment',
+      actorId: input.actorId,
+      actorName: input.actorName,
+      projectId: input.projectId,
+      // Project-scoped: the subject IS the project, and the role rides in snippet.
+      taskTitle: input.projectTitle,
+      snippet: input.roleLabel,
+    })
   }
 }
 
@@ -740,14 +794,12 @@ export interface AddProjectInput {
   submissionDate?: Timestamp
   submissionHasTime?: boolean
   presentationDate?: Timestamp
-  // Auto-allocation hook: when the picked workflow's first-stage first action
-  // is an `assign_lead` and the form supplied a lead uid, the project is
-  // created at stage 1 and then immediately advanced via performAction in the
-  // same commit. Falsy → project lands at stage 1 awaiting allocation.
-  initialAction?: {
-    actionId: string
-    inputs: Record<string, unknown>
-  }
+  // Auto-allocation: the ordered assignment gates the create form already
+  // satisfied, from planCreationAllocation(). Each hop is chained onto the same
+  // commit, so a project whose leader was picked on the form never lands on the
+  // stage that asks for one. Empty/absent → the project lands on the entry
+  // stage and is allocated there.
+  initialAllocation?: AllocationHop[]
 }
 
 export async function addProject(input: AddProjectInput): Promise<string> {
@@ -757,14 +809,13 @@ export async function addProject(input: AddProjectInput): Promise<string> {
       `Workflow "${input.workflowId}" not loaded — refresh the page or ask an admin to seed it under /admin/config.`,
     )
   }
-  const orderedFirst = [...workflow.stages].sort((a, b) => a.order - b.order)[0]
-  if (!orderedFirst) {
+  // Phase 3: prefer the author-set entry task; fall back to lowest-order stage.
+  // Shared with the new-project form via resolveEntryStage so the two can't
+  // disagree about which stage (and therefore which gate action) is the entry.
+  const firstStage = resolveEntryStage(workflow)
+  if (!firstStage) {
     throw new Error(`Workflow "${input.workflowId}" has no stages — cannot pin a project.`)
   }
-  // Phase 3: prefer the author-set entry task; fall back to lowest-order stage.
-  const firstStage =
-    (workflow.entryStageId && workflow.stages.find((s) => s.id === workflow.entryStageId)) ||
-    orderedFirst
 
   // Initial timeline events. Always start with the workflow_assignment marker
   // so the side panel renders "pinned to {workflowName} by {creator}". Add the
@@ -811,6 +862,12 @@ export async function addProject(input: AddProjectInput): Promise<string> {
   }
   const hasRoles = Object.keys(roleAssignments).length > 0
 
+  // The lead the create form supplied, if any. Seeded into the initial doc so
+  // the project is never briefly written with leadUid: null — the chained hops
+  // below would fix it, but only after the same batch's earlier write.
+  const allocation = input.initialAllocation ?? []
+  const initialLeadUid = allocation.find((h) => h.target === 'lead')?.assigneeUid ?? null
+
   const batch = writeBatch(db)
   const projectRef = doc(tenantCol('projects'))
   batch.set(projectRef, {
@@ -821,13 +878,17 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     status: 'in_progress',
     teamIds: [],
     // Brand-new project: no teams attached and no tasks yet, so team-lead and
-    // assignee sets are empty. A lead assigned via auto-allocation is folded in
-    // by the chained performAction below.
-    accessKeys: computeAccessKeys(hasRoles ? roleAssignments : undefined, input.createdBy, null, [], [], {
-      workflow,
-      users: input.users,
-      roles: getRolesSnapshot(),
-    }),
+    // assignee sets are empty. An auto-allocated lead is folded in via
+    // initialLeadUid (project-role assignees already ride in roleAssignments);
+    // the chained hops below then union/recompute over this.
+    accessKeys: computeAccessKeys(
+      hasRoles ? roleAssignments : undefined,
+      input.createdBy,
+      initialLeadUid,
+      [],
+      [],
+      { workflow, users: input.users, roles: getRolesSnapshot() },
+    ),
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),
     // Phase 2d additions (omitted when empty so docs stay tidy).
@@ -837,7 +898,7 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     workflowId: input.workflowId,
     pinnedWorkflow,
     currentStageId: firstStage.id,
-    leadUid: null,
+    leadUid: initialLeadUid,
     iterationCount: 0,
     escalationCount: 0,
     projectHistory,
@@ -860,64 +921,120 @@ export async function addProject(input: AddProjectInput): Promise<string> {
     batch,
   })
 
-  // Auto-allocation: when the form provided the inputs the first action needs,
-  // chain a performAction onto the same batch so the project lands at stage 2
-  // (e.g. 'allocated' / 'assigned') in a single commit. Skips silently when
-  // the action doesn't exist or the supplied inputs fail validation — the
-  // project still gets created at stage 1.
-  if (input.initialAction) {
-    const action = firstStage.actions.find((a) => a.id === input.initialAction!.actionId)
-    if (action) {
-      // Reconstruct a Project shape sufficient for performAction. We don't
-      // have the server-stamped ids/timestamps yet, but performAction only
-      // reads workflowId/currentStageId/leadUid/ownerId/status from the
-      // project to compose the patch — all known here.
-      const projectShim: Project = {
-        id: projectRef.id,
-        title: input.title,
-        description: input.description,
-        createdBy: input.createdBy,
-        ...(hasRoles ? { roleAssignments } : {}),
-        status: 'in_progress',
-        teamIds: [],
-        createdAt: now,
-        updatedAt: now,
-        workflowId: input.workflowId,
-        pinnedWorkflow,
-        currentStageId: firstStage.id,
-        leadUid: null,
-        iterationCount: 0,
-        escalationCount: 0,
-        projectHistory,
+  // Tell everyone the create form just handed a project role to. Roles that an
+  // allocation hop assigns are notified by that hop's writer below instead, so
+  // they're excluded here — otherwise the same person gets two notifications for
+  // one assignment. The lead is likewise covered by its hop.
+  const hopRoleIds = new Set(
+    allocation.flatMap((h) => (h.target === 'lead' ? [] : [h.target.roleId])),
+  )
+  for (const [roleId, value] of Object.entries(roleAssignments)) {
+    if (hopRoleIds.has(roleId)) continue
+    queueRoleAssignmentNotifications(batch, {
+      recipientIds: Array.isArray(value) ? value : [value],
+      roleLabel: projectRoleLabel(workflow, roleId),
+      projectId: projectRef.id,
+      projectTitle: input.title,
+      actorId: input.createdBy,
+      actorName: input.actorName,
+    })
+  }
+
+  // Auto-allocation: run each assignment gate the create form already satisfied
+  // onto the SAME batch, so a project whose leader was picked on the form never
+  // lands on the stage that asks for one. Routed exactly like runWorkflowAction
+  // (v2 `outcomes` → executeOutcome, legacy single `effect` → performAction) so
+  // canvas-authored assigns work as well as the seeds'.
+  //
+  // NOT best-effort. Everything is staged before commit, so a throw here writes
+  // nothing and the creator sees the real error — the old code swallowed
+  // permission/validation failures into a console.warn, which is exactly why a
+  // picked lead silently landed back on the allocation stage.
+  if (allocation.length) {
+    // Reconstruct a Project shape sufficient for the writers. The server-stamped
+    // ids/timestamps aren't known yet, but they only read
+    // workflowId/currentStageId/leadUid/roleAssignments/createdBy/status.
+    // Mutated between hops so hop n+1 sees hop n's assignment.
+    const shimRoles: Record<string, string | string[]> = { ...roleAssignments }
+    const projectShim: Project = {
+      id: projectRef.id,
+      title: input.title,
+      description: input.description,
+      createdBy: input.createdBy,
+      roleAssignments: shimRoles,
+      status: 'in_progress',
+      teamIds: [],
+      createdAt: now,
+      updatedAt: now,
+      workflowId: input.workflowId,
+      pinnedWorkflow,
+      currentStageId: firstStage.id,
+      leadUid: null,
+      iterationCount: 0,
+      escalationCount: 0,
+      projectHistory,
+    }
+    const userShim: User = {
+      uid: input.createdBy,
+      email: '',
+      displayName: input.actorName,
+      // Real role + team memberships so the audit trail and any role-actor
+      // resolution see the actual creator, not a "user"-role placeholder.
+      globalRole: input.creatorRole,
+      teamIds: input.creatorTeamIds ?? [],
+      createdAt: now,
+    }
+    const roles = getRolesSnapshot()
+    const effective = computeEffectivePermissions(userShim, roles)
+
+    for (const hop of allocation) {
+      const stage = getCurrentStage(projectShim, workflow)
+      const action = stage.actions.find((a) => a.id === hop.actionId)
+      if (!action) {
+        throw new Error(
+          `Cannot allocate at creation: action "${hop.actionId}" is not on stage "${stage.displayName}".`,
+        )
       }
-      const userShim: User = {
-        uid: input.createdBy,
-        email: '',
-        displayName: input.actorName,
-        // Real role + team memberships so performAction's permission check
-        // sees the actual creator, not a "user"-role placeholder.
-        globalRole: input.creatorRole,
-        teamIds: input.creatorTeamIds ?? [],
-        createdAt: now,
-      }
-      try {
+      const bypassGates = { requireOnly: hop.requireOnly }
+      if (action.outcomes?.length) {
+        await executeOutcome({
+          project: projectShim,
+          workflow,
+          user: userShim,
+          actionId: hop.actionId,
+          outcomeId: hop.outcomeId,
+          inputs: hop.inputs,
+          org: getOrgStructureSnapshot(),
+          roles,
+          effective,
+          users: input.users,
+          batch,
+          bypassGates,
+        })
+      } else {
         await performAction({
           project: projectShim,
           workflow,
           user: userShim,
-          actionId: input.initialAction.actionId,
-          inputs: input.initialAction.inputs,
+          actionId: hop.actionId,
+          inputs: hop.inputs,
           batch,
           users: input.users,
+          bypassGates,
         })
-      } catch (e) {
-        // Auto-allocation is best-effort: the project is still created at
-        // stage 1 in the same batch. Log so silent permission / validation
-        // failures surface during dev instead of disappearing.
-        console.warn(
-          `addProject: auto-allocation of action "${input.initialAction.actionId}" failed; project will land at stage 1.`,
-          e,
-        )
+      }
+
+      // Advance the shim to the post-hop state.
+      projectShim.currentStageId = hop.toStageId
+      if (hop.target === 'lead') {
+        projectShim.leadUid = hop.assigneeUid
+      } else {
+        const { roleId } = hop.target
+        const def = (workflow.projectRoles ?? []).find((r) => r.id === roleId)
+        const prev = shimRoles[roleId]
+        shimRoles[roleId] = def?.multiple
+          ? [...new Set([...(Array.isArray(prev) ? prev : prev ? [prev] : []), hop.assigneeUid])]
+          : hop.assigneeUid
       }
     }
   }
@@ -1256,6 +1373,19 @@ export async function setProjectRole(input: SetProjectRoleInput): Promise<void> 
     accessKeys,
     projectHistory: arrayUnion(event),
     updatedAt: serverTimestamp(),
+  })
+  // Notify only the people this write ADDS. Re-saving the picker unchanged, or
+  // removing someone, must not fire anything.
+  const asList = (v: string | string[] | null | undefined): string[] =>
+    v == null ? [] : Array.isArray(v) ? v : [v]
+  const before = new Set(asList(input.currentRoleAssignments?.[input.roleId]))
+  queueRoleAssignmentNotifications(batch, {
+    recipientIds: asList(input.value).filter((uid) => !before.has(uid)),
+    roleLabel: projectRoleLabel(input.workflow, input.roleId),
+    projectId: input.projectId,
+    projectTitle: input.projectTitle,
+    actorId: input.actorId,
+    actorName: input.actorName,
   })
   recordAuditEvent({
     actorId: input.actorId,

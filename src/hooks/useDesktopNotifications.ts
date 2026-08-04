@@ -13,6 +13,7 @@ const VERB: Record<NotificationType, string> = {
   mention: 'mentioned you in',
   assignment: 'assigned you',
   status_update: 'updated',
+  role_assignment: 'assigned you to',
 }
 
 function currentPermission(): NotificationPermissionState {

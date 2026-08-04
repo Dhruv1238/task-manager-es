@@ -73,6 +73,8 @@ export interface User {
     mention?: boolean
     assignment?: boolean
     statusUpdate?: boolean
+    // Being given a project role (or the project lead slot) on a project.
+    roleAssignment?: boolean
   }
   // Account activation state. Optional → a missing field means active (no
   // backfill of existing docs required). A 'deactivated' user is bounced at
@@ -304,7 +306,7 @@ export interface Comment {
 // Write-always / filter-at-display: the fan-out never reads recipient prefs
 // (queueNotification just skips the actor); each client filters by its own
 // notificationPrefs at render time, so muting is retroactive (Discord-style).
-export type NotificationType = 'mention' | 'assignment' | 'status_update'
+export type NotificationType = 'mention' | 'assignment' | 'status_update' | 'role_assignment'
 
 export interface AppNotification {
   id: string
@@ -312,10 +314,16 @@ export interface AppNotification {
   type: NotificationType
   actorId: string
   actorName: string
-  taskId: string
+  // Absent on project-scoped notifications (role_assignment) — those have no
+  // task, and the bell routes them to /projects/{projectId} instead.
+  taskId?: string
   projectId: string
+  // The subject the row renders. Task title for task-scoped types; the PROJECT
+  // title for role_assignment.
   taskTitle: string
-  snippet?: string // mention: comment excerpt; status_update: "todo → done"
+  // Secondary detail line. mention: comment excerpt; status_update: "todo → done";
+  // role_assignment: the role label ("Vertical Head", "Admin Head").
+  snippet?: string
   // User-driven "done" flag. The bell badge counts UNRESOLVED notifications;
   // resolving is an explicit action (per-row check or "mark all"), never
   // automatic on open.

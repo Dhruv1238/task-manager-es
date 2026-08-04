@@ -7,7 +7,7 @@ import { useFeature } from '../contexts/AppConfigContext'
 import { useMyNotifications } from '../hooks/useMyNotifications'
 import { useDesktopNotifications } from '../hooks/useDesktopNotifications'
 import { pruneOldNotifications, resolveAllNotifications, resolveNotifications } from '../lib/firestore'
-import { setNotificationPref } from '../lib/notifications'
+import { setNotificationPref, type NotificationPrefKey } from '../lib/notifications'
 import type { AppNotification, NotificationType } from '../types/models'
 
 function initialsFor(name: string): string {
@@ -32,12 +32,14 @@ const VERB: Record<NotificationType, string> = {
   mention: 'mentioned you in',
   assignment: 'assigned you',
   status_update: 'updated',
+  role_assignment: 'assigned you to',
 }
 
-const PREF_ROWS: { key: 'mention' | 'assignment' | 'statusUpdate'; label: string }[] = [
+const PREF_ROWS: { key: NotificationPrefKey; label: string }[] = [
   { key: 'mention', label: 'Mentions' },
   { key: 'assignment', label: 'Task assignments' },
   { key: 'statusUpdate', label: 'Status updates on your tasks' },
+  { key: 'roleAssignment', label: 'Project roles assigned to you' },
 ]
 
 function NotificationRow({
@@ -50,10 +52,15 @@ function NotificationRow({
   onToggleResolve: (id: string, resolved: boolean) => void
 }) {
   const location = useLocation()
+  // Task-scoped rows open the task modal over the current page; project-scoped
+  // rows (role_assignment) navigate to the project. backgroundLocation must NOT
+  // be set for those — the overlay <Routes> only matches /tasks/:taskId, so the
+  // main outlet would keep rendering the background page and the click would
+  // appear to do nothing.
   return (
     <Link
-      to={`/tasks/${n.taskId}`}
-      state={{ backgroundLocation: location }}
+      to={n.taskId ? `/tasks/${n.taskId}` : `/projects/${n.projectId}`}
+      state={n.taskId ? { backgroundLocation: location } : undefined}
       onClick={() => {
         // Opening a notification resolves it (unless already resolved).
         if (!n.resolved) onToggleResolve(n.id, true)

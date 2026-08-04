@@ -12,6 +12,7 @@ const PREF_KEY: Record<NotificationType, keyof NonNullable<User['notificationPre
   mention: 'mention',
   assignment: 'assignment',
   status_update: 'statusUpdate',
+  role_assignment: 'roleAssignment',
 }
 
 // Server-side ordered + limited: fetches only the newest FETCH_LIMIT, ordered by

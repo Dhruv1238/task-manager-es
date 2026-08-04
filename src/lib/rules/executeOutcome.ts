@@ -24,7 +24,14 @@ import {
   type WriteBatch,
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import { tenantDoc, recordAuditEvent, recomputeProjectAccessKeys } from '../firestore'
+import {
+  tenantDoc,
+  recordAuditEvent,
+  recomputeProjectAccessKeys,
+  leadRoleLabel,
+  projectRoleLabel,
+  queueRoleAssignmentNotifications,
+} from '../firestore'
 import {
   WorkflowValidationError,
   actorOnlyMatch,
@@ -57,6 +64,12 @@ export interface ExecuteOutcomeArgs {
   effective?: import('../../types/v2').EffectivePermissions | null
   batch?: WriteBatch
   extras?: Record<string, unknown>
+  // Creation-time auto-allocation ONLY (addProject). Skips the actor check and
+  // the availableWhen gate, and narrows the required-input check to
+  // `requireOnly`. See PerformActionArgs.bypassGates for the rationale; the
+  // availableWhen skip is additionally necessary because the condition reads
+  // project.fields, which are only being written in this same batch.
+  bypassGates?: { requireOnly: string[] }
 }
 
 function err(code: WorkflowValidationError['code'], message: string): WorkflowValidationError {
@@ -101,20 +114,23 @@ export async function executeOutcome(args: ExecuteOutcomeArgs): Promise<void> {
   }
 
   // 2. Permission re-check (defence-in-depth, lenient like performAction).
-  const permitted =
-    canPerform(project, workflow, user, teams, org, actionId, roleCtx) ||
-    readActors(action).all.some((a) => actorOnlyMatch(a, user, project))
-  if (!permitted) {
-    throw err('permission_denied', `You are not allowed to perform "${action.label}".`)
-  }
+  // Skipped for creation-time auto-allocation; see bypassGates.
+  if (!args.bypassGates) {
+    const permitted =
+      canPerform(project, workflow, user, teams, org, actionId, roleCtx) ||
+      readActors(action).all.some((a) => actorOnlyMatch(a, user, project))
+    if (!permitted) {
+      throw err('permission_denied', `You are not allowed to perform "${action.label}".`)
+    }
 
-  // 3. availableWhen gate.
-  if (action.availableWhen && !passesCondition(action.availableWhen, project)) {
-    throw err('invalid_input_value', `"${action.label}" is not available right now.`)
+    // 3. availableWhen gate.
+    if (action.availableWhen && !passesCondition(action.availableWhen, project)) {
+      throw err('invalid_input_value', `"${action.label}" is not available right now.`)
+    }
   }
 
   // 4. Input validation (shared with performAction).
-  validateActionInputs(action, inputs)
+  validateActionInputs(action, inputs, args.bypassGates)
 
   // 5. Compose the patch.
   const now = Timestamp.now()
@@ -166,12 +182,19 @@ export async function executeOutcome(args: ExecuteOutcomeArgs): Promise<void> {
       break
   }
 
+  // Who to tell they've been given a slot on this project. Collected here,
+  // fanned out once the batch exists. Only genuine changes of hands land here.
+  const roleNotices: { recipientIds: string[]; roleLabel: string }[] = []
+
   // 5b. Legacy effect replay (lead set/clear, counters) carried on the outcome.
   switch (outcome.legacyEffectKind) {
     case 'assign_lead': {
       const leadUid = String(inputs.leadUid ?? '')
       if (!leadUid) throw err('missing_required_input', 'A lead must be selected.')
       patch.leadUid = leadUid
+      if (leadUid !== project.leadUid) {
+        roleNotices.push({ recipientIds: [leadUid], roleLabel: leadRoleLabel(workflow) })
+      }
       break
     }
     case 'clear_lead':
@@ -191,12 +214,19 @@ export async function executeOutcome(args: ExecuteOutcomeArgs): Promise<void> {
     if (!uid) throw err('missing_required_input', 'A person must be selected to assign.')
     if (outcome.assign.target === 'lead') {
       patch.leadUid = uid
+      if (uid !== project.leadUid) {
+        roleNotices.push({ recipientIds: [uid], roleLabel: leadRoleLabel(workflow) })
+      }
     } else {
       const roleId = outcome.assign.target.roleId
       const def = (workflow.projectRoles ?? []).find((r) => r.id === roleId)
       const prev = project.roleAssignments?.[roleId]
+      const held = Array.isArray(prev) ? prev : prev ? [prev] : []
+      if (!held.includes(uid)) {
+        roleNotices.push({ recipientIds: [uid], roleLabel: projectRoleLabel(workflow, roleId) })
+      }
       const nextVal: string | string[] = def?.multiple
-        ? Array.from(new Set([...(Array.isArray(prev) ? prev : prev ? [prev] : []), uid]))
+        ? Array.from(new Set([...held, uid]))
         : uid
       patch[`roleAssignments.${roleId}`] = nextVal
       effectiveRoleAssignments = { ...(project.roleAssignments ?? {}), [roleId]: nextVal }
@@ -263,6 +293,15 @@ export async function executeOutcome(args: ExecuteOutcomeArgs): Promise<void> {
   const ownsBatch = !args.batch
   const batch = args.batch ?? writeBatch(db)
   batch.update(tenantDoc('projects', project.id), patch)
+  for (const notice of roleNotices) {
+    queueRoleAssignmentNotifications(batch, {
+      ...notice,
+      projectId: project.id,
+      projectTitle: project.title,
+      actorId: user.uid,
+      actorName: user.displayName,
+    })
+  }
   bumpStatusTally(batch, project.status, typeof patch.status === 'string' ? patch.status : null)
   recordAuditEvent({
     actorId: user.uid,

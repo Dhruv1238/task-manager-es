@@ -17,10 +17,11 @@ import {
 } from '../../contexts/AppConfigContext'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { addProject } from '../../lib/firestore'
+import { findEntryLeadGate, planCreationAllocation } from '../../lib/creationAllocation'
 import { resolveExactRoleHolders } from '../../lib/permissions/effectivePermissions'
 import { uploadAsset } from '../../lib/uploadAsset'
 import type { Attachment, User } from '../../types/models'
-import type { ActionInput, Workflow } from '../../types/workflow'
+import type { Workflow } from '../../types/workflow'
 
 interface Props {
   open: boolean
@@ -37,9 +38,11 @@ function friendlyError(err: unknown): string {
 // The new-project modal walks the user through two conceptual steps:
 //   0. Workflow pick (only shown when more than one workflow is active).
 //   1. Form fields adapted to the chosen workflow's flowType.
-// The form's auto-allocation path: when the workflow's first stage's first
-// action is `assign_lead` and the user picks a lead, addProject is called
-// with `initialAction` so the project lands at stage 2 in one commit.
+// The form's auto-allocation path: when the workflow's entry stage has an action
+// that assigns somebody (legacy `assign_lead` or a canvas-authored
+// `outcome.assign`) and the form collected that person, addProject is called
+// with the plan from planCreationAllocation() so those gates complete in the
+// same commit and the project never lands on the stage that asks for a leader.
 export default function NewProjectModal({ open, onClose }: Props) {
   const { user, profile } = useAuth()
   const org = useOrgStructure()
@@ -118,20 +121,16 @@ export default function NewProjectModal({ open, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pickedWorkflow?.id])
 
-  // The first action on the first stage — drives the lead-picker UI and the
-  // auto-allocation path. When this action's effect is `assign_lead`, the
-  // form surfaces a lead picker; submitting with a chosen lead chains the
-  // action onto the create batch so the project lands at stage 2.
-  const firstAction = useMemo(() => {
-    if (!pickedWorkflow) return null
-    const firstStage = [...pickedWorkflow.stages].sort((a, b) => a.order - b.order)[0]
-    return firstStage?.actions[0] ?? null
-  }, [pickedWorkflow])
-
-  const leadInput: ActionInput | null = useMemo(() => {
-    if (!firstAction || firstAction.effect.kind !== 'assign_lead') return null
-    return firstAction.inputs.find((i) => i.type === 'user_picker') ?? null
-  }, [firstAction])
+  // The entry stage's lead-assigning gate, if the workflow has one — drives the
+  // lead-picker UI. Resolved by the shared helper so this agrees with addProject
+  // on which stage is the entry and which of its actions is the gate (it scans
+  // every action, honours workflow.entryStageId, and detects both legacy
+  // `assign_lead` effects and canvas-authored `outcome.assign`).
+  const leadGate = useMemo(
+    () => (pickedWorkflow ? findEntryLeadGate(pickedWorkflow) : null),
+    [pickedWorkflow],
+  )
+  const leadInput = leadGate?.input ?? null
 
   // Resolve the lead-picker candidate pool from the action's pickerScope.
   // Mirrors ActionModal's resolvePickerScope for the scopes a new-project lead
@@ -242,16 +241,6 @@ export default function NewProjectModal({ open, onClose }: Props) {
         setUploadStatus('Saving project…')
       }
 
-      // Auto-allocation: only when the workflow's first action is assign_lead
-      // AND the form supplied a lead.
-      const initialAction =
-        firstAction && firstAction.effect.kind === 'assign_lead' && leadUid
-          ? {
-              actionId: firstAction.id,
-              inputs: { leadUid },
-            }
-          : undefined
-
       // Phase 2d: normalise role assignments (strip empty/null) + field values.
       const normalizedRoles: Record<string, string | string[]> = {}
       for (const [k, v] of Object.entries(roleAssignments)) {
@@ -268,6 +257,15 @@ export default function NewProjectModal({ open, onClose }: Props) {
           v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)
         if (!empty) normalizedFields[k] = v
       }
+
+      // Auto-allocation: every entry-stage assignment gate this form already
+      // satisfied — the lead picked above and/or the project roles collected
+      // in normalizedRoles. Empty when the workflow has no such gate or nobody
+      // was picked, in which case the project lands on the gate stage as before.
+      const initialAllocation = planCreationAllocation(pickedWorkflow, {
+        leadUid,
+        roleAssignments: normalizedRoles,
+      })
 
       const projectId = await addProject({
         title: trimmedTitle,
@@ -306,7 +304,7 @@ export default function NewProjectModal({ open, onClose }: Props) {
           ? { deadline: Timestamp.fromDate(new Date(deadline)) }
           : {}),
         attachments,
-        ...(initialAction ? { initialAction } : {}),
+        ...(initialAllocation.length ? { initialAllocation } : {}),
       })
       onClose()
       navigate(`/projects/${projectId}`)

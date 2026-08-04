@@ -28,6 +28,7 @@ import { db } from './firebase'
 import { tenantDoc } from './firestore'
 import { recordAuditEvent } from './firestore'
 import { recomputeProjectAccessKeys } from './firestore'
+import { leadRoleLabel, queueRoleAssignmentNotifications } from './firestore'
 import { bumpStatusTally, stageEnteredPatch } from './rules/analyticsCounters'
 
 // Re-export so callers can import the error class directly from this module.
@@ -50,6 +51,19 @@ export function getCurrentStage(project: Project, workflow: Workflow): Stage {
 
 export function getStageById(workflow: Workflow, stageId: string): Stage | null {
   return workflow.stages.find((s) => s.id === stageId) ?? null
+}
+
+// The stage a brand-new project starts at: the author-set entry task (Phase 3),
+// falling back to the lowest-order stage. Lives here — beside getCurrentStage —
+// so `addProject` and the new-project form resolve it identically. They used to
+// each inline their own version, and diverged on `entryStageId`.
+export function resolveEntryStage(workflow: Workflow): Stage | null {
+  const ordered = [...workflow.stages].sort((a, b) => a.order - b.order)
+  if (!ordered.length) return null
+  return (
+    (workflow.entryStageId && workflow.stages.find((s) => s.id === workflow.entryStageId)) ||
+    ordered[0]
+  )
 }
 
 // ─── Headline rendering ──────────────────────────────────────────────────────
@@ -361,14 +375,24 @@ export function getInvolvedGlobalRoles(stage: Stage): Array<'super_admin' | 'adm
 
 // Input validation against an action's declared inputs. Exported so the
 // modal-side validation and the engine-side check share one implementation.
+//
+// `opts.requireOnly` narrows the required-check to the listed input ids — used
+// by creation-time auto-allocation, where the form only ever collects the
+// user_picker and the rest of the action's inputs are deliberately never asked
+// (the stage is being skipped). Anything that IS supplied is still type- and
+// option-checked, so a narrowed call can't smuggle a bad value through.
 export function validateActionInputs(
   action: StageAction,
   inputs: Record<string, unknown>,
+  opts?: { requireOnly?: string[] },
 ): void {
   for (const input of action.inputs) {
     const raw = inputs[input.id]
     const present = raw !== undefined && raw !== null && raw !== ''
-    if (input.required && !present) {
+    // requireOnly only ever NARROWS — it never makes an optional input required.
+    const enforceRequired =
+      input.required && (!opts?.requireOnly || opts.requireOnly.includes(input.id))
+    if (enforceRequired && !present) {
       throw makeError('missing_required_input', `${input.label} is required`)
     }
     if (!present) continue
@@ -415,6 +439,12 @@ export interface PerformActionArgs {
   // Optional tenant user directory. Used by clear_lead's accessKeys recompute so
   // hierarchy-role-actor holders are preserved across the rebuild.
   users?: User[]
+  // Creation-time auto-allocation ONLY (addProject). Skips the actor check —
+  // the creator is deliberately satisfying the gate as they create the project,
+  // and the gate exists to ensure allocation happens, not to stop the creator
+  // doing it — and narrows the required-input check to `requireOnly`. Never set
+  // from a UI action path; every surface goes through runWorkflowAction without it.
+  bypassGates?: { requireOnly: string[] }
 }
 
 export async function performAction(args: PerformActionArgs): Promise<void> {
@@ -434,7 +464,8 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   }
 
   // 2. Permission check (defence-in-depth — modals already gate rendering).
-  if (!canPerform(project, workflow, user, [], {} as OrgStructure, actionId)) {
+  // Skipped for creation-time auto-allocation; see bypassGates.
+  if (!args.bypassGates && !canPerform(project, workflow, user, [], {} as OrgStructure, actionId)) {
     if (!actorOnlyMatch(action.actor, user, project)) {
       throw makeError(
         'permission_denied',
@@ -444,7 +475,7 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   }
 
   // 3. Input validation.
-  validateActionInputs(action, inputs)
+  validateActionInputs(action, inputs, args.bypassGates)
 
   // 4. Compose the project patch + the projectHistory events to append.
   const now = Timestamp.now()
@@ -483,6 +514,8 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   const toStage = effectTargetStage()
   const stayingAtStage =
     action.effect.kind === 'set_status' || action.effect.kind === 'assign_project_role'
+  // Set by the assign_lead case; fanned out after the batch is created.
+  let notifyLeadUid: string | null = null
 
   // Standard transition (unless we're only changing status).
   if (!stayingAtStage) {
@@ -507,6 +540,9 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
         throw makeError('missing_required_input', 'A lead must be selected.')
       }
       patch.leadUid = leadUid
+      // Notified below, once the batch exists. Skipped when the slot didn't
+      // actually change hands (re-running allocate with the same person).
+      if (leadUid !== project.leadUid) notifyLeadUid = leadUid
       // The newly-assigned lead (vertical head) gains access. Additive union —
       // preserves every existing key and is safe inside a caller's shared batch.
       patch.accessKeys = arrayUnion(leadUid)
@@ -597,6 +633,17 @@ export async function performAction(args: PerformActionArgs): Promise<void> {
   const ownsBatch = !args.batch
   const batch = args.batch ?? writeBatch(db)
   batch.update(projectRef, patch)
+  // Tell the new lead (Vertical Head / Sales Manager / …) they now own this project.
+  if (notifyLeadUid) {
+    queueRoleAssignmentNotifications(batch, {
+      recipientIds: [notifyLeadUid],
+      roleLabel: leadRoleLabel(workflow),
+      projectId: project.id,
+      projectTitle: project.title,
+      actorId: user.uid,
+      actorName: user.displayName,
+    })
+  }
   // Phase 3 analytics: keep the tenant status tally in lockstep with the write.
   bumpStatusTally(batch, project.status, typeof patch.status === 'string' ? patch.status : null)
   recordAuditEvent({
