@@ -55,17 +55,25 @@ export function ProjectChatProvider({ projectId, children }: ProviderProps) {
   const lastWriteAtRef = useRef<number>(0)
   const pendingWriteRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Keyed on profile?.uid (primitive), NOT the profile object. markChatRead
+  // writes users/{uid}, which re-delivers the profile snapshot as a NEW object —
+  // object-keyed callbacks re-created here re-ran the mark-read effect below,
+  // which re-armed the debounce, whose flush wrote users/{uid} again… a
+  // perpetual 1 write/min/project/tab treadmill, each write fanned out as a
+  // billed read to every client holding a users-collection listener. With uid
+  // keys the chain is stable across profile snapshots and quiesces after the
+  // panel-open / new-message writes it's meant to do.
+  const uid = profile?.uid
   const flushMarkRead = useCallback(() => {
-    const uid = profile?.uid
     if (!uid) return
     lastWriteAtRef.current = Date.now()
     void markChatRead(uid, projectId).catch(() => {
       // Best-effort; the optimistic copy already cleared the badge.
     })
-  }, [profile, projectId])
+  }, [uid, projectId])
 
   const scheduleMarkRead = useCallback(() => {
-    if (!profile?.uid) return
+    if (!uid) return
     setOptimisticReadMs(Date.now())
     const sinceLast = Date.now() - lastWriteAtRef.current
     if (sinceLast >= MARK_READ_DEBOUNCE_MS) {
@@ -80,7 +88,7 @@ export function ProjectChatProvider({ projectId, children }: ProviderProps) {
         flushMarkRead()
       }, MARK_READ_DEBOUNCE_MS - sinceLast)
     }
-  }, [flushMarkRead, profile])
+  }, [flushMarkRead, uid])
 
   // Cleanup any pending debounced write on unmount.
   useEffect(
@@ -125,7 +133,6 @@ export function ProjectChatProvider({ projectId, children }: ProviderProps) {
 
   const send = useCallback(
     async (text: string, attachments?: ChatAttachment[]) => {
-      const uid = profile?.uid
       if (!uid) throw new Error('Not signed in.')
       await sendMessage({
         projectId,
@@ -134,7 +141,7 @@ export function ProjectChatProvider({ projectId, children }: ProviderProps) {
         attachments,
       })
     },
-    [projectId, profile],
+    [projectId, uid],
   )
 
   const edit = useCallback(

@@ -381,12 +381,31 @@ export default function ProjectDetail() {
   // Mark the corrigendum section seen on open (clears this user's list badge).
   // Conditional write — no user-doc write on ordinary opens; also fires if an
   // upload lands while the project is already open. Fire-and-forget.
+  //
+  // The ref latch is load-bearing: markCorrigendumSeen writes a serverTimestamp
+  // to users/{uid}, and the profile listener's latency-compensation snapshot
+  // delivers that pending timestamp as NULL — so `seen` reads 0 mid-flight and
+  // the uploadMs<=seen guard fails, which used to make this effect re-write on
+  // every snapshot until the server ack (and unboundedly while offline). The
+  // latch marks the (project, upload) pair as already written THIS SESSION,
+  // before the async call, so the pending-null snapshot can't re-enter. A new
+  // upload changes corrigendumUploadMs → new marker → exactly one more write.
   const corrigendumUploadMs = project?.corrigendumLastUploadAt?.toMillis()
+  const corrigendumWrittenRef = useRef<string | null>(null)
   useEffect(() => {
     if (!user || !projectId || corrigendumUploadMs === undefined) return
+    const marker = `${projectId}:${corrigendumUploadMs}`
+    if (corrigendumWrittenRef.current === marker) return
     const seen = profile?.corrigendumSeenAt?.[projectId]?.toMillis() ?? 0
     if (corrigendumUploadMs <= seen) return
-    void markCorrigendumSeen(user.uid, projectId).catch(() => {})
+    corrigendumWrittenRef.current = marker
+    void markCorrigendumSeen(user.uid, projectId).catch(() => {
+      // Release the latch so a later dep change can retry. Offline writes are
+      // SDK-queued and never reject, so reaching here means a hard failure
+      // (e.g. permission denied) — without this, the unread badge would stay
+      // lit until the user navigated away and back.
+      if (corrigendumWrittenRef.current === marker) corrigendumWrittenRef.current = null
+    })
   }, [user, projectId, corrigendumUploadMs, profile?.corrigendumSeenAt])
 
   if (loading) {

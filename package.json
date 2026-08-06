@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@firebase/firestore": "4.14.0",
     "@lottiefiles/dotlottie-react": "^0.19.3",
     "@xyflow/react": "^12.10.2",
     "dagre": "^0.8.5",

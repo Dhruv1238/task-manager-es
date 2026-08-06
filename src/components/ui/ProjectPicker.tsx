@@ -113,21 +113,25 @@ export default function ProjectPicker({
   const accessUid = profile?.uid ?? null
 
   // Auto-select the first visible project when enabled and no value is set.
-  // No ref/cancellation guards — once onChange fires, `value` becomes truthy
-  // and the early-return at the top blocks re-runs. In StrictMode dev this
-  // effect may run twice and fire getDocs twice; both resolve to the same id,
-  // and onChange is idempotent for the parent's useState setter, so it's safe.
   // Ref-held onChange so we don't churn the effect on every parent render.
+  // The once-per-mount latch matters twice over: (a) the deps are primitives
+  // (accessUid, not the profile object) so a users/{uid} write elsewhere can't
+  // re-fire this query, and (b) when the query returns EMPTY, `value` stays
+  // null forever — without the latch that combination re-ran the getDocs on
+  // every profile snapshot for the life of the mount.
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     onChangeRef.current = onChange
   })
+  const autoSelectRanRef = useRef(false)
   useEffect(() => {
-    if (!autoSelectFirst || value || !profile) return
+    // accessUid doubles as the "profile loaded" gate (uid is always set once
+    // the profile doc arrives) — a primitive, unlike the profile object.
+    if (!autoSelectFirst || value || !accessUid || autoSelectRanRef.current) return
+    autoSelectRanRef.current = true
     const projectsRef = tenantCol('projects')
     const constraints = []
     if (!isAdmin) {
-      if (!accessUid) return
       constraints.push(where('accessKeys', 'array-contains', accessUid))
     }
     constraints.push(orderBy('createdAt', 'desc'))
@@ -138,9 +142,13 @@ export default function ProjectPicker({
         if (first) onChangeRef.current(first.id)
       })
       .catch(() => {
-        // If the query fails we just leave value as null and let the user pick.
+        // Release the latch so a genuine dep change can retry. Safe: the
+        // profile object is no longer a dep, so profile snapshots can't
+        // re-fire this — which is what caused the read churn. An empty
+        // result still latches (via .then), so we don't re-query forever.
+        autoSelectRanRef.current = false
       })
-  }, [autoSelectFirst, value, profile, isAdmin, accessUid])
+  }, [autoSelectFirst, value, isAdmin, accessUid])
 
   const buildQuery = useCallback(
     (cursor: QueryDocumentSnapshot<DocumentData> | null) => {

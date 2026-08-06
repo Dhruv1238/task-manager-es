@@ -9,6 +9,9 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    /* Mirrors the vite alias: consumers of 'firebase/firestore' typecheck
+       against the instrumented facade, so a missing re-export fails compile. */
+    "paths": { "firebase/firestore": ["./src/lib/fsIntercept.ts"] },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

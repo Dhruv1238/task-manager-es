@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -24,6 +25,10 @@ const STORAGE_KEY = 'appConfig:v3'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const REGISTRY_STORAGE_KEY = 'workflowRegistry:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
+// How long ensureWorkflow trusts a "this workflow doc doesn't exist" result
+// before probing again. Bounds both the read drip and the staleness window
+// for a workflow seeded by another client mid-session.
+const MISSING_WORKFLOW_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 // Per-feature fallbacks when the key is missing from the appConfig doc.
 // NOT a blanket default: pre-existing capabilities must stay on for tenants
@@ -445,11 +450,28 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Ids that resolved to no doc, with the time we last probed. Without this
+  // negative cache, ensureWorkflow re-issued a getDoc for a dangling
+  // workflowId on EVERY caller recompute (useProjectsAwaitingMyAction re-runs
+  // per profile change, so one bad reference = a steady read drip from every
+  // /me tab).
+  //
+  // TTL rather than a permanent mark: a workflow seeded by ANOTHER client
+  // mid-session would otherwise stay invisible here until reload, since no
+  // non-admin path calls refreshWorkflow for an id outside the registry. One
+  // getDoc per id per TTL window keeps the drip fixed while letting new docs
+  // surface within minutes. An explicit refreshWorkflow always re-checks now.
+  const missingWorkflowIdsRef = useRef<Map<string, number>>(new Map())
+
   // Fetch a single workflow doc, normalise id from doc path so the in-memory
   // shape always matches the storage key, and write through both caches.
   const refreshWorkflow = useCallback(async (id: string): Promise<Workflow | null> => {
     const snap = await getDoc(tenantDoc('workflows', id))
-    if (!snap.exists()) return null
+    if (!snap.exists()) {
+      missingWorkflowIdsRef.current.set(id, Date.now())
+      return null
+    }
+    missingWorkflowIdsRef.current.delete(id)
     const data = snap.data() as Workflow
     const normalised: Workflow = { ...data, id }
     writeWorkflowCache(normalised)
@@ -477,6 +499,10 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
   const ensureWorkflow = useCallback(
     async (id: string): Promise<Workflow | null> => {
       if (workflowsById[id]) return workflowsById[id]
+      // Probed and absent within the TTL — don't re-issue the getDoc on every
+      // caller recompute. Direct refreshWorkflow calls still re-check now.
+      const probedAt = missingWorkflowIdsRef.current.get(id)
+      if (probedAt !== undefined && Date.now() - probedAt < MISSING_WORKFLOW_TTL_MS) return null
       const cached = readWorkflowCache(id)?.workflow
       if (cached) {
         setWorkflowsById((prev) => (prev[id] ? prev : { ...prev, [id]: cached }))
