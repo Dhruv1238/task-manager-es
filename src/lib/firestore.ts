@@ -40,8 +40,8 @@ import { getWorkflowSnapshot, getRolesSnapshot, getOrgStructureSnapshot } from '
 import { getCurrentStage, performAction, resolveEntryStage } from './workflowEvaluator'
 import type { AllocationHop } from './creationAllocation'
 import { executeOutcome } from './rules/executeOutcome'
-import { readActors, readOutcomes } from './rules/outcomeAdapter'
-import { computeEffectivePermissions, resolveRoleHolders } from './permissions/effectivePermissions'
+import { readOutcomes } from './rules/outcomeAdapter'
+import { computeEffectivePermissions } from './permissions/effectivePermissions'
 import type { OrgStructure, Team } from '../types/models'
 import type { RoleDef, EffectivePermissions } from '../types/v2'
 import {
@@ -625,27 +625,19 @@ export async function setTeamLead(input: SetTeamLeadInput): Promise<void> {
 
 // --- Projects (Sprint 3 — Flow 2, Sprint 4 — Flow 3) ---------------------------
 
-// The hierarchy-role ids referenced as actors anywhere in a workflow's actions
-// (canonical actor + actors[] + alsoAllow, via the adapter). These are the roles
-// whose holders must be able to SEE a project on this workflow to act on it.
-function roleActorIdsOf(workflow: Workflow): string[] {
-  const ids = new Set<string>()
-  for (const stage of workflow.stages) {
-    for (const action of stage.actions) {
-      for (const actor of readActors(action).all) {
-        if (actor.kind === 'role') ids.add(actor.roleId)
-      }
-    }
-  }
-  return [...ids]
-}
-
-// The single place the denormalised visibility array is built. As of the
-// access-scoping change, `accessKeys` is a PURE SET OF USER UIDS — team
-// membership is no longer an access vector. Access =
-//   createdBy ∪ leadUid (vertical head) ∪ project-role holders
-//   ∪ hierarchy-role-actor holders ∪ {lead of each attached team}
-//   ∪ {assignee of each task in the project}.
+// The single place the denormalised visibility array is built. `accessKeys` is
+// a PURE SET OF USER UIDS, and ASSIGNMENT is the only access vector:
+//   createdBy ∪ leadUid (vertical head) ∪ assigned project-role holders
+//   ∪ {lead of each attached team} ∪ {assignee of each task in the project}.
+//
+// Deliberately ABSENT: enumerating the holders of hierarchy roles referenced
+// as workflow actors. That spray (Phase 3.6) made every tender visible to
+// everyone at-or-above the lowest role level any action mentioned — ~46 uids
+// on a 4-person project, i.e. every Admin Head could see every other Admin
+// Head's projects. Holding a role governs what you MAY DO on a project you
+// can see (actorMatches keeps its level inheritance untouched); it no longer
+// makes you see it. Being named on the project does.
+//
 // Because team membership no longer grants access, callers must resolve the
 // attached teams' lead uids (`teamLeadIds`) and the project's task-assignee uids
 // (`assigneeIds`) up front — see `recomputeProjectAccessKeys`, which does those
@@ -664,10 +656,6 @@ export function computeAccessKeys(
   teamLeadIds: string[],
   // Resolved assignee uids of every task in the project (any status).
   assigneeIds: string[],
-  // Phase 3.6: when supplied, also enumerate the holders of every `role`-kind
-  // actor referenced by the workflow so hierarchy-role-gated projects are
-  // visible to (and routable for) their holders. Omitted → not seeded.
-  opts?: { workflow?: Workflow; users?: User[]; roles?: RoleDef[] },
 ): string[] {
   const keys = new Set<string>()
   for (const v of Object.values(roleAssignments ?? {})) {
@@ -678,11 +666,6 @@ export function computeAccessKeys(
   if (leadUid) keys.add(leadUid)
   for (const id of teamLeadIds) if (id) keys.add(id)
   for (const id of assigneeIds) if (id) keys.add(id)
-  if (opts?.workflow && opts.users?.length && opts.roles?.length) {
-    for (const roleId of roleActorIdsOf(opts.workflow)) {
-      for (const uid of resolveRoleHolders(roleId, opts.users, opts.roles)) keys.add(uid)
-    }
-  }
   return [...keys]
 }
 
@@ -696,9 +679,9 @@ export interface RecomputeAccessKeysOverrides {
   // Resolved team-lead uids to use instead of reading the teams back — needed
   // when the team.projectIds mirror is changing in the same op (setProjectTeams).
   teamLeadIds?: string[]
-  // Hierarchy-role enrichment (optional → not seeded, matching prior behaviour).
-  // There is no module-level users snapshot, so callers pass the directory;
-  // roles falls back to getRolesSnapshot(), workflow to the project's pinned one.
+  // DEPRECATED — accepted so existing callers compile, but ignored since the
+  // hierarchy-role-actor spray was removed from computeAccessKeys (holding a
+  // role no longer grants visibility; assignment does).
   workflow?: Workflow
   users?: User[]
   roles?: RoleDef[]
@@ -726,7 +709,6 @@ export async function recomputeProjectAccessKeys(
         ownerId?: string
         leadUid?: string | null
         roleAssignments?: Record<string, string | string[]>
-        pinnedWorkflow?: Workflow
       })
     : {}
 
@@ -734,7 +716,6 @@ export async function recomputeProjectAccessKeys(
   const createdBy = overrides?.createdBy ?? proj.createdBy ?? proj.ownerId
   const leadUid =
     overrides && 'leadUid' in overrides ? overrides.leadUid : proj.leadUid ?? null
-  const workflow = overrides?.workflow ?? proj.pinnedWorkflow
 
   let teamLeadIds = overrides?.teamLeadIds
   if (!teamLeadIds) {
@@ -750,11 +731,7 @@ export async function recomputeProjectAccessKeys(
     .map((d) => (d.data() as { assigneeId?: string | null }).assigneeId)
     .filter((id): id is string => Boolean(id))
 
-  return computeAccessKeys(roleAssignments, createdBy, leadUid, teamLeadIds, assigneeIds, {
-    workflow,
-    users: overrides?.users,
-    roles: overrides?.roles ?? getRolesSnapshot(),
-  })
+  return computeAccessKeys(roleAssignments, createdBy, leadUid, teamLeadIds, assigneeIds)
 }
 
 export interface AddProjectInput {
@@ -887,7 +864,6 @@ export async function addProject(input: AddProjectInput): Promise<string> {
       initialLeadUid,
       [],
       [],
-      { workflow, users: input.users, roles: getRolesSnapshot() },
     ),
     attachments: input.attachments ?? [],
     ...(input.deadline ? { deadline: input.deadline } : {}),

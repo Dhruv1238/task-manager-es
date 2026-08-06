@@ -1279,6 +1279,34 @@ function MigrationsSection({ adminUid }: { adminUid: string | null }) {
   const [open, setOpen] = useState(false)
   const [history, setHistory] = useState<OperationRow>({ status: 'idle' })
   const [retire, setRetire] = useState<OperationRow>({ status: 'idle' })
+  const [accessDry, setAccessDry] = useState<OperationRow>({ status: 'idle' })
+  const [accessApply, setAccessApply] = useState<OperationRow>({ status: 'idle' })
+
+  async function runAccessKeys(dryRun: boolean) {
+    if (!adminUid) return
+    if (
+      !dryRun &&
+      !confirm(
+        'Rebuild accessKeys on every project to the assignment-only set (creator + lead + assigned role holders + team leads + task assignees)? Run the dry run first.',
+      )
+    )
+      return
+    const setRow = dryRun ? setAccessDry : setAccessApply
+    setRow({ status: 'running' })
+    try {
+      const { backfillAccessKeys } = await import('../lib/backfillAccessKeys')
+      const res = await backfillAccessKeys(adminUid, { dryRun })
+      // Full per-project detail for the operator; the row shows the totals.
+      console.log(`[accessKeys backfill${dryRun ? ' DRY RUN' : ''}]`, res)
+      if (res.changes.length) console.table(res.changes.slice(0, 25))
+      setRow({
+        status: 'done',
+        message: `${dryRun ? 'Would change' : 'Changed'} ${res.changed}/${res.totalScanned} project(s) · −${res.keysRemoved} uid(s), +${res.keysAdded} · ${dryRun ? 'no writes (details in console)' : `${res.batches} batch(es)`}.`,
+      })
+    } catch (e) {
+      setRow({ status: 'error', message: e instanceof Error ? e.message : 'Backfill failed' })
+    }
+  }
 
   async function runHistory() {
     if (!adminUid) return
@@ -1338,6 +1366,20 @@ function MigrationsSection({ adminUid }: { adminUid: string | null }) {
             hint="Removes the legacy pipeline.enabled field from /config/appConfig via deleteField()."
             row={retire}
             onRun={runRetire}
+            disabled={!adminUid}
+          />
+          <RunButton
+            label="Access keys backfill — dry run"
+            hint="Recomputes every project's accessKeys to the assignment-only set and reports what would change (biggest reductions in the console). Writes nothing."
+            row={accessDry}
+            onRun={() => runAccessKeys(true)}
+            disabled={!adminUid}
+          />
+          <RunButton
+            label="Access keys backfill — apply"
+            hint="Writes the recomputed accessKeys. Strips the retired role-holder spray, so projects stop being visible to unassigned Admin/Functional/Vertical Heads. Run the dry run first."
+            row={accessApply}
+            onRun={() => runAccessKeys(false)}
             disabled={!adminUid}
           />
         </div>
