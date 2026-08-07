@@ -21,7 +21,9 @@ import { useAuth } from './AuthContext'
 // takes effect on the next load instead of waiting out the 24h cache TTL.
 // Bumped v2→v3 when the org-wide feature toggles landed (FEATURE_DEFAULTS):
 // forces a fresh fetch so cached configs without the new keys re-sync.
-const STORAGE_KEY = 'appConfig:v3'
+// Bumped v3→v4 with the syncGuard toggle so the new key syncs immediately —
+// it's a kill switch, and a 24h-stale cache would blunt it.
+const STORAGE_KEY = 'appConfig:v4'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const REGISTRY_STORAGE_KEY = 'workflowRegistry:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -44,6 +46,9 @@ export const FEATURE_DEFAULTS: Record<FeatureKey, boolean> = {
   taskDuplication: false,
   crossTeamSubtasks: false,
   corrigendumSection: false,
+  // Off until smoke-tested in prod; flipping it off again is the remote kill
+  // switch if the overlay ever misfires.
+  syncGuard: false,
 }
 
 // Default config — used when no Firestore doc exists yet AND no localStorage

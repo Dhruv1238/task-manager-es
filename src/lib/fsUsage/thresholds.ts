@@ -18,37 +18,44 @@ export const FS_USAGE = {
   SLOT_MS: 10_000, // 6 slots of 10s; advanced lazily inside recordOp — no timers
 
   // ── Trip thresholds (per client, per rolling minute) ───────────────────
-  // Calibrated against the real incident: 396K reads/hr org-wide across ~16
-  // fan-out clients ≈ 400 reads/min PER CLIENT, versus ~22/min normal. The
-  // original 1,500 bar would have missed it entirely on the read side.
+  // Calibrated twice against real data:
+  //  - the Aug-6 incident: ~400 writes+deltas/min from ONE client (a write
+  //    loop fanned out over the users-collection listeners);
+  //  - the healthiest busy day after the fixes (Aug 7): peak hour 24K reads /
+  //    1.9K writes ORG-WIDE ≈ 400 reads/min + 32 writes/min across ~16-20
+  //    concurrent clients, i.e. ~25 reads/min and ~2 writes/min PER CLIENT.
+  // The gap between "busiest normal" and "incident" is ~15×, so thresholds
+  // sit in the middle: several × above the busiest legitimate burst, well
+  // under the incident shape.
   //
-  // DELTAS is the sharpest instrument and the one that catches this exact
-  // shape. It counts snapshot UPDATE DELIVERIES (events), not documents:
+  // DELTAS is the sharpest instrument. It counts snapshot UPDATE DELIVERIES
+  // (events), not documents:
   //   - a cold page load is ONE delivery carrying thousands of docs
   //     (AdminDashboard's useAllTasks reads the whole tasks collection) —
   //     large read count, 1 delta;
   //   - a write-loop fanned out over a collection listener is HUNDREDS of
-  //     deliveries carrying one changed doc each — 400 deltas.
-  // So deltas separate "legitimately expensive" from "leaking" in a way raw
-  // read counts cannot, which is why reads stay comparatively high (dropping
-  // them far enough to catch 400/min would fire on every admin page load and
-  // drown the signal in false positives).
-  PER_COLLECTION_DELTAS_PER_MIN: 120, // vs ~400 in the incident, ~6-18 normal
-  GLOBAL_DELTAS_PER_MIN: 200,
-  // Writes have no legitimate sustained burst in this app (~1/min per client
-  // normally; the looping client hit ~400/min), so this can be tight. Bulk
-  // admin operations (migrations, a team edit recomputing access keys across
-  // many projects) may trip it — that's report-only and worth knowing about.
-  PER_COLLECTION_WRITES_PER_MIN: 40,
-  GLOBAL_WRITES_PER_MIN: 100,
+  //     deliveries carrying one changed doc each.
+  PER_COLLECTION_DELTAS_PER_MIN: 300, // incident ~400-600; busy normal ≤40
+  GLOBAL_DELTAS_PER_MIN: 500,
+  // Writes: ~2/min per client normally; the looping client hit ~400/min.
+  // 150 also clears deliberate bulk ops (the accessKeys backfill stages up to
+  // 200 batch writes per commit — a VERY large migration run may still log
+  // one rate-limited report, which is acceptable visibility, not noise).
+  PER_COLLECTION_WRITES_PER_MIN: 150,
+  GLOBAL_WRITES_PER_MIN: 300,
   // Listener-churn storms — the signature of a dependency-array bug
-  // re-mounting a collection listener.
-  PER_COLLECTION_SUBS_PER_MIN: 25,
+  // re-mounting a collection listener. A project page mounts ~5 listeners on
+  // 'projects'; 60 allows ~12 rapid page hops/min, churn bugs run hundreds.
+  PER_COLLECTION_SUBS_PER_MIN: 60,
   // Only SERVER-served reads count here (cache deliveries don't bill); both
-  // are reported. Kept above the largest legitimate single-collection
-  // snapshot; deltas above are the precision instrument.
-  PER_COLLECTION_SERVER_READS_PER_MIN: 900,
-  GLOBAL_SERVER_READS_PER_MIN: 2_500,
+  // are reported. This is the blunt catch-all, NOT the diagnostic — it must
+  // clear every legitimate single-shot scan: AdminDashboard's full-tasks
+  // snapshot, the KPI page's auditEvents window, the backfill dry-run's
+  // whole-collection getDocs (the source of the "for no reason" reports at
+  // the old 900 bar). If auditEvents outgrows this, raise it again — deltas/
+  // subs/writes above are what actually name leaks.
+  PER_COLLECTION_SERVER_READS_PER_MIN: 3_000,
+  GLOBAL_SERVER_READS_PER_MIN: 5_000,
 
   // ── Reporting (report-only breaker — no blocking, by decision) ─────────
   REPORT_COOLDOWN_PER_COLLECTION_MS: 10 * 60_000,

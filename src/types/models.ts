@@ -365,6 +365,10 @@ export type FeatureKey =
   // A second, admin-named attachments section on projects (default "Corrigendum")
   // with new-upload badges on the project list.
   | 'corrigendumSection'
+  // Full-screen blocking overlay when the browser is offline or locally-queued
+  // writes stop reaching the server, plus a boot gate that holds the app while
+  // a previous session's queue drains. Doubles as the remote kill switch.
+  | 'syncGuard'
 
 export interface AppConfig {
   // Monotonic counter bumped on every save. Drives cache invalidation when the

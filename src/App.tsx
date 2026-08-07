@@ -3,6 +3,7 @@ import { Route, Routes, useLocation, type Location } from 'react-router-dom'
 import { SuperAdminRoute } from './components/AdminRoute'
 import RequireAccess from './components/RequireAccess'
 import ProtectedRoute from './components/ProtectedRoute'
+import SyncGuardOverlay from './components/SyncGuardOverlay'
 import TaskDetailModal from './components/tasks/TaskDetailModal'
 import ProjectLayout from './layouts/ProjectLayout'
 import AdminDashboard from './pages/AdminDashboard'
@@ -152,6 +153,11 @@ function App() {
           <Route path="/tasks/:taskId" element={<TaskDetailModal />} />
         </Routes>
       )}
+
+      {/* Connection/sync guard — sibling of <Routes> so it covers every route
+        * including /login. Feature-gated (syncGuard, default off); renders
+        * nothing while healthy. */}
+      <SyncGuardOverlay />
     </>
   )
 
