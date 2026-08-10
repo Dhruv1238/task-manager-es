@@ -48,6 +48,27 @@ import {
 import { recordOp, isHot } from './fsUsage/core'
 import { getTag, tagQuery } from './fsUsage/normalizePath'
 import { captureStack, shouldCaptureReadStack } from './fsUsage/stackSampler'
+import { writeStarted, writeSettled } from './fsUsage/inflightWrites'
+
+// Register a write promise with the inflight tracker (sync-guard stall
+// detection): settled = acked or rejected, either way it's an answer.
+// Returns the DERIVED promise (same value, rethrown reason) rather than the
+// original: attaching a handler to the original would mark it "handled" and
+// silence the browser's unhandledrejection reporting for fire-and-forget
+// writes — this shape keeps caller-visible semantics identical to the raw SDK.
+function trackWrite<T>(p: Promise<T>): Promise<T> {
+  const id = writeStarted()
+  return p.then(
+    (v) => {
+      writeSettled(id)
+      return v
+    },
+    (e) => {
+      writeSettled(id)
+      throw e
+    },
+  )
+}
 
 // Path string for samples: refs expose .path; queries fall back to their tag.
 function pathOf(target: unknown): string {
@@ -200,22 +221,22 @@ export const onSnapshot: typeof _onSnapshot = ((...args: any[]) => {
 
 export const setDoc: typeof _setDoc = ((ref: any, ...rest: any[]) => {
   recordOp('set', getTag(ref), 1, false, pathOf(ref), captureStack())
-  return (_setDoc as any)(ref, ...rest)
+  return trackWrite((_setDoc as any)(ref, ...rest))
 }) as typeof _setDoc
 
 export const updateDoc: typeof _updateDoc = ((ref: any, ...rest: any[]) => {
   recordOp('update', getTag(ref), 1, false, pathOf(ref), captureStack())
-  return (_updateDoc as any)(ref, ...rest)
+  return trackWrite((_updateDoc as any)(ref, ...rest))
 }) as typeof _updateDoc
 
 export const deleteDoc: typeof _deleteDoc = ((ref: any) => {
   recordOp('delete', getTag(ref), 1, false, pathOf(ref), captureStack())
-  return (_deleteDoc as any)(ref)
+  return trackWrite((_deleteDoc as any)(ref))
 }) as typeof _deleteDoc
 
 export const addDoc: typeof _addDoc = ((colRef: any, data: any) => {
   recordOp('add', getTag(colRef), 1, false, pathOf(colRef), captureStack())
-  return (_addDoc as any)(colRef, data)
+  return trackWrite((_addDoc as any)(colRef, data))
 }) as typeof _addDoc
 
 // Facade over WriteBatch: staged ops are attributed only when commit() runs —
@@ -243,7 +264,7 @@ export const writeBatch: typeof _writeBatch = ((db: any) => {
     },
     commit() {
       for (const op of staged) recordOp('batchWrite', op.tag, 1, false, op.path, op.stack)
-      return real.commit()
+      return trackWrite(real.commit())
     },
   }
   return facade as unknown as WriteBatch
@@ -284,7 +305,7 @@ export const runTransaction: typeof _runTransaction = (async (
     }
     return updateFunction(facade as unknown as Transaction)
   }
-  const result = await (_runTransaction as any)(db, wrappedUpdate, options)
+  const result = await trackWrite((_runTransaction as any)(db, wrappedUpdate, options))
   for (const op of lastAttemptWrites) recordOp('txnWrite', op.tag, 1, false, op.path, op.stack)
   return result
 }) as typeof _runTransaction
