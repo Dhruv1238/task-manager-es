@@ -11,7 +11,7 @@
  *
  * Scope: collaborative flow only (callers pre-filter to COLLAB_DEFAULT_WORKFLOW_ID).
  */
-import type { AuditEvent, Project } from '../../types/models'
+import type { AuditAction, AuditEvent, Project } from '../../types/models'
 import type { StageEvent } from '../../types/workflow'
 import { isProjectClosed } from '../projectStatus'
 
@@ -414,38 +414,113 @@ export function teamFlowEfficiency(
     .sort((a, b) => b.efficiency - a.efficiency)
 }
 
+export interface UserActivity {
+  uid: string
+  displayName?: string
+  email?: string
+  // Recorded ≥1 action inside the window.
+  active: boolean
+  // Actions inside the window. The tile counts people, not actions — this only
+  // ranks the drill-down list so the busiest people surface first.
+  actions: number
+  lastActionMs: number | null
+  lastAction?: AuditAction
+  // Seat state, not activity: a deactivated account still counts toward `total`
+  // for the months it was onboarded, and reads as an idle seat here.
+  deactivated: boolean
+  onboardedMs: number | null
+}
+
 export interface UserStats {
   total: number
   active: number
   rate: number // 0..1
+  // Who those two numbers actually are: every user counted in `total`, each
+  // flagged active or idle for the window. Ordered active-first, then by action
+  // count, then by recency, then by name — the drill-down opens on the people
+  // doing the work. `active` === roster.filter(r => r.active).length by
+  // construction, so the tile and its list can never disagree.
+  roster: UserActivity[]
 }
 
 // #7 Total vs active users over one month.
-//  - active = distinct auditEvents.actorId inside [monthStartMs, monthEndMs)
-//    that map to a real user doc.
 //  - total  = users onboarded before monthEndMs, so a past month is measured
 //    against the headcount as it stood then rather than today's. Users with no
 //    parsable createdAt count as always-onboarded (unknown ⇒ pre-existing),
 //    which keeps the current month identical to a plain users.length.
+//  - active = of those, the ones with ≥1 auditEvent (actorId) inside
+//    [monthStartMs, monthEndMs). Scoping actors to the onboarded set keeps
+//    active a true subset of total — an actor whose user doc postdates the
+//    window can never push the ratio above 100%.
 // monthEndMs defaults to open-ended (current month, running to now).
 export function userStats(
-  users: Array<{ uid: string; createdAt?: unknown }>,
+  users: Array<{
+    uid: string
+    displayName?: string
+    email?: string
+    status?: string
+    createdAt?: unknown
+  }>,
   audit: AuditEvent[],
   monthStartMs: number,
   monthEndMs = Infinity,
 ): UserStats {
-  const uids = new Set(users.map((u) => u.uid))
-  const active = new Set<string>()
-  for (const e of audit) {
-    const at = tsToMs(e.createdAt)
-    if (at != null && at >= monthStartMs && at < monthEndMs && uids.has(e.actorId))
-      active.add(e.actorId)
-  }
-  const total = users.filter((u) => {
+  const onboarded = users.filter((u) => {
     const ms = tsToMs(u.createdAt)
     return ms == null || ms < monthEndMs
-  }).length
-  return { total, active: active.size, rate: total ? active.size / total : 0 }
+  })
+  const onboardedUids = new Set(onboarded.map((u) => u.uid))
+
+  const activity = new Map<
+    string,
+    { actions: number; lastActionMs: number; lastAction?: AuditAction }
+  >()
+  for (const e of audit) {
+    const at = tsToMs(e.createdAt)
+    if (at == null || at < monthStartMs || at >= monthEndMs) continue
+    if (!onboardedUids.has(e.actorId)) continue
+    const prev = activity.get(e.actorId)
+    if (!prev) {
+      activity.set(e.actorId, { actions: 1, lastActionMs: at, lastAction: e.action })
+    } else {
+      prev.actions += 1
+      if (at > prev.lastActionMs) {
+        prev.lastActionMs = at
+        prev.lastAction = e.action
+      }
+    }
+  }
+
+  const roster: UserActivity[] = onboarded
+    .map((u) => {
+      const a = activity.get(u.uid)
+      return {
+        uid: u.uid,
+        displayName: u.displayName,
+        email: u.email,
+        active: a != null,
+        actions: a?.actions ?? 0,
+        lastActionMs: a?.lastActionMs ?? null,
+        lastAction: a?.lastAction,
+        deactivated: u.status === 'deactivated',
+        onboardedMs: tsToMs(u.createdAt),
+      }
+    })
+    .sort(
+      (a, b) =>
+        Number(b.active) - Number(a.active) ||
+        b.actions - a.actions ||
+        (b.lastActionMs ?? 0) - (a.lastActionMs ?? 0) ||
+        (a.displayName ?? a.email ?? a.uid).localeCompare(b.displayName ?? b.email ?? b.uid),
+    )
+
+  const active = roster.filter((r) => r.active).length
+  return {
+    total: onboarded.length,
+    active,
+    rate: onboarded.length ? active / onboarded.length : 0,
+    roster,
+  }
 }
 
 export interface ActiveUsersPoint {

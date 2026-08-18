@@ -102,7 +102,8 @@ export default function UsageAnalytics() {
           onboarded by the end of that month. Viewing-only visits aren't counted. The month pickers
           on this page go back to {monthLabel(reportMonths[reportMonths.length - 1])}, where portal
           activity starts; the current month is counted to date, so it reads low until the month
-          fills out.
+          fills out. The tile's <i>Who's active?</i> button opens the named roster behind the
+          ratio for the selected month — active, idle, and a CSV export.
         </li>
         <li>
           <b>Median cycle time (tile) / Cycle-time reduction (chart):</b> for each project, days

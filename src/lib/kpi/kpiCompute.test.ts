@@ -311,6 +311,60 @@ describe('userStats month scoping', () => {
   })
 })
 
+describe('userStats roster (the drill-down behind the tile)', () => {
+  const auditEv = (actorId: string, at: number, action = 'task.updated') =>
+    ({ id: 'e', actorId, action, createdAt: ts(at) }) as unknown as AuditEvent
+
+  const jan = new Date(2026, 0, 1).getTime()
+  const users = [
+    { uid: 'u1', displayName: 'Ada', email: 'ada@x.test', createdAt: ts(jan) },
+    { uid: 'u2', displayName: 'Bo', email: 'bo@x.test', createdAt: ts(jan) },
+    { uid: 'u3', displayName: 'Cy', email: 'cy@x.test', createdAt: ts(jan), status: 'deactivated' },
+  ]
+  const mar = monthBounds('2026-03')
+  const events = [
+    auditEv('u1', new Date(2026, 2, 4).getTime(), 'project.created'),
+    auditEv('u1', new Date(2026, 2, 18).getTime(), 'project.stage_transitioned'),
+    auditEv('u2', new Date(2026, 2, 9).getTime()),
+    auditEv('u1', new Date(2026, 3, 2).getTime()), // April — outside the window
+  ]
+  const s = userStats(users, events, mar.startMs, mar.endMs)
+
+  it('names everyone in the denominator, active first', () => {
+    expect(s.roster.map((r) => r.uid)).toEqual(['u1', 'u2', 'u3'])
+    expect(s.roster.map((r) => r.active)).toEqual([true, true, false])
+    expect(s.roster.length).toBe(s.total)
+  })
+
+  it('counts in-window actions per person and keeps the latest one', () => {
+    const ada = s.roster[0]
+    expect(ada.actions).toBe(2) // April event excluded
+    expect(ada.lastAction).toBe('project.stage_transitioned')
+    expect(ada.lastActionMs).toBe(new Date(2026, 2, 18).getTime())
+  })
+
+  it('leaves idle seats with no activity, flagging deactivated accounts', () => {
+    const cy = s.roster[2]
+    expect(cy.actions).toBe(0)
+    expect(cy.lastActionMs).toBeNull()
+    expect(cy.deactivated).toBe(true)
+  })
+
+  it('can never disagree with the tile it sits behind', () => {
+    expect(s.roster.filter((r) => r.active).length).toBe(s.active)
+  })
+
+  it('keeps active a subset of total when an actor postdates the window', () => {
+    const june = new Date(2026, 5, 1).getTime()
+    const late = [...users, { uid: 'u4', displayName: 'Di', createdAt: ts(june) }]
+    const withGhostActor = [...events, auditEv('u4', new Date(2026, 2, 12).getTime())]
+    const r = userStats(late, withGhostActor, mar.startMs, mar.endMs)
+    expect(r.total).toBe(3) // u4 not onboarded until June
+    expect(r.active).toBe(2) // …so its March events can't inflate the numerator
+    expect(r.roster.some((x) => x.uid === 'u4')).toBe(false)
+  })
+})
+
 describe('month picker range', () => {
   it('enumerates whole months from the window start through now', () => {
     const start = new Date(2026, 3, 1).getTime()

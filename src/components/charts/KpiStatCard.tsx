@@ -5,7 +5,9 @@ import { Info } from 'lucide-react'
 // are optional; tone tints only the delta, never the main value. `info` adds an
 // ⓘ affordance whose plain-language definition surfaces on hover/focus, and
 // `control` takes a compact per-tile scope picker (e.g. a month <select>) in
-// the header, left of that ⓘ.
+// the header, left of that ⓘ. `action` sits under the sub-label for a
+// drill-down affordance (e.g. "View the 41 people") — kept out of the card's
+// click target so it never fights the header control.
 interface Props {
   label: string
   value: string
@@ -13,9 +15,18 @@ interface Props {
   delta?: { value: string; direction: 'up' | 'down' | 'flat'; good?: boolean }
   info?: string
   control?: ReactNode
+  action?: ReactNode
 }
 
-export default function KpiStatCard({ label, value, sub, delta, info, control }: Props) {
+export default function KpiStatCard({
+  label,
+  value,
+  sub,
+  delta,
+  info,
+  control,
+  action,
+}: Props) {
   const deltaColor =
     delta?.good === undefined
       ? 'text-fg-subtle'
@@ -54,6 +65,7 @@ export default function KpiStatCard({ label, value, sub, delta, info, control }:
         )}
       </div>
       {sub && <p className="mt-1 text-xs text-fg-subtle">{sub}</p>}
+      {action && <div className="no-print mt-2.5">{action}</div>}
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { Users } from 'lucide-react'
 import type { KpiData } from '../../hooks/useKpiMetrics'
 import { pct } from '../../lib/kpi/format'
+import ActiveUsersPanel from './ActiveUsersPanel'
 import KpiStatCard from './KpiStatCard'
 import MonthSelect from './MonthSelect'
 
@@ -13,6 +15,9 @@ import MonthSelect from './MonthSelect'
  * through useKpiMetrics (it changes which audit window userStats counts), so
  * the page owns it and passes it back down. The on-time month only picks a
  * bucket out of an already-computed series, so it lives here.
+ *
+ * The active-users tile also opens a roster drill-down (ActiveUsersPanel) —
+ * "41/183" is only actionable once you can see which 41.
  */
 export default function KpiHeadlineTiles({
   kpi,
@@ -23,6 +28,7 @@ export default function KpiHeadlineTiles({
 }) {
   const { metrics, reportMonths, currentMonth, userMonth } = kpi
   const [otMonth, setOtMonth] = useState<string | null>(null)
+  const [rosterOpen, setRosterOpen] = useState(false)
 
   const wr = metrics.winRate
   const totAwarded = wr.reduce((a, b) => a + b.awarded, 0)
@@ -95,6 +101,18 @@ export default function KpiHeadlineTiles({
             label="Month for active users"
           />
         }
+        action={
+          u.total > 0 && (
+            <button
+              type="button"
+              onClick={() => setRosterOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-line px-2 py-1 text-[11px] font-medium text-fg-muted transition hover:border-brand-edge hover:text-fg focus-visible:border-brand-edge focus-visible:text-fg"
+            >
+              <Users size={12} aria-hidden />
+              Who's active?
+            </button>
+          )
+        }
       />
       <KpiStatCard
         label="Median cycle time"
@@ -114,6 +132,13 @@ export default function KpiHeadlineTiles({
               }
         }
         info="Typical days from a project being created to its pitch going out (or the project closing). Time spent on hold waiting on clients is not counted. Lower is better."
+      />
+      <ActiveUsersPanel
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
+        stats={u}
+        month={userMonth}
+        isCurrentMonth={isCurrentMonth}
       />
     </div>
   )
