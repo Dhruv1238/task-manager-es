@@ -9,6 +9,7 @@ import NotificationBell from './NotificationBell'
 import NavbarAdminMenu, { type AdminNavItem } from './NavbarAdminMenu'
 import NavbarAccountMenu from './NavbarAccountMenu'
 import { useFeature } from '../contexts/AppConfigContext'
+import { acquireScrollLock } from '../lib/scrollLock'
 
 // Sandbox slots — lazy-loaded so production bundles never fetch them.
 const SandboxMenu = __IS_SANDBOX__
@@ -70,13 +71,29 @@ export default function Navbar() {
     setMobileOpen(false)
   }, [location.pathname])
 
+  // The drawer markup and its toggle are both lg:hidden, so if the viewport
+  // crosses the lg breakpoint (tablet rotation, window resize) while the
+  // drawer is open, the overlay AND its only close control disappear — but
+  // mobileOpen would stay true, keeping the scroll lock below held with
+  // nothing visible holding it. Close it the moment the desktop layout kicks in.
   useEffect(() => {
     if (!mobileOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
+    // No synchronous matches check needed: the toggle is itself lg:hidden, so
+    // the drawer can only ever OPEN below the breakpoint — only a resize
+    // while open can cross it, and the change listener catches that.
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setMobileOpen(false)
     }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [mobileOpen])
+
+  useEffect(() => {
+    if (!mobileOpen) return
+    // Ref-counted shared lock (lib/scrollLock.ts): overlays can overlap, and a
+    // save-and-restore here could re-apply a stale 'hidden' on cleanup.
+    return acquireScrollLock()
   }, [mobileOpen])
 
   return (

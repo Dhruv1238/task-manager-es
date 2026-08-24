@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { acquireScrollLock } from '../../lib/scrollLock'
 
 type Size = 'sm' | 'md' | 'lg' | 'xl'
 
@@ -35,13 +36,16 @@ export default function Modal({
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
-    }
+    return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // Separate effect, keyed on `open` alone: an unstable onClose identity must
+  // not churn the lock while the modal sits open. Ref-counted because modals
+  // nest (see lib/scrollLock.ts) — release order doesn't matter.
+  useEffect(() => {
+    if (!open) return
+    return acquireScrollLock()
+  }, [open])
 
   if (!open) return null
 

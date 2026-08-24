@@ -17,6 +17,7 @@ import type {
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { useAppConfigContext, useOrgStructure, useProjectWorkflow } from '../../contexts/AppConfigContext'
 import { stageTone } from './stageStyle'
+import { acquireScrollLock } from '../../lib/scrollLock'
 import { STATUS_DISPLAY } from '../../lib/projectStatus'
 import FieldValue from '../fields/FieldValue'
 
@@ -252,13 +253,16 @@ export default function ProjectHistorySidePanel({ open, onClose, project }: Prop
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
-    }
+    return () => document.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // Separate effect keyed on `open` alone — an unstable onClose identity must
+  // not churn the lock. Ref-counted (lib/scrollLock.ts) so overlapping
+  // overlays release in any order without leaving <body> stuck on 'hidden'.
+  useEffect(() => {
+    if (!open) return
+    return acquireScrollLock()
+  }, [open])
 
   const stageById = useMemo(() => {
     if (!workflow) return new Map<string, Stage>()
