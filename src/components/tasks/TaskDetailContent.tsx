@@ -10,8 +10,7 @@ import { usePermissions } from '../../hooks/usePermissions'
 import { useTaskPermissions } from '../../hooks/useTaskPermissions'
 import { useAuth } from '../../contexts/AuthContext'
 import { useFeature } from '../../contexts/AppConfigContext'
-import { setTaskStatus, transitionTaskFromReview, updateTaskDetails } from '../../lib/firestore'
-import { getEffectiveAssignee } from '../../lib/effectiveAssignee'
+import { setTaskAssignee, setTaskStatus, transitionTaskFromReview, updateTaskDetails } from '../../lib/firestore'
 import {
   KIND_STYLES,
   canHaveChildren,
@@ -19,6 +18,7 @@ import {
   effectiveKind,
 } from '../../lib/taskKind'
 import AddSubtaskForm from './AddSubtaskForm'
+import AssigneeMenu from './AssigneeMenu'
 import DuplicateTaskModal from './DuplicateTaskModal'
 import LinkedTasksSection from './LinkedTasksSection'
 import StatusMenu from './StatusMenu'
@@ -213,11 +213,6 @@ export default function TaskDetailContent({ task }: Props) {
     return m
   }, [teams])
 
-  const assignee = useMemo(
-    () => getEffectiveAssignee(task, userById, teamById),
-    [task, userById, teamById],
-  )
-
   const isAssignee = user?.uid === task.assigneeId
   const isCreator = user?.uid === task.createdBy
   // Editing title/description + managing attachments: the creator, the assignee,
@@ -316,6 +311,26 @@ export default function TaskDetailContent({ task }: Props) {
     } catch (e) {
       // Most likely the completion gate (blocked by an unfinished task).
       setStatusError(e instanceof Error ? e.message : 'Failed to change status')
+    }
+  }
+
+  async function handleAssigneeChange(next: {
+    assigneeId: string | null
+    assigneeName: string | null
+  }) {
+    if (!user || !profile) return
+    setStatusError(null)
+    try {
+      await setTaskAssignee({
+        taskId: task.id,
+        assigneeId: next.assigneeId,
+        assigneeName: next.assigneeName,
+        actorId: user.uid,
+        actorName: profile.displayName,
+      })
+    } catch (e) {
+      // Surfaced through the same meta-row alert as status failures.
+      setStatusError(e instanceof Error ? e.message : 'Failed to change assignee')
     }
   }
 
@@ -419,17 +434,13 @@ export default function TaskDetailContent({ task }: Props) {
             {task.workType}
           </span>
         )}
-        {assignee && (
-          <span className="inline-flex items-center gap-1.5 text-fg-muted">
-            <Avatar user={assignee.user} size={20} />
-            <span>
-              {assignee.user.displayName}
-              {assignee.implicit && (
-                <span className="ml-1 text-fg-subtle">· Lead</span>
-              )}
-            </span>
-          </span>
-        )}
+        <AssigneeMenu
+          task={task}
+          users={userById}
+          teams={teamById}
+          onChange={handleAssigneeChange}
+          disabled={!canEdit}
+        />
         <span className={`font-medium ${priority.cls}`}>{priority.label} priority</span>
         <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-muted'}>
           {overdue ? 'Overdue · ' : ''}

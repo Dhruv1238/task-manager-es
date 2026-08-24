@@ -36,7 +36,10 @@ function describeAuditEvent(e: AuditEvent): string {
     case 'task.status_changed':
       return `changed status ${String(p.from ?? '?')} → ${String(p.to ?? '?')}`
     case 'task.assignee_changed':
-      return 'changed the assignee'
+      if (p.toAssigneeId == null) return 'unassigned the task'
+      return typeof p.toAssigneeName === 'string' && p.toAssigneeName
+        ? `assigned the task to ${p.toAssigneeName}`
+        : 'changed the assignee'
     case 'task.submitted_for_review':
       return 'submitted the task for review'
     case 'task.review_approved':

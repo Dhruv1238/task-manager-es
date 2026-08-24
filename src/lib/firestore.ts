@@ -1917,6 +1917,101 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
   await batch.commit()
 }
 
+export interface SetTaskAssigneeInput {
+  taskId: string
+  // null = unassign. A team-level task with no explicit assignee is implicitly
+  // owned by the team lead (see getEffectiveAssignee), so clearing is a valid
+  // state, not an error.
+  assigneeId: string | null
+  assigneeName: string | null
+  actorId: string
+  actorName: string
+}
+
+// Reassign a task (any kind — epic/story/task/subtask ride the same doc shape).
+// Applies to every task surface: the write is on the task doc, so boards,
+// lists, /me and the detail views all pick it up through their listeners.
+export async function setTaskAssignee(input: SetTaskAssigneeInput): Promise<void> {
+  const ref = tenantDoc('tasks', input.taskId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) throw new Error('Task not found')
+  const task = snap.data() as {
+    title?: string
+    projectId?: string
+    teamId?: string
+    assigneeId?: string | null
+    assigneeName?: string
+  }
+  const prevAssigneeId = task.assigneeId ?? null
+  if (prevAssigneeId === input.assigneeId) return
+
+  const batch = writeBatch(db)
+  batch.update(ref, {
+    assigneeId: input.assigneeId,
+    // Denormalized display name travels with the id; on unassign it must be
+    // removed, not left stale (deleteField, since undefined is rejected).
+    assigneeName: input.assigneeName?.trim() ? input.assigneeName.trim() : deleteField(),
+    updatedAt: serverTimestamp(),
+  })
+
+  // Access maintenance: the new assignee gains task-based project access.
+  // arrayUnion is additive-only, so this needs no recompute — the revoke side
+  // for the PREVIOUS assignee happens after commit (below).
+  if (input.assigneeId && task.projectId) {
+    batch.update(tenantDoc('projects', task.projectId), {
+      accessKeys: arrayUnion(input.assigneeId),
+      updatedAt: serverTimestamp(),
+    })
+  }
+
+  recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.assignee_changed',
+    targetType: 'task',
+    targetId: input.taskId,
+    ...(task.title ? { targetTitle: task.title } : {}),
+    ...(task.projectId ? { projectId: task.projectId } : {}),
+    ...(task.teamId ? { teamId: task.teamId } : {}),
+    // Same payload shape the review-reject reassignment already writes.
+    payload: {
+      fromAssigneeId: prevAssigneeId,
+      toAssigneeId: input.assigneeId,
+      ...(task.assigneeName ? { fromAssigneeName: task.assigneeName } : {}),
+      ...(input.assigneeName ? { toAssigneeName: input.assigneeName } : {}),
+    },
+    batch,
+  })
+
+  // Assignment notification to the new assignee (queueNotification skips the
+  // actor assigning themselves).
+  if (input.assigneeId && task.projectId) {
+    queueNotification(batch, {
+      recipientId: input.assigneeId,
+      type: 'assignment',
+      actorId: input.actorId,
+      actorName: input.actorName,
+      taskId: input.taskId,
+      projectId: task.projectId,
+      taskTitle: task.title ?? 'a task',
+    })
+  }
+
+  await batch.commit()
+
+  // Reassignment changes who has task-based access: the previous assignee may
+  // no longer be justified anywhere on the project. arrayUnion can't revoke,
+  // so mirror the review-reject path — full recompute AFTER the commit, when
+  // the tasks read reflects the new assignee.
+  if (prevAssigneeId && task.projectId) {
+    const accessKeys = await recomputeProjectAccessKeys(task.projectId)
+    await updateDoc(tenantDoc('projects', task.projectId), {
+      accessKeys,
+      updatedAt: serverTimestamp(),
+    })
+  }
+}
+
 export interface AddProjectAttachmentInput {
   projectId: string
   projectTitle: string
