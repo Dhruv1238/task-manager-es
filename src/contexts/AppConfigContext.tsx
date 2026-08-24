@@ -23,7 +23,9 @@ import { useAuth } from './AuthContext'
 // forces a fresh fetch so cached configs without the new keys re-sync.
 // Bumped v3→v4 with the syncGuard toggle so the new key syncs immediately —
 // it's a kill switch, and a 24h-stale cache would blunt it.
-const STORAGE_KEY = 'appConfig:v4'
+// Bumped v4→v5 with the timeTracking toggle so the new key syncs immediately
+// rather than waiting out a 24h-stale cache that predates it.
+const STORAGE_KEY = 'appConfig:v5'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const REGISTRY_STORAGE_KEY = 'workflowRegistry:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -49,6 +51,10 @@ export const FEATURE_DEFAULTS: Record<FeatureKey, boolean> = {
   // Off until smoke-tested in prod; flipping it off again is the remote kill
   // switch if the overlay ever misfires.
   syncGuard: false,
+  // Genuinely new surface — off until an admin turns it on. Needs both
+  // timeEntries composite indexes built first (see useTaskTimeEntries and
+  // useMyTimeEntries).
+  timeTracking: false,
 }
 
 // Default config — used when no Firestore doc exists yet AND no localStorage

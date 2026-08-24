@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
 import { useAuth } from '../contexts/AuthContext'
+import { useFeature } from '../contexts/AppConfigContext'
 import WorkflowBadge from '../components/projects/WorkflowBadge'
+import MyTimeSection from '../components/tasks/MyTimeSection'
 import { useMyTasks } from '../hooks/useMyTasks'
 import { useMyLedTeamTasks } from '../hooks/useMyLedTeamTasks'
 import { useMyReviewQueue } from '../hooks/useMyReviewQueue'
@@ -334,6 +336,7 @@ export default function Me() {
   const [showCompleted, setShowCompleted] = useState(false)
   const [showSubmitted, setShowSubmitted] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true)
+  const timeTrackingOn = useFeature('timeTracking')
 
   // Project status by id — used to hide tasks whose project has been submitted
   // (the work is off the assignee's plate). Fail open: a task whose project
@@ -571,6 +574,17 @@ export default function Me() {
           )}
         </section>
       )}
+
+      {/* Flag-gated as a whole section: with time tracking off there is nothing
+          to log against, so a personal timesheet is just noise on this page.
+          Nothing is lost — the entries stay in Firestore and remain visible on
+          each task's detail (which keeps showing logged time regardless of the
+          flag) and on /admin/time, so re-enabling brings this straight back.
+          Real auth uid, not the sandbox persona lens — entries are always
+          authored as the actual signed-in visitor (the security rules pin an
+          entry's uid to request.auth.uid), so "my time" can only ever mean
+          that visitor's own logged time, persona or not. */}
+      {timeTrackingOn && <MyTimeSection uid={user?.uid} />}
     </main>
   )
 }

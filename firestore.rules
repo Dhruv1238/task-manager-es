@@ -35,6 +35,25 @@ service cloud.firestore {
           && request.resource.data.text.size() <= 5000;
     }
 
+    // A time entry carries a positive whole number of minutes and a bare
+    // calendar day ('YYYY-MM-DD'), never a timestamp — see the TimeEntry type.
+    function validTimeEntry() {
+      return request.resource.data.minutes is int
+          && request.resource.data.minutes >= 1
+          && request.resource.data.dateKey is string
+          // Month 01-12, day 01-31 — not full calendar validation (Firestore
+          // rules can't check e.g. Feb 30), but rejects the obviously bogus
+          // groupings a direct write could otherwise smuggle in.
+          && request.resource.data.dateKey.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+          && (!('note' in request.resource.data)
+              || (request.resource.data.note is string
+                  // .size() on a string counts UTF-8 BYTES, not JS characters —
+                  // the 500-char client input can therefore be up to ~2000
+                  // bytes for multi-byte text (CJK, emoji), so the cap here
+                  // must be sized in bytes, not mirror the character count.
+                  && request.resource.data.note.size() <= 2000));
+    }
+
     function validEdit() {
       return request.resource.data.authorId == resource.data.authorId
           && request.resource.data.createdAt == resource.data.createdAt
@@ -89,6 +108,37 @@ service cloud.firestore {
     match /workflows/{workflowId} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
+    }
+
+    // ─── /timeEntries/{entryId} ──────────────────────────────────────────
+    // Per-task time logs (features.timeTracking). A time entry is a personal
+    // fact: only its owner may create it (uid is pinned to the caller), and
+    // only its owner or a super_admin may correct or remove it. Reads stay
+    // open to any signed-in user because the /admin/time report aggregates
+    // across everyone.
+    //
+    // Proportionate hygiene, not a security boundary — the blanket rule below
+    // still lets any signed-in client write tasks/ and auditEvents/ directly.
+    // Sandbox builds write to sandbox/{visitorUid}/timeEntries, which this
+    // match does not cover; the sandbox ruleset handles those (same as chat).
+
+    match /timeEntries/{entryId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+                    && validTimeEntry()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.createdAt == request.time;
+
+      allow update: if isSignedIn()
+                    && validTimeEntry()
+                    && (resource.data.uid == request.auth.uid || isSuperAdmin())
+                    // Ownership and creation time are immutable.
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if isSignedIn()
+                    && (resource.data.uid == request.auth.uid || isSuperAdmin());
     }
 
     // ─── Everything else — unchanged blanket rule ───────────────────────

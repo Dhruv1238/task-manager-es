@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import type { Timestamp } from 'firebase/firestore'
+import { Clock } from 'lucide-react'
 import { getEffectiveAssignee } from '../../lib/effectiveAssignee'
+import { formatDuration } from '../../lib/duration'
 import { useFeature } from '../../contexts/AppConfigContext'
 import { KIND_STYLES, effectiveKind } from '../../lib/taskKind'
 import type { Task, TaskPriority, Team, User } from '../../types/models'
@@ -107,6 +109,16 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
           <span className={overdue ? 'text-tone-danger-fg' : 'text-fg-subtle'}>
             {overdue ? '⚠ ' : ''}
             {due}
+          </span>
+        )}
+        {/* Not flag-gated: logged time is data, and the counter costs no reads. */}
+        {(task.timeSpentMinutes ?? 0) > 0 && (
+          <span
+            className="inline-flex items-center gap-1 text-fg-subtle"
+            title={`${formatDuration(task.timeSpentMinutes)} logged`}
+          >
+            <Clock size={11} aria-hidden />
+            {formatDuration(task.timeSpentMinutes)}
           </span>
         )}
       </div>

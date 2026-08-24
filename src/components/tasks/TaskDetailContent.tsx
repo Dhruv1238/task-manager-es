@@ -23,6 +23,7 @@ import DuplicateTaskModal from './DuplicateTaskModal'
 import LinkedTasksSection from './LinkedTasksSection'
 import StatusMenu from './StatusMenu'
 import TaskAttachmentsSection from './TaskAttachmentsSection'
+import TimeTrackingSection from './TimeTrackingSection'
 import CommentsSection from './CommentsSection'
 import TaskActivitySection from './TaskActivitySection'
 import SubmitForReviewModal from '../workflow/SubmitForReviewModal'
@@ -172,6 +173,7 @@ export default function TaskDetailContent({ task }: Props) {
   const hierarchyOn = useFeature('taskHierarchy')
   const linkingOn = useFeature('taskLinking')
   const duplicationOn = useFeature('taskDuplication')
+  const timeTrackingOn = useFeature('timeTracking')
   const ancestors = useAncestorChain(hierarchyOn ? task : null)
   // Tasks that block this one and aren't done yet — gate completion (the write
   // path enforces it authoritatively; this drives the UI affordance).
@@ -626,6 +628,12 @@ export default function TaskDetailContent({ task }: Props) {
         attachments={task.attachments ?? []}
         canEdit={canEdit}
       />
+
+      {/* Entries logged while the flag was on stay visible after it goes off —
+          the section just drops its composer and row controls. */}
+      {(timeTrackingOn || (task.timeSpentMinutes ?? 0) > 0) && (
+        <TimeTrackingSection task={task} canLog={timeTrackingOn} users={userById} />
+      )}
 
       <CommentsSection
         taskId={task.id}

@@ -9,6 +9,7 @@ import ProjectLayout from './layouts/ProjectLayout'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminMembers from './pages/AdminMembers'
 import KpiReports from './pages/KpiReports'
+import TimeReport from './pages/TimeReport'
 import UsageAnalytics from './pages/UsageAnalytics'
 import AppConfigPage from './pages/AppConfigPage'
 import Home from './pages/Home'
@@ -91,6 +92,10 @@ function App() {
             * always passes via RequireAccess's hierarchy-independent baseline). */}
           <Route element={<RequireAccess module="reports" />}>
             <Route path="/admin" element={<AdminDashboard />} />
+            {/* Time Report rides the same grant as Admin Analytics. Its own
+              * release switch is the timeTracking feature flag: with the flag
+              * off nothing is logged, so the page is inert rather than hidden. */}
+            <Route path="/admin/time" element={<TimeReport />} />
           </Route>
           {/* KPI Reports + Usage Analytics — pushed but NOT yet released to the
             * client. No nav entry, no permission column; the routes stay live

@@ -8,6 +8,7 @@ import ThemeToggle from './ThemeToggle'
 import NotificationBell from './NotificationBell'
 import NavbarAdminMenu, { type AdminNavItem } from './NavbarAdminMenu'
 import NavbarAccountMenu from './NavbarAccountMenu'
+import { useFeature } from '../contexts/AppConfigContext'
 
 // Sandbox slots — lazy-loaded so production bundles never fetch them.
 const SandboxMenu = __IS_SANDBOX__
@@ -50,6 +51,7 @@ export default function Navbar() {
   // RELEASE(kpi-reports): uncomment with the KPI Reports navbar entries below.
   // const canViewKpiReports = isSuperAdmin || can('kpi_reports', 'view')
   const canViewSettings = isSuperAdmin || can('settings', 'view')
+  const timeTrackingOn = useFeature('timeTracking')
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
 
@@ -58,6 +60,9 @@ export default function Navbar() {
   const adminItems: AdminNavItem[] = [
     canViewMembers && { to: '/admin/members', label: 'Members' },
     canViewReports && { to: '/admin', end: true, label: 'Admin Analytics' },
+    // Flag-gated as well as permission-gated: no point advertising a report
+    // that has nothing in it until an admin turns time tracking on.
+    canViewReports && timeTrackingOn && { to: '/admin/time', label: 'Time Report' },
     canViewSettings && { to: '/admin/config', label: 'Configuration' },
   ].filter(Boolean) as AdminNavItem[]
 
@@ -222,6 +227,11 @@ export default function Navbar() {
               {canViewReports && (
                 <NavLink to="/admin" end className={mobileLinkCls}>
                   Admin Analytics
+                </NavLink>
+              )}
+              {canViewReports && timeTrackingOn && (
+                <NavLink to="/admin/time" className={mobileLinkCls}>
+                  Time Report
                 </NavLink>
               )}
               {/* RELEASE(kpi-reports): uncomment to restore the mobile entry.

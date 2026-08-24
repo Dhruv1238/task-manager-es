@@ -268,6 +268,12 @@ export interface Task {
   subtaskCount?: number
   subtaskDoneCount?: number
 
+  // Sum of this task's timeEntries.minutes (features.timeTracking). Maintained
+  // by increment() inside the same batch as every entry write, so it can't drift
+  // from the entries. Display-only — the /admin/time report always re-sums the
+  // raw entries, so a stale counter is cosmetic. Missing on legacy tasks → 0.
+  timeSpentMinutes?: number
+
   attachments: Attachment[]
 
   createdBy: string
@@ -299,6 +305,42 @@ export interface Comment {
   // UIDs @mentioned in this comment (features.notifications). Drives per-user
   // mention notifications; missing/empty on legacy comments.
   mentionedUids?: string[]
+}
+
+// One "I spent N minutes on this task on day D" fact (features.timeTracking).
+// Stored TOP-LEVEL at tenantCol('timeEntries'), not as a task subcollection:
+// every report is a cross-task group-by, and a collectionGroup query would
+// cross sandbox visitor subtrees (`sandbox/{visitorUid}/...`). Same shape of
+// storage as auditEvents/notifications — append an event doc carrying every
+// dimension it will be grouped by, then aggregate client-side.
+//
+// userName/taskTitle/projectTitle are creation-time snapshots (the same trade
+// `Comment.authorName` and `Task.projectTitle` already make). Reports group by
+// the *ids* and use the snapshot for display only.
+export interface TimeEntry {
+  id: string
+  // Who spent the time. The only identity field the security rules trust, and
+  // the per-user group-by key. Never rewritten — an admin correcting an entry
+  // stays the audit actor without becoming its owner.
+  uid: string
+  userName: string
+  taskId: string
+  taskTitle: string
+  projectId: string
+  projectTitle: string
+  teamId: string
+  // Canonical total, integer >= 1. Composed from the hours + minutes inputs.
+  minutes: number
+  // 'YYYY-MM-DD' — the user-declared work day, NOT an instant. Deliberately a
+  // string rather than a Timestamp: a calendar day has no timezone, so storing
+  // one avoids the tz-bucketing ambiguity a Timestamp would reintroduce (and
+  // the codebase buckets local-time everywhere else). Sorts and range-queries
+  // lexicographically on the free single-field index.
+  dateKey: string
+  note?: string
+  createdAt: Timestamp
+  // Present only after an edit.
+  updatedAt?: Timestamp
 }
 
 // In-app notification (features.notifications). Named AppNotification to avoid
@@ -369,6 +411,10 @@ export type FeatureKey =
   // writes stop reaching the server, plus a boot gate that holds the app while
   // a previous session's queue drains. Doubles as the remote kill switch.
   | 'syncGuard'
+  // Per-task time logging (hours + minutes on a chosen work day) plus the
+  // /admin/time report. Gates the composer and the nav entry only — entries
+  // already logged stay visible and aggregatable after the flag goes off.
+  | 'timeTracking'
 
 export interface AppConfig {
   // Monotonic counter bumped on every save. Drives cache invalidation when the
@@ -484,6 +530,11 @@ export type AuditAction =
   | 'task.linked'
   | 'task.unlinked'
   | 'task.updated'
+  // Time logging (features.timeTracking). The actor is whoever performed the
+  // write, which on a correction may be an admin rather than the entry's owner.
+  | 'task.time_logged'
+  | 'task.time_updated'
+  | 'task.time_deleted'
   // Admin-sensitive
   | 'user.created'
   | 'user.role_changed'

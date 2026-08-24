@@ -238,6 +238,10 @@ const FEATURE_META: Record<FeatureKey, { label: string; hint: string }> = {
     label: 'Extra attachments section',
     hint: 'A second, named attachments section on projects (e.g. Corrigendum) with new-upload badges on the project list.',
   },
+  timeTracking: {
+    label: 'Time tracking',
+    hint: 'Log hours and minutes against a task on a chosen day, and see per-person / per-project / per-day totals under Admin → Time Report. Entries already logged stay visible when off.',
+  },
   syncGuard: {
     label: 'Connection guard',
     hint: 'Blocks the app with a full-screen notice when someone is offline or their changes stop reaching the server, and holds at load until a previous session’s unsynced changes finish syncing. Prevents days-stale offline work.',
@@ -252,6 +256,7 @@ const FEATURE_ORDER: FeatureKey[] = [
   'notifications',
   'descriptionPreview',
   'corrigendumSection',
+  'timeTracking',
   'syncGuard',
 ]
 

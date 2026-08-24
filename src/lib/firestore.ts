@@ -42,7 +42,7 @@ import type { AllocationHop } from './creationAllocation'
 import { executeOutcome } from './rules/executeOutcome'
 import { readOutcomes } from './rules/outcomeAdapter'
 import { computeEffectivePermissions } from './permissions/effectivePermissions'
-import type { OrgStructure, Team } from '../types/models'
+import type { OrgStructure, Team, TimeEntry } from '../types/models'
 import type { RoleDef, EffectivePermissions } from '../types/v2'
 import {
   addDoc,
@@ -2135,6 +2135,179 @@ export async function addProjectComment(input: AddProjectCommentInput): Promise<
     createdAt: serverTimestamp(),
   })
   return ref.id
+}
+
+// --- Time tracking (features.timeTracking) -----------------------------------
+// Entries live in the TOP-LEVEL `timeEntries` collection (see the TimeEntry
+// doc comment for why it isn't a task subcollection). Each write batches three
+// things so they can never drift apart:
+//   1. the entry doc itself
+//   2. an increment() of the parent task's timeSpentMinutes counter — the
+//      analyticsCounters doctrine: "Firestore has no GROUP BY, so dashboards
+//      read pre-aggregated counters, maintained inside the SAME writeBatch"
+//   3. the audit event
+// There is deliberately NO project-level counter: the report page reads its
+// date window of entries anyway, and a single all-time scalar could not answer
+// per-day or per-user slices — it would only add contention on hot project docs.
+
+export interface LogTaskTimeInput {
+  taskId: string
+  taskTitle: string
+  projectId: string
+  projectTitle: string
+  teamId: string
+  // The person the time belongs to == the actor. Logging on someone else's
+  // behalf is not a supported flow (the rules pin uid to request.auth.uid).
+  uid: string
+  userName: string
+  minutes: number // integer >= 1, already composed from hours + minutes
+  dateKey: string // 'YYYY-MM-DD'
+  note?: string
+}
+
+export async function logTaskTime(input: LogTaskTimeInput): Promise<string> {
+  const batch = writeBatch(db)
+  const ref = doc(tenantCol('timeEntries'))
+  const note = input.note?.trim()
+  batch.set(ref, {
+    uid: input.uid,
+    userName: input.userName,
+    taskId: input.taskId,
+    taskTitle: input.taskTitle,
+    projectId: input.projectId,
+    projectTitle: input.projectTitle,
+    teamId: input.teamId,
+    minutes: input.minutes,
+    dateKey: input.dateKey,
+    // Firestore rejects an explicit undefined, so omit the key entirely.
+    ...(note ? { note } : {}),
+    createdAt: serverTimestamp(),
+  })
+  batch.update(tenantDoc('tasks', input.taskId), {
+    timeSpentMinutes: increment(input.minutes),
+    updatedAt: serverTimestamp(),
+  })
+  recordAuditEvent({
+    actorId: input.uid,
+    actorName: input.userName,
+    action: 'task.time_logged',
+    targetType: 'task',
+    targetId: input.taskId,
+    targetTitle: input.taskTitle,
+    projectId: input.projectId,
+    teamId: input.teamId,
+    payload: { entryId: ref.id, minutes: input.minutes, dateKey: input.dateKey },
+    batch,
+  })
+  await batch.commit()
+  return ref.id
+}
+
+export interface UpdateTimeEntryInput {
+  entryId: string
+  taskId: string
+  taskTitle: string
+  projectId: string
+  teamId: string
+  minutes: number
+  dateKey: string
+  note?: string
+  // Whoever is performing the edit — the owner, or a super_admin correcting it.
+  // The entry's own uid/userName are never rewritten.
+  actorId: string
+  actorName: string
+}
+
+// Transactional rather than a plain batch: the counter delta is derived from
+// the entry's server-side minutes at commit time, not a client-cached value.
+// Two overlapping edits of the SAME entry (two tabs, or an owner and a
+// super_admin correcting the same row within moments of each other) would
+// otherwise both compute their delta against the same stale baseline and
+// permanently drift task.timeSpentMinutes — increment() only ever applies a
+// relative delta, so there is no way to reconcile it after the fact. A
+// transaction re-reads and retries on contention instead, so each edit's
+// delta is always correct relative to what actually landed before it. If the
+// entry was deleted concurrently, this is a no-op (nothing left to edit).
+export async function updateTimeEntry(input: UpdateTimeEntryInput): Promise<void> {
+  const entryRef = tenantDoc('timeEntries', input.entryId)
+  const taskRef = tenantDoc('tasks', input.taskId)
+  const note = input.note?.trim()
+
+  const prevMinutes = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(entryRef)
+    if (!snap.exists()) return null
+    const prev = (snap.data() as TimeEntry).minutes
+    tx.update(entryRef, {
+      minutes: input.minutes,
+      dateKey: input.dateKey,
+      // An emptied note must be removed, not written as undefined.
+      note: note ? note : deleteField(),
+      updatedAt: serverTimestamp(),
+    })
+    const delta = input.minutes - prev
+    if (delta !== 0) {
+      tx.update(taskRef, { timeSpentMinutes: increment(delta), updatedAt: serverTimestamp() })
+    }
+    return prev
+  })
+  if (prevMinutes === null) return
+
+  // Outside the transaction: a new doc has no contention, and keeping it out
+  // means a transaction retry can't produce duplicate audit rows.
+  await recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.time_updated',
+    targetType: 'task',
+    targetId: input.taskId,
+    targetTitle: input.taskTitle,
+    projectId: input.projectId,
+    teamId: input.teamId,
+    payload: { entryId: input.entryId, fromMinutes: prevMinutes, toMinutes: input.minutes, dateKey: input.dateKey },
+  })
+}
+
+export interface DeleteTimeEntryInput {
+  entryId: string
+  taskId: string
+  taskTitle: string
+  projectId: string
+  teamId: string
+  actorId: string
+  actorName: string
+}
+
+// Transactional for the same reason as updateTimeEntry, plus idempotency: the
+// entry's minutes are read server-side inside the transaction rather than
+// trusting a client-cached value, so a duplicate delete call (the owner and a
+// super_admin both clicking Remove on the same row within moments of each
+// other) decrements the counter exactly once — the second transaction finds
+// the doc already gone and no-ops instead of blindly decrementing again.
+export async function deleteTimeEntry(input: DeleteTimeEntryInput): Promise<void> {
+  const entryRef = tenantDoc('timeEntries', input.entryId)
+  const taskRef = tenantDoc('tasks', input.taskId)
+
+  const deletedMinutes = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(entryRef)
+    if (!snap.exists()) return null
+    const minutes = (snap.data() as TimeEntry).minutes
+    tx.delete(entryRef)
+    tx.update(taskRef, { timeSpentMinutes: increment(-minutes), updatedAt: serverTimestamp() })
+    return minutes
+  })
+  if (deletedMinutes === null) return
+
+  await recordAuditEvent({
+    actorId: input.actorId,
+    actorName: input.actorName,
+    action: 'task.time_deleted',
+    targetType: 'task',
+    targetId: input.taskId,
+    targetTitle: input.taskTitle,
+    projectId: input.projectId,
+    teamId: input.teamId,
+    payload: { entryId: input.entryId, minutes: deletedMinutes },
+  })
 }
 
 // `transitionStage` was removed in Phase 2a / Sprint 4. Every project stage

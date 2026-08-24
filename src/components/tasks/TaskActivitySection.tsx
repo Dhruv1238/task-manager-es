@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Timestamp } from 'firebase/firestore'
 import { useTaskAuditEvents } from '../../hooks/useTaskAuditEvents'
+import { formatDuration } from '../../lib/duration'
 import type { AuditEvent } from '../../types/models'
 
 function fmtWhen(ts: Timestamp | undefined): string {
@@ -15,6 +16,10 @@ function fmtWhen(ts: Timestamp | undefined): string {
 
 function fmtMillis(v: unknown): string {
   return typeof v === 'number' ? new Date(v).toLocaleDateString() : 'none'
+}
+
+function fmtMinutes(v: unknown): string {
+  return typeof v === 'number' ? formatDuration(v) : 'time'
 }
 
 // Turn an audit event into a human sentence (subject is the actor, rendered
@@ -46,6 +51,12 @@ function describeAuditEvent(e: AuditEvent): string {
       return 'linked another task'
     case 'task.unlinked':
       return 'unlinked a task'
+    case 'task.time_logged':
+      return `logged ${fmtMinutes(p.minutes)}${p.dateKey ? ` for ${String(p.dateKey)}` : ''}`
+    case 'task.time_updated':
+      return `changed a time entry ${fmtMinutes(p.fromMinutes)} → ${fmtMinutes(p.toMinutes)}`
+    case 'task.time_deleted':
+      return `removed a time entry (${fmtMinutes(p.minutes)})`
     case 'task.updated': {
       const parts: string[] = []
       if (p.titleChanged) parts.push('renamed it')

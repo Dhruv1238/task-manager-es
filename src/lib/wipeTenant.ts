@@ -57,6 +57,7 @@ const COLLECTIONS_TO_WIPE = [
   'workflows',
   'auditEvents',
   'notifications',
+  'timeEntries',
 ] as const
 
 // Doc paths under /config/. We delete instead of overwriting so the wizard's
