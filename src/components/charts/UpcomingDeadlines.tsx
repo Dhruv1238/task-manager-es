@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Task } from '../../types/models'
+import { isTerminal } from '../../lib/taskStatus'
 import ChartCard from './ChartCard'
 
 interface Props {
@@ -22,7 +23,7 @@ export default function UpcomingDeadlines({
     return tasks
       .filter((t) => {
         if (!t.dueDate) return false
-        if (t.status === 'done') return false
+        if (isTerminal(t.status)) return false
         const ms = t.dueDate.toDate().getTime()
         return ms >= now - 24 * 60 * 60 * 1000 && ms <= cutoff
       })

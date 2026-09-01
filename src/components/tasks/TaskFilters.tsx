@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Team, TaskKind, TaskPriority, TaskStatus, User } from '../../types/models'
+import { bucketForActiveSet, taskStatusLabel, useTaskStatuses } from '../../lib/taskStatus'
 
 export interface TaskFilterState {
   statuses: Set<TaskStatus>
@@ -25,12 +26,27 @@ export interface TaskFilterable {
   teamId?: string | null
 }
 
+// Pure function outside React, so the techTaskStatuses flag is threaded in as
+// a parameter. Statuses match on the ACTIVE bucket, not the raw status: with
+// the tech set off, the In Review pill must also match dev_done/in_uat/
+// ready_for_prod tasks — they render under that column, and column and filter
+// must agree.
 export function applyFilters(
   tasks: TaskFilterable[],
   filters: TaskFilterState,
+  techOn: boolean,
 ): boolean[] {
+  // BOTH sides go through the bucket. Saved filters keep their raw ids across
+  // flag flips (taskFilterStorage), so a filter stored as 'dev_done' has to
+  // degrade to 'in_review' when the tech set is off — otherwise it matches
+  // nothing and silently blanks the board with no active pill to explain it.
+  const selected =
+    filters.statuses.size > 0
+      ? new Set(Array.from(filters.statuses, (s) => bucketForActiveSet(s, techOn)))
+      : null
+
   return tasks.map((t) => {
-    if (filters.statuses.size > 0 && !filters.statuses.has(t.status)) return false
+    if (selected && !selected.has(bucketForActiveSet(t.status, techOn))) return false
     if (filters.priorities.size > 0 && !filters.priorities.has(t.priority)) return false
     // Kind filter: tasks with no kind read as 'task' (matches effectiveKind).
     if (filters.kinds.size > 0 && !filters.kinds.has(t.kind ?? 'task')) return false
@@ -41,13 +57,20 @@ export function applyFilters(
   })
 }
 
-const STATUS_PILLS: { value: TaskStatus; label: string; activeCls: string }[] = [
-  { value: 'todo', label: 'Todo', activeCls: 'bg-fill-4 text-fg' },
-  { value: 'in_progress', label: 'In Progress', activeCls: 'bg-tone-info-bg text-tone-info-fg' },
-  { value: 'in_review', label: 'In Review', activeCls: 'bg-brand-soft text-brand' },
-  { value: 'done', label: 'Done', activeCls: 'bg-tone-success-bg text-tone-success-fg' },
-  { value: 'blocked', label: 'Blocked', activeCls: 'bg-tone-danger-bg text-tone-danger-fg' },
-]
+// Active-pill classes only — label and order come from useTaskStatuses(). Kept
+// as a local map (not derived from TASK_STATUS_META.pillCls) so the selected
+// pill look stays exactly as before. Total over the union — compile-enforced.
+const STATUS_ACTIVE_CLS: Record<TaskStatus, string> = {
+  todo: 'bg-fill-4 text-fg',
+  in_progress: 'bg-tone-info-bg text-tone-info-fg',
+  blocked: 'bg-tone-danger-bg text-tone-danger-fg',
+  dev_done: 'bg-tone-mint-bg text-tone-mint-fg',
+  in_review: 'bg-brand-soft text-brand',
+  in_uat: 'bg-tone-yellow-bg text-tone-yellow-fg',
+  ready_for_prod: 'bg-tone-orange-bg text-tone-orange-fg',
+  done: 'bg-tone-success-bg text-tone-success-fg',
+  cancelled: 'bg-tone-pink-bg text-tone-pink-fg',
+}
 
 const PRIORITY_PILLS: { value: TaskPriority; label: string; activeCls: string }[] = [
   { value: 'low', label: 'Low', activeCls: 'bg-fill-4 text-fg' },
@@ -313,6 +336,7 @@ export default function TaskFilters({
   showKind = false,
   teams,
 }: Props) {
+  const { statuses } = useTaskStatuses()
   const hasAny =
     value.statuses.size > 0 ||
     value.priorities.size > 0 ||
@@ -327,22 +351,22 @@ export default function TaskFilters({
       {showStatus && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs uppercase tracking-wider text-fg-subtle">Status</span>
-          {STATUS_PILLS.map((p) => {
-            const active = value.statuses.has(p.value)
+          {statuses.map((s) => {
+            const active = value.statuses.has(s)
             return (
               <button
-                key={p.value}
+                key={s}
                 type="button"
                 onClick={() =>
-                  onChange({ ...value, statuses: toggle(value.statuses, p.value) })
+                  onChange({ ...value, statuses: toggle(value.statuses, s) })
                 }
                 className={
                   active
-                    ? `${basePill} border-transparent ${p.activeCls}`
+                    ? `${basePill} border-transparent ${STATUS_ACTIVE_CLS[s]}`
                     : `${basePill} border-line bg-fill-1 text-fg-subtle hover:bg-fill-2`
                 }
               >
-                {p.label}
+                {taskStatusLabel(s)}
               </button>
             )
           })}

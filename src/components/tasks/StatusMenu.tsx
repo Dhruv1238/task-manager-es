@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { resolveTaskStatusMeta, useTaskStatuses } from '../../lib/taskStatus'
 import type { TaskStatus } from '../../types/models'
 
 interface Props {
@@ -11,36 +12,6 @@ interface Props {
   disabledHint?: string
 }
 
-const ORDER: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'blocked']
-
-const STYLES: Record<TaskStatus, { label: string; cls: string; dot: string }> = {
-  todo: {
-    label: 'Todo',
-    cls: 'border-line bg-fill-2 text-fg-muted',
-    dot: 'bg-neutral-dot',
-  },
-  in_progress: {
-    label: 'In Progress',
-    cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg',
-    dot: 'bg-info-dot',
-  },
-  in_review: {
-    label: 'In Review',
-    cls: 'border-brand-edge bg-brand-soft text-brand',
-    dot: 'bg-brandtone-dot',
-  },
-  done: {
-    label: 'Done',
-    cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg',
-    dot: 'bg-success-dot',
-  },
-  blocked: {
-    label: 'Blocked',
-    cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg',
-    dot: 'bg-danger-dot',
-  },
-}
-
 export default function StatusMenu({
   value,
   onChange,
@@ -51,6 +22,11 @@ export default function StatusMenu({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
+  // Options come from the active set (generic 5 / tech 9). If the current
+  // value is outside it (tech status while the flag is off), it's prepended so
+  // the menu always shows — and can move off — the task's true status.
+  const { statuses } = useTaskStatuses()
+  const order = statuses.includes(value) ? statuses : [value, ...statuses]
 
   useEffect(() => {
     if (!open) return
@@ -68,7 +44,7 @@ export default function StatusMenu({
     }
   }, [open])
 
-  const current = STYLES[value]
+  const current = resolveTaskStatusMeta(value)
 
   async function select(next: TaskStatus) {
     if (next === value || disabledStatuses?.includes(next)) {
@@ -90,14 +66,14 @@ export default function StatusMenu({
         type="button"
         onClick={() => !disabled && !busy && setOpen((o) => !o)}
         disabled={disabled || busy}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${current.cls} ${
+        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${current.pillCls} ${
           disabled ? 'opacity-60 cursor-not-allowed' : 'hover:brightness-110'
         }`}
       >
         {busy ? (
           <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
         ) : (
-          <span className={`h-1.5 w-1.5 rounded-full ${current.dot}`} aria-hidden />
+          <span className={`h-1.5 w-1.5 rounded-full ${current.dotCls}`} aria-hidden />
         )}
         <span>{current.label}</span>
         {!disabled && (
@@ -109,8 +85,8 @@ export default function StatusMenu({
 
       {open && !disabled && (
         <div className="absolute left-0 top-full z-30 mt-1.5 w-52 overflow-hidden rounded-lg border border-line bg-elevated shadow-2xl">
-          {ORDER.map((s) => {
-            const style = STYLES[s]
+          {order.map((s) => {
+            const style = resolveTaskStatusMeta(s)
             const active = s === value
             const isDisabled = disabledStatuses?.includes(s) ?? false
             return (
@@ -128,7 +104,7 @@ export default function StatusMenu({
                       : 'hover:bg-fill-2'
                 }`}
               >
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} aria-hidden />
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dotCls}`} aria-hidden />
                 <span className="flex-1 text-fg-strong">{style.label}</span>
                 {isDisabled ? (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-fg-faint" aria-hidden>

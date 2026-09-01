@@ -1,4 +1,5 @@
 import type { TaskKind, TaskPriority, TaskStatus } from '../../types/models'
+import { TECH_STATUSES } from '../../lib/taskStatus'
 import { EMPTY_FILTERS, type TaskFilterState } from './TaskFilters'
 
 // Board filters persist per project (and per team workspace) in localStorage,
@@ -9,7 +10,10 @@ import { EMPTY_FILTERS, type TaskFilterState } from './TaskFilters'
 // shared key would carry a stale assigneeId into other projects and silently
 // blank their boards.
 
-const TASK_STATUSES: readonly TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'blocked']
+// Flag-INDEPENDENT whitelist: the full 9-id union (TECH_STATUSES is the
+// superset of both sets), so a saved filter survives techTaskStatuses flips
+// without dropping tech-only statuses.
+const TASK_STATUSES: readonly TaskStatus[] = TECH_STATUSES
 const TASK_PRIORITIES: readonly TaskPriority[] = ['low', 'medium', 'high']
 const TASK_KINDS: readonly TaskKind[] = ['epic', 'story', 'task', 'subtask']
 
@@ -21,6 +25,10 @@ interface StoredTaskFilters {
   teamId: string | null
 }
 
+// Keys stay unversioned: widening the status whitelist is backward compatible
+// (pre-existing payloads hold only the 5 legacy ids, all still valid), and
+// these filters have no server copy — bumping the key would silently reset
+// every user's saved filters instead of migrating them.
 export function boardFiltersKey(projectId: string): string {
   return `boardFilters:${projectId}`
 }

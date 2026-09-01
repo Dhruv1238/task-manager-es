@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Timestamp } from 'firebase/firestore'
 import { useTaskAuditEvents } from '../../hooks/useTaskAuditEvents'
 import { formatDuration } from '../../lib/duration'
+import { taskStatusLabel } from '../../lib/taskStatus'
 import type { AuditEvent } from '../../types/models'
 
 function fmtWhen(ts: Timestamp | undefined): string {
@@ -22,6 +23,12 @@ function fmtMinutes(v: unknown): string {
   return typeof v === 'number' ? formatDuration(v) : 'time'
 }
 
+// Audit payloads persist raw status ids; timelines span flag flips, so always
+// relabel at render (never flag-gate) via the safe resolver.
+function fmtStatus(v: unknown): string {
+  return typeof v === 'string' ? taskStatusLabel(v) : '?'
+}
+
 // Turn an audit event into a human sentence (subject is the actor, rendered
 // separately). Payload keys are `unknown` — read defensively. Unknown/future
 // actions fall back to the raw action string so the timeline never goes blank.
@@ -34,7 +41,7 @@ function describeAuditEvent(e: AuditEvent): string {
     case 'task.duplicated':
       return 'created this task by duplication'
     case 'task.status_changed':
-      return `changed status ${String(p.from ?? '?')} → ${String(p.to ?? '?')}`
+      return `changed status ${fmtStatus(p.from)} → ${fmtStatus(p.to)}`
     case 'task.assignee_changed':
       if (p.toAssigneeId == null) return 'unassigned the task'
       return typeof p.toAssigneeName === 'string' && p.toAssigneeName
@@ -43,7 +50,11 @@ function describeAuditEvent(e: AuditEvent): string {
     case 'task.submitted_for_review':
       return 'submitted the task for review'
     case 'task.review_approved':
-      return 'approved the review'
+      // Newer payloads carry {from, to}; legacy rows lack a destination, so
+      // keep the wording destination-neutral for them.
+      return typeof p.to === 'string'
+        ? `approved the review → ${taskStatusLabel(p.to)}`
+        : 'approved the review'
     case 'task.review_rejected':
       return 'sent the task back from review'
     case 'task.attachment_added':

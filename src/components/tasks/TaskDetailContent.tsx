@@ -17,6 +17,15 @@ import {
   childSectionLabel,
   effectiveKind,
 } from '../../lib/taskKind'
+import {
+  countsForProgress,
+  isComplete,
+  isReviewStatus,
+  isTerminal,
+  reviewApproveTarget,
+} from '../../lib/taskStatus'
+import { subtaskRatio } from '../../lib/progress'
+import TaskStatusPill from './TaskStatusPill'
 import AddSubtaskForm from './AddSubtaskForm'
 import AssigneeMenu from './AssigneeMenu'
 import DuplicateTaskModal from './DuplicateTaskModal'
@@ -34,35 +43,10 @@ interface Props {
   task: Task
 }
 
-const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
-  todo: { label: 'Todo', cls: 'border-line bg-fill-2 text-fg-muted' },
-  in_progress: {
-    label: 'In Progress',
-    cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg',
-  },
-  in_review: {
-    label: 'In Review',
-    cls: 'border-brand-edge bg-brand-soft text-brand',
-  },
-  done: { label: 'Done', cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg' },
-  blocked: { label: 'Blocked', cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg' },
-}
-
 const PRIORITY_STYLES: Record<TaskPriority, { label: string; cls: string }> = {
   low: { label: 'Low', cls: 'text-fg-muted' },
   medium: { label: 'Medium', cls: 'text-tone-warn-fg' },
   high: { label: 'High', cls: 'text-tone-danger-fg' },
-}
-
-function StatusPill({ status }: { status: TaskStatus }) {
-  const s = STATUS_STYLES[status]
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.cls}`}
-    >
-      {s.label}
-    </span>
-  )
 }
 
 function formatDate(ts: Timestamp | undefined): string {
@@ -117,7 +101,7 @@ function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
   const priority = PRIORITY_STYLES[task.priority]
   const overdue =
     task.dueDate &&
-    task.status !== 'done' &&
+    !isTerminal(task.status) &&
     task.dueDate.toDate().getTime() < Date.now()
 
   return (
@@ -126,7 +110,7 @@ function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
       state={{ backgroundLocation }}
       className="flex items-center gap-3 border-b border-line-subtle px-4 py-3 transition last:border-b-0 hover:bg-fill-2"
     >
-      <StatusPill status={task.status} />
+      <TaskStatusPill status={task.status} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-fg">{task.title}</div>
         {task.description && (
@@ -134,9 +118,10 @@ function SubtaskRow({ task, users }: { task: Task; users: Map<string, User> }) {
             {task.description}
           </div>
         )}
-        {task.status === 'in_review' && (reviewer || task.reviewerName) && (
+        {isReviewStatus(task.status) && (reviewer || task.reviewerName) && (
           <div className="mt-0.5 text-[11px] text-brand/80">
-            🔍 In review by {reviewer?.displayName ?? task.reviewerName}
+            🔍 {task.status === 'in_uat' ? 'In UAT with' : 'In review by'}{' '}
+            {reviewer?.displayName ?? task.reviewerName}
           </div>
         )}
       </div>
@@ -174,12 +159,17 @@ export default function TaskDetailContent({ task }: Props) {
   const linkingOn = useFeature('taskLinking')
   const duplicationOn = useFeature('taskDuplication')
   const timeTrackingOn = useFeature('timeTracking')
+  // Live flag value — threaded into review writes (never the cached snapshot).
+  const techOn = useFeature('techTaskStatuses')
   const ancestors = useAncestorChain(hierarchyOn ? task : null)
   // Tasks that block this one and aren't done yet — gate completion (the write
   // path enforces it authoritatively; this drives the UI affordance).
   const openBlockers = useOpenBlockers(task)
 
   const [submitReviewOpen, setSubmitReviewOpen] = useState(false)
+  // Which review status the SubmitForReviewModal targets (in_uat via the
+  // status menu under the tech set; in_review otherwise).
+  const [reviewTarget, setReviewTarget] = useState<'in_review' | 'in_uat'>('in_review')
   const [sendBackOpen, setSendBackOpen] = useState(false)
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
@@ -274,31 +264,40 @@ export default function TaskDetailContent({ task }: Props) {
   const priority = PRIORITY_STYLES[task.priority]
   const overdue =
     task.dueDate &&
-    task.status !== 'done' &&
+    !isTerminal(task.status) &&
     task.dueDate.toDate().getTime() < Date.now()
 
-  const doneCount = task.subtaskDoneCount ?? 0
-  const totalCount = task.subtaskCount ?? subtasks.length
+  // Cancelled-adjusted ratio, in agreement with the progress bars (progress.ts).
+  // Legacy fallback when the counters were never denormalized: count the loaded
+  // subtasks directly.
+  const ratio = subtaskRatio(task)
+  const doneCount = ratio.done
+  const totalCount =
+    task.subtaskCount != null ? ratio.total : subtasks.filter((s) => countsForProgress(s.status)).length
 
   async function handleStatusChange(next: TaskStatus) {
-    // Submitting to review is a structured transition — open the modal so the
-    // user picks a reviewer (and optionally writes notes). Modal commits the write.
-    if (next === 'in_review' && task.status !== 'in_review') {
+    // Entering the review pipeline (in_review, or in_uat under the tech set) is
+    // a structured transition — open the modal so the user picks a reviewer
+    // (and optionally writes notes). Modal commits the write. Without this, a
+    // review-status task with no reviewerId would appear in nobody's queue.
+    if (isReviewStatus(next) && !isReviewStatus(task.status)) {
+      setReviewTarget(next === 'in_uat' ? 'in_uat' : 'in_review')
       setSubmitReviewOpen(true)
       return
     }
     if (!user || !profile) return
     setStatusError(null)
     try {
-      // Approving from in_review goes through transitionTaskFromReview so reviewerId
-      // is cleared and parent counters roll up cleanly. Prevents direct state writes
-      // from bypassing the helper.
-      if (task.status === 'in_review' && next === 'done') {
+      // Picking the approve target while in review routes through
+      // transitionTaskFromReview so reviewerId is cleared and parent counters
+      // roll up cleanly. Prevents direct state writes from bypassing the helper.
+      if (isReviewStatus(task.status) && next === reviewApproveTarget(task.status, techOn)) {
         await transitionTaskFromReview({
           taskId: task.id,
           decision: 'approve',
           authorId: user.uid,
           authorName: profile.displayName,
+          techStatuses: techOn,
         })
         return
       }
@@ -344,6 +343,7 @@ export default function TaskDetailContent({ task }: Props) {
         decision: 'approve',
         authorId: user.uid,
         authorName: profile.displayName,
+        techStatuses: techOn,
       })
     } catch (e) {
       setApproveError(e instanceof Error ? e.message : 'Failed to approve')
@@ -357,12 +357,12 @@ export default function TaskDetailContent({ task }: Props) {
 
   return (
     <div className="space-y-8">
-      {task.status === 'in_review' && (
+      {isReviewStatus(task.status) && (
         <div className="flex flex-col gap-3 rounded-xl border border-brand-edge bg-brand-soft p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm text-tone-brandtone-fg">
             <span aria-hidden>🔍</span>
             <span>
-              In review by{' '}
+              {task.status === 'in_uat' ? 'In UAT with' : 'In review by'}{' '}
               <span className="font-medium text-fg">
                 {reviewer?.displayName ?? task.reviewerName ?? 'someone'}
               </span>
@@ -373,7 +373,12 @@ export default function TaskDetailContent({ task }: Props) {
               <button
                 type="button"
                 onClick={handleApproveClick}
-                disabled={approving || isBlocked}
+                // Blockers only gate actual completion — approving to a
+                // non-terminal target (ready_for_prod) is always allowed.
+                disabled={
+                  approving ||
+                  (isBlocked && isComplete(reviewApproveTarget(task.status, techOn)))
+                }
                 title={isBlocked ? blockerHint : undefined}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-tone-success-bd bg-tone-success-bg px-3.5 py-1.5 text-sm font-medium text-tone-success-fg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -659,6 +664,7 @@ export default function TaskDetailContent({ task }: Props) {
         open={submitReviewOpen}
         onClose={() => setSubmitReviewOpen(false)}
         task={task}
+        targetStatus={reviewTarget}
       />
       <SendBackModal
         open={sendBackOpen}

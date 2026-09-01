@@ -29,7 +29,22 @@ export type ProjectStatus =
   // tender-style outcome. Counts as closed.
   | 'archived'
 
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'blocked'
+// Persisted on tasks/{id}.status. The 5 legacy ids are shared by both status
+// sets (no migration); the 4 tech-only ids (dev_done, in_uat, ready_for_prod,
+// cancelled) are only offered while features.techTaskStatuses is on, but docs
+// holding them must render forever regardless of the flag. Display order,
+// labels, colours and the open/active/blocked/terminal categories live in
+// src/lib/taskStatus.ts — never hardcode a status list outside that module.
+export type TaskStatus =
+  | 'todo'
+  | 'in_progress'
+  | 'blocked'
+  | 'dev_done'
+  | 'in_review'
+  | 'in_uat'
+  | 'ready_for_prod'
+  | 'done'
+  | 'cancelled'
 
 export type TaskPriority = 'low' | 'medium' | 'high'
 
@@ -267,6 +282,11 @@ export interface Task {
 
   subtaskCount?: number
   subtaskDoneCount?: number
+  // Children currently 'cancelled' (features.techTaskStatuses). Excluded from
+  // progress denominators (progress.ts). Maintained by setTaskStatus in the
+  // same batch as subtaskDoneCount; missing → 0, which is correct for every
+  // doc predating the tech status set ('cancelled' is a brand-new id).
+  subtaskCancelledCount?: number
 
   // Sum of this task's timeEntries.minutes (features.timeTracking). Maintained
   // by increment() inside the same batch as every entry write, so it can't drift
@@ -415,6 +435,12 @@ export type FeatureKey =
   // /admin/time report. Gates the composer and the nav entry only — entries
   // already logged stay visible and aggregatable after the flag goes off.
   | 'timeTracking'
+  // Tech status set: swaps the 5 generic task statuses for the 9-stage
+  // engineering pipeline (adds Dev Done, In UAT, Ready for Prod, Cancelled).
+  // Gates the column set and status picker only — tasks already holding a
+  // tech-only status stay visible when off, folding into the nearest generic
+  // column (see taskStatus.ts bucketForActiveSet).
+  | 'techTaskStatuses'
 
 export interface AppConfig {
   // Monotonic counter bumped on every save. Drives cache invalidation when the

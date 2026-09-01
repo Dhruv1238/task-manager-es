@@ -9,11 +9,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { Task, TaskStatus, Team } from '../../types/models'
+import type { Task, Team } from '../../types/models'
+import { bucketForActiveSet, useTaskStatuses } from '../../lib/taskStatus'
 import { AXIS_STYLE, GRID_COLOR, LABEL_STYLE, STATUS_COLOR, STATUS_LABEL, TOOLTIP_STYLE } from './chartTheme'
 import ChartCard from './ChartCard'
-
-const COUNT_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'blocked']
 
 interface Props {
   teams: Team[]
@@ -28,17 +27,23 @@ export default function PerTeamProgress({
   title = 'Per-team progress',
   subtitle,
 }: Props) {
+  // Row keys, <Bar> dataKeys, and the rounded-cap index all derive from the
+  // active set — a dataKey the rows don't carry renders silently as zero-height.
+  const { statuses, techOn } = useTaskStatuses()
   const data = useMemo(
     () =>
       teams.map((team) => {
         const list = tasksByTeam.get(team.id) ?? []
         const row: Record<string, number | string> = { name: team.name }
-        for (const s of COUNT_STATUSES) {
-          row[s] = list.filter((t) => t.status === s).length
+        for (const s of statuses) row[s] = 0
+        for (const t of list) {
+          // Fold flag-inactive statuses into their active column so no task vanishes.
+          const bucket = bucketForActiveSet(t.status, techOn)
+          row[bucket] = ((row[bucket] as number) ?? 0) + 1
         }
         return row
       }),
-    [teams, tasksByTeam],
+    [teams, tasksByTeam, statuses, techOn],
   )
 
   const empty = teams.length === 0
@@ -75,14 +80,14 @@ export default function PerTeamProgress({
             wrapperStyle={{ fontSize: 11, color: 'var(--color-fg-muted)' }}
             iconType="circle"
           />
-          {COUNT_STATUSES.map((s, idx) => (
+          {statuses.map((s, idx) => (
             <Bar
               key={s}
               dataKey={s}
               name={STATUS_LABEL[s]}
               stackId="status"
               fill={STATUS_COLOR[s]}
-              radius={idx === COUNT_STATUSES.length - 1 ? [0, 4, 4, 0] : 0}
+              radius={idx === statuses.length - 1 ? [0, 4, 4, 0] : 0}
             />
           ))}
         </BarChart>

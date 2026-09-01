@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {  onSnapshot } from 'firebase/firestore'
 import { tenantDoc } from '../lib/firestore'
+import { isReviewStatus, isTerminal } from '../lib/taskStatus'
 import { useAuth } from '../contexts/AuthContext'
 import type { Task, Team } from '../types/models'
 
@@ -14,8 +15,10 @@ export interface TaskPermissions {
 }
 
 // Permissions for task-level review actions (delta §6.6).
-// canSubmitForReview — assignee or team lead, on a non-done task.
-// canDecideReview    — I am task.reviewerId, OR a team lead override.
+// canSubmitForReview — assignee or team lead, on a pre-review task (not
+//                      terminal, not already in the pipeline, not past it).
+// canDecideReview    — I am task.reviewerId, OR a team lead override, while
+//                      the task is in any review status (in_review / in_uat).
 export function useTaskPermissions(task: Task | null | undefined): TaskPermissions {
   const { profile } = useAuth()
   const [team, setTeam] = useState<Team | null>(null)
@@ -41,10 +44,15 @@ export function useTaskPermissions(task: Task | null | undefined): TaskPermissio
     const isTeamLead = Boolean(uid && team && team.leadId === uid)
 
     const canSubmitForReview = Boolean(
-      task && task.status !== 'done' && (isAssignee || isTeamLead),
+      task &&
+        !isTerminal(task.status) &&
+        !isReviewStatus(task.status) &&
+        // ready_for_prod is post-review — nothing left to submit.
+        task.status !== 'ready_for_prod' &&
+        (isAssignee || isTeamLead),
     )
     const canDecideReview = Boolean(
-      task && task.status === 'in_review' && (isReviewer || isTeamLead),
+      task && isReviewStatus(task.status) && (isReviewer || isTeamLead),
     )
 
     return {

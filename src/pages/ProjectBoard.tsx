@@ -53,6 +53,7 @@ export default function ProjectBoard() {
 
   const { profile } = useAuth()
   const hierarchyOn = useFeature('taskHierarchy')
+  const techOn = useFeature('techTaskStatuses')
   const { users } = useAllUsers()
   const { teams: allTeams } = useAllTeams()
   const { tasks, loading: tasksLoading, error: tasksError } = useAllProjectTasks(projectId)
@@ -156,6 +157,9 @@ export default function ProjectBoard() {
   }, [tasks, teamsById])
 
   const filteredTasks = useMemo(() => {
+    // techOn threads through to applyFilters so a persisted status filter
+    // (status pills are hidden here — showStatus is false) matches on the
+    // active bucket and stays in agreement with the board columns.
     const mask = applyFilters(
       tasks.map((t) => ({
         status: t.status,
@@ -165,9 +169,10 @@ export default function ProjectBoard() {
         teamId: t.teamId,
       })),
       filters,
+      techOn,
     )
     return tasks.filter((_, i) => mask[i])
-  }, [tasks, effectiveAssigneeById, filters])
+  }, [tasks, effectiveAssigneeById, filters, techOn])
 
   const tasksById = useMemo(() => {
     const m = new Map<string, Task>()

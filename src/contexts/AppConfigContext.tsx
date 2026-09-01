@@ -25,7 +25,10 @@ import { useAuth } from './AuthContext'
 // it's a kill switch, and a 24h-stale cache would blunt it.
 // Bumped v4→v5 with the timeTracking toggle so the new key syncs immediately
 // rather than waiting out a 24h-stale cache that predates it.
-const STORAGE_KEY = 'appConfig:v5'
+// Bumped v5→v6 with the techTaskStatuses toggle: a 24h-stale cache would leave
+// clients on the 5-status board (and writing statuses others can't pick) after
+// an admin enables the tech set.
+const STORAGE_KEY = 'appConfig:v6'
 const ORG_STORAGE_KEY = 'orgStructure:v1'
 const REGISTRY_STORAGE_KEY = 'workflowRegistry:v1'
 const TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
@@ -55,6 +58,9 @@ export const FEATURE_DEFAULTS: Record<FeatureKey, boolean> = {
   // timeEntries composite indexes built first (see useTaskTimeEntries and
   // useMyTimeEntries).
   timeTracking: false,
+  // Genuinely new surface — off until an admin turns it on. Existing tenants
+  // keep the 5-status board with zero migration; see taskStatus.ts.
+  techTaskStatuses: false,
 }
 
 // Default config — used when no Firestore doc exists yet AND no localStorage

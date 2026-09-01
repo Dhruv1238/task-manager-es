@@ -15,37 +15,15 @@ import PriorityBar from '../components/charts/PriorityBar'
 import UpcomingDeadlines from '../components/charts/UpcomingDeadlines'
 import WeeklyCompletionLine from '../components/charts/WeeklyCompletionLine'
 import { stageTone } from '../components/workflow/stageStyle'
-import type { Task, TaskPriority, TaskStatus } from '../types/models'
-
-const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
-  todo: { label: 'Todo', cls: 'border-line bg-fill-2 text-fg-muted' },
-  in_progress: {
-    label: 'In Progress',
-    cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg',
-  },
-  in_review: {
-    label: 'In Review',
-    cls: 'border-brand-edge bg-brand-soft text-brand',
-  },
-  done: { label: 'Done', cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg' },
-  blocked: { label: 'Blocked', cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg' },
-}
+import TaskStatusPill from '../components/tasks/TaskStatusPill'
+import { isComplete, isTerminal } from '../lib/taskStatus'
+import { subtaskRatio } from '../lib/progress'
+import type { Task, TaskPriority } from '../types/models'
 
 const PRIORITY_STYLES: Record<TaskPriority, { label: string; cls: string }> = {
   low: { label: 'Low', cls: 'text-fg-subtle' },
   medium: { label: 'Medium', cls: 'text-tone-warn-fg' },
   high: { label: 'High', cls: 'text-tone-danger-fg' },
-}
-
-function StatusPill({ status }: { status: TaskStatus }) {
-  const s = STATUS_STYLES[status]
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.cls}`}
-    >
-      {s.label}
-    </span>
-  )
 }
 
 function formatDate(ts: Timestamp | undefined): string {
@@ -98,9 +76,10 @@ function TaskRow({ task, showSubtaskProgress = false }: { task: Task; showSubtas
   const location = useLocation()
   const overdue =
     task.dueDate &&
-    task.status !== 'done' &&
+    !isTerminal(task.status) &&
     task.dueDate.toDate().getTime() < Date.now()
   const priority = PRIORITY_STYLES[task.priority]
+  const ratio = subtaskRatio(task)
 
   return (
     <li className="border-b border-line-subtle last:border-b-0">
@@ -109,7 +88,7 @@ function TaskRow({ task, showSubtaskProgress = false }: { task: Task; showSubtas
         state={{ backgroundLocation: location }}
         className="flex items-center gap-3 px-5 py-3 transition hover:bg-fill-1"
       >
-        <StatusPill status={task.status} />
+        <TaskStatusPill status={task.status} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-fg">{task.title}</div>
           {task.description && (
@@ -126,7 +105,7 @@ function TaskRow({ task, showSubtaskProgress = false }: { task: Task; showSubtas
           </span>
           {showSubtaskProgress && (
             <span className="text-fg-subtle">
-              {task.subtaskDoneCount ?? 0}/{task.subtaskCount ?? 0}
+              {ratio.done}/{ratio.total}
             </span>
           )}
         </div>
@@ -361,12 +340,14 @@ export default function Me() {
     [ledTasks, showSubmitted, statusById],
   )
 
+  // "Show completed" reveals all finished work — cancelled is off your plate
+  // just like done, so it hides/reveals with the same toggle.
   const filteredMine = useMemo(
-    () => (showCompleted ? visibleMine : visibleMine.filter((t) => t.status !== 'done')),
+    () => (showCompleted ? visibleMine : visibleMine.filter((t) => !isTerminal(t.status))),
     [visibleMine, showCompleted],
   )
   const filteredLed = useMemo(
-    () => (showCompleted ? visibleLed : visibleLed.filter((t) => t.status !== 'done')),
+    () => (showCompleted ? visibleLed : visibleLed.filter((t) => !isTerminal(t.status))),
     [visibleLed, showCompleted],
   )
 
@@ -374,22 +355,26 @@ export default function Me() {
   const groupedLed = useMemo(() => groupByProjectTeam(filteredLed), [filteredLed])
 
   const openCount = useMemo(
-    () => visibleMine.filter((t) => t.status !== 'done').length,
+    () => visibleMine.filter((t) => !isTerminal(t.status)).length,
     [visibleMine],
   )
-  const doneCount = visibleMine.length - openCount
+  // "done" means completed work — cancelled tasks count as neither open nor done.
+  const doneCount = useMemo(
+    () => visibleMine.filter((t) => isComplete(t.status)).length,
+    [visibleMine],
+  )
   const overdueCount = useMemo(
     () =>
       [...visibleMine, ...visibleLed].filter(
         (t) =>
-          t.status !== 'done' &&
+          !isTerminal(t.status) &&
           t.dueDate &&
           t.dueDate.toDate().getTime() < Date.now(),
       ).length,
     [visibleMine, visibleLed],
   )
   const ledOpenCount = useMemo(
-    () => visibleLed.filter((t) => t.status !== 'done').length,
+    () => visibleLed.filter((t) => !isTerminal(t.status)).length,
     [visibleLed],
   )
 

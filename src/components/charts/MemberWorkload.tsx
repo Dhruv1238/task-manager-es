@@ -11,10 +11,9 @@ import {
 } from 'recharts'
 import type { Task, TaskStatus, Team, User } from '../../types/models'
 import { getEffectiveAssignee } from '../../lib/effectiveAssignee'
+import { bucketForActiveSet, isTerminal, useTaskStatuses } from '../../lib/taskStatus'
 import { AXIS_STYLE, GRID_COLOR, LABEL_STYLE, STATUS_COLOR, STATUS_LABEL, TOOLTIP_STYLE } from './chartTheme'
 import ChartCard from './ChartCard'
-
-const OPEN_STATUSES: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'blocked']
 
 interface Props {
   tasks: Task[]
@@ -33,6 +32,12 @@ export default function MemberWorkload({
   subtitle,
   memberUids,
 }: Props) {
+  const { statuses, techOn } = useTaskStatuses()
+  // The row keys below, the <Bar> dataKeys, and the rounded-cap index must all
+  // derive from THIS array — a dataKey the rows don't carry renders zero-height
+  // segments with no error.
+  const openStatuses = useMemo(() => statuses.filter((s) => !isTerminal(s)), [statuses])
+
   const data = useMemo(() => {
     const perUser = new Map<string, Partial<Record<TaskStatus, number>> & { name: string; total: number }>()
 
@@ -47,25 +52,27 @@ export default function MemberWorkload({
     if (memberUids) for (const uid of memberUids) ensure(uid)
 
     for (const t of tasks) {
-      if (!OPEN_STATUSES.includes(t.status)) continue
+      // Fold flag-inactive statuses into their active column so no task vanishes.
+      const status = bucketForActiveSet(t.status, techOn)
+      if (!openStatuses.includes(status)) continue
       const assignee = getEffectiveAssignee(t, users, teams)
       if (!assignee) continue
       const bucket = ensure(assignee.user.uid)
-      bucket[t.status] = (bucket[t.status] ?? 0) + 1
+      bucket[status] = (bucket[status] ?? 0) + 1
       bucket.total += 1
     }
 
     return Array.from(perUser.values())
       .sort((a, b) => b.total - a.total)
-      .map((row) => ({
-        name: row.name,
-        todo: row.todo ?? 0,
-        in_progress: row.in_progress ?? 0,
-        in_review: row.in_review ?? 0,
-        blocked: row.blocked ?? 0,
-        total: row.total,
-      }))
-  }, [tasks, users, teams, memberUids])
+      .map((row) => {
+        const out: Partial<Record<TaskStatus, number>> & { name: string; total: number } = {
+          name: row.name,
+          total: row.total,
+        }
+        for (const s of openStatuses) out[s] = row[s] ?? 0
+        return out
+      })
+  }, [tasks, users, teams, memberUids, openStatuses, techOn])
 
   const empty = data.length === 0 || data.every((d) => d.total === 0)
 
@@ -101,14 +108,14 @@ export default function MemberWorkload({
             wrapperStyle={{ fontSize: 11, color: 'var(--color-fg-muted)' }}
             iconType="circle"
           />
-          {OPEN_STATUSES.map((s, idx) => (
+          {openStatuses.map((s, idx) => (
             <Bar
               key={s}
               dataKey={s}
               name={STATUS_LABEL[s]}
               stackId="workload"
               fill={STATUS_COLOR[s]}
-              radius={idx === OPEN_STATUSES.length - 1 ? [0, 4, 4, 0] : 0}
+              radius={idx === openStatuses.length - 1 ? [0, 4, 4, 0] : 0}
             />
           ))}
         </BarChart>

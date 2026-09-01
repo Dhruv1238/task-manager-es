@@ -42,10 +42,15 @@ export default function RemoveMemberConfirmModal({
     }
     let cancelled = false
     setCounting(true)
+    // "Open work" = non-terminal: dev_done/in_uat/ready_for_prod are still
+    // undelivered work someone must absorb; cancelled is not. Served by the
+    // same (assigneeId, status) composite as the previous `!=` form. Note
+    // `not-in` excludes docs MISSING the field — safe: every creation path
+    // writes status explicitly.
     const q = query(
       tenantCol('tasks'),
       where('assigneeId', '==', member.uid),
-      where('status', '!=', 'done'),
+      where('status', 'not-in', ['done', 'cancelled']),
     )
     getCountFromServer(q)
       .then((snap) => {

@@ -5,11 +5,14 @@ import type { Timestamp } from 'firebase/firestore'
 import { tenantDoc } from '../lib/firestore'
 import { useFeature } from '../contexts/AppConfigContext'
 import { effectiveKind } from '../lib/taskKind'
+import { isTerminal } from '../lib/taskStatus'
+import { subtaskRatio } from '../lib/progress'
 import { useAllUsers } from '../hooks/useAllUsers'
 import { useTeamProjectTasks } from '../hooks/useTeamProjectTasks'
 import { usePermissions } from '../hooks/usePermissions'
 import NewTaskModal from '../components/admin/NewTaskModal'
 import TaskBoard from '../components/tasks/TaskBoard'
+import TaskStatusPill from '../components/tasks/TaskStatusPill'
 import TaskFilters, {
   EMPTY_FILTERS,
   applyFilters,
@@ -26,7 +29,6 @@ import type {
   Project,
   Task,
   TaskPriority,
-  TaskStatus,
   Team,
   User,
 } from '../types/models'
@@ -49,29 +51,10 @@ function Avatar({ user, size = 22 }: { user: User; size?: number }) {
   )
 }
 
-const STATUS_STYLES: Record<TaskStatus, { label: string; cls: string }> = {
-  todo: { label: 'Todo', cls: 'border-line bg-fill-2 text-fg-muted' },
-  in_progress: { label: 'In Progress', cls: 'border-tone-info-bd bg-tone-info-bg text-tone-info-fg' },
-  in_review: { label: 'In Review', cls: 'border-brand-edge bg-brand-soft text-brand' },
-  done: { label: 'Done', cls: 'border-tone-success-bd bg-tone-success-bg text-tone-success-fg' },
-  blocked: { label: 'Blocked', cls: 'border-tone-danger-bd bg-tone-danger-bg text-tone-danger-fg' },
-}
-
 const PRIORITY_STYLES: Record<TaskPriority, { label: string; cls: string }> = {
   low: { label: 'Low', cls: 'text-fg-subtle' },
   medium: { label: 'Medium', cls: 'text-tone-warn-fg' },
   high: { label: 'High', cls: 'text-tone-danger-fg' },
-}
-
-function StatusPill({ status }: { status: TaskStatus }) {
-  const s = STATUS_STYLES[status]
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${s.cls}`}
-    >
-      {s.label}
-    </span>
-  )
 }
 
 function formatDate(ts: Timestamp | undefined): string {
@@ -101,12 +84,14 @@ function TaskRow({
   const location = useLocation()
   const overdue =
     task.dueDate &&
-    task.status !== 'done' &&
+    !isTerminal(task.status) &&
     task.dueDate.toDate().getTime() < Date.now()
   const priority = PRIORITY_STYLES[task.priority]
   const assignee = getEffectiveAssignee(task, users, teams)
   const nested = variant === 'subtask'
-  const showSubtaskCount = variant === 'parent' && (task.subtaskCount ?? 0) > 0
+  // Cancelled-adjusted denominator — must agree with the progress bars.
+  const ratio = subtaskRatio(task)
+  const showSubtaskCount = variant === 'parent' && ratio.total > 0
 
   return (
     <li className="border-b border-line-subtle last:border-b-0">
@@ -122,7 +107,7 @@ function TaskRow({
             ↳
           </span>
         )}
-        <StatusPill status={task.status} />
+        <TaskStatusPill status={task.status} />
         <div className="min-w-0 flex-1">
           <div className={`truncate font-medium text-fg ${nested ? 'text-sm' : 'text-sm'}`}>
             {task.title}
@@ -158,7 +143,7 @@ function TaskRow({
           </span>
           {showSubtaskCount && (
             <span className="text-fg-subtle">
-              {task.subtaskDoneCount ?? 0}/{task.subtaskCount ?? 0}
+              {ratio.done}/{ratio.total}
             </span>
           )}
         </div>
@@ -188,6 +173,7 @@ export default function TeamOnProject() {
   )
   const { users } = useAllUsers()
   const hierarchyOn = useFeature('taskHierarchy')
+  const techOn = useFeature('techTaskStatuses')
 
   // Same non-remount navigation caveat as ProjectBoard: re-hydrate when the
   // route params change and only persist filters that belong to the current
@@ -305,6 +291,9 @@ export default function TeamOnProject() {
   }, [tasks, team?.leadId])
 
   const filteredIds = useMemo(() => {
+    // techOn threads through to applyFilters so a persisted status filter
+    // (the status pills are hidden in board view) matches on the active
+    // bucket and stays in agreement with the board columns.
     const mask = applyFilters(
       tasks.map((t) => ({
         status: t.status,
@@ -313,13 +302,14 @@ export default function TeamOnProject() {
         effectiveAssigneeId: effectiveAssigneeById.get(t.id) ?? null,
       })),
       filters,
+      techOn,
     )
     const s = new Set<string>()
     tasks.forEach((t, i) => {
       if (mask[i]) s.add(t.id)
     })
     return s
-  }, [tasks, effectiveAssigneeById, filters])
+  }, [tasks, effectiveAssigneeById, filters, techOn])
 
   const filteredTasks = useMemo(
     () => tasks.filter((t) => filteredIds.has(t.id)),

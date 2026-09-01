@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import type { Task, TaskStatus } from '../../types/models'
+import { bucketForActiveSet, isTerminal, useTaskStatuses } from '../../lib/taskStatus'
 import { LABEL_STYLE, STATUS_COLOR, STATUS_LABEL, TOOLTIP_STYLE } from './chartTheme'
 import ChartCard from './ChartCard'
-
-const ORDER: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done', 'blocked']
 
 interface Props {
   tasks: Task[]
@@ -19,19 +18,23 @@ export default function StatusDonut({
   subtitle,
   excludeDone = false,
 }: Props) {
+  const { statuses, techOn } = useTaskStatuses()
   const data = useMemo(() => {
     const counts = new Map<TaskStatus, number>()
-    for (const s of ORDER) counts.set(s, 0)
+    for (const s of statuses) counts.set(s, 0)
     for (const t of tasks) {
-      if (excludeDone && t.status === 'done') continue
-      counts.set(t.status, (counts.get(t.status) ?? 0) + 1)
+      // "excludeDone" means "open work only" — cancelled is just as closed.
+      if (excludeDone && isTerminal(t.status)) continue
+      // Fold flag-inactive statuses into their legacy slice so no task vanishes.
+      const bucket = bucketForActiveSet(t.status, techOn)
+      counts.set(bucket, (counts.get(bucket) ?? 0) + 1)
     }
-    return ORDER.map((s) => ({
+    return statuses.map((s) => ({
       name: STATUS_LABEL[s],
       value: counts.get(s) ?? 0,
       color: STATUS_COLOR[s],
     })).filter((d) => d.value > 0)
-  }, [tasks, excludeDone])
+  }, [tasks, excludeDone, statuses, techOn])
 
   const total = data.reduce((acc, d) => acc + d.value, 0)
 

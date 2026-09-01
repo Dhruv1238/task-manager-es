@@ -246,6 +246,10 @@ const FEATURE_META: Record<FeatureKey, { label: string; hint: string }> = {
     label: 'Connection guard',
     hint: 'Blocks the app with a full-screen notice when someone is offline or their changes stop reaching the server, and holds at load until a previous session’s unsynced changes finish syncing. Prevents days-stale offline work.',
   },
+  techTaskStatuses: {
+    label: 'Tech status set',
+    hint: 'Replaces the five task statuses with a nine-stage engineering pipeline: Todo, In Progress, Blocked, Dev Done, In Review, In UAT, Ready for Prod, Done, Cancelled. Tasks already in a tech-only status stay visible when off — they fold into the nearest generic column.',
+  },
 }
 
 const FEATURE_ORDER: FeatureKey[] = [
@@ -258,6 +262,7 @@ const FEATURE_ORDER: FeatureKey[] = [
   'corrigendumSection',
   'timeTracking',
   'syncGuard',
+  'techTaskStatuses',
 ]
 
 function effectiveFeatures(config: AppConfig): Record<FeatureKey, boolean> {

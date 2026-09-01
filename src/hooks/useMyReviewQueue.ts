@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
 import {  onSnapshot, query, where } from 'firebase/firestore'
 import { tenantCol } from '../lib/firestore'
+import { REVIEW_STATUSES } from '../lib/taskStatus'
 import type { Task } from '../types/models'
 
-// Tasks where I am the named reviewer and the task is in_review (delta §7.1).
-// Single-collection query; rendering happens in the /me "Awaiting my review" section.
-// Add the index manually in Firebase console: tasks (reviewerId asc, status asc).
+// Tasks where I am the named reviewer and the task is in the review pipeline
+// (in_review, or in_uat under the tech status set) — delta §7.1. Deliberately
+// flag-independent: a leftover in_uat task must stay in its reviewer's queue
+// after the tech set is switched off. Single-collection query; rendering
+// happens in the /me "Awaiting my review" section.
+// Add the index manually in Firebase console: tasks (reviewerId asc, status asc)
+// — the same composite serves this `in` query.
 export function useMyReviewQueue(uid: string | null | undefined): {
   tasks: Task[]
   loading: boolean
@@ -25,7 +30,7 @@ export function useMyReviewQueue(uid: string | null | undefined): {
     const q = query(
       tenantCol('tasks'),
       where('reviewerId', '==', uid),
-      where('status', '==', 'in_review'),
+      where('status', 'in', REVIEW_STATUSES),
     )
     return onSnapshot(
       q,

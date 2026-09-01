@@ -9,6 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { Task, Team } from '../../types/models'
+import { isTerminal } from '../../lib/taskStatus'
 import { AXIS_STYLE, GRID_COLOR, LABEL_STYLE, TOOLTIP_STYLE } from './chartTheme'
 import ChartCard from './ChartCard'
 
@@ -28,7 +29,7 @@ export default function TeamUtilization({
   const data = useMemo(() => {
     const counts = new Map<string, number>()
     for (const t of tasks) {
-      if (t.status === 'done') continue
+      if (isTerminal(t.status)) continue
       counts.set(t.teamId, (counts.get(t.teamId) ?? 0) + 1)
     }
     return teams

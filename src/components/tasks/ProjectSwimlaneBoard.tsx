@@ -1,13 +1,6 @@
 import TaskCard from './TaskCard'
+import { TASK_STATUS_META, bucketForActiveSet, useTaskStatuses } from '../../lib/taskStatus'
 import type { Task, TaskStatus, Team, User } from '../../types/models'
-
-const COLUMNS: { status: TaskStatus; label: string; dotCls: string }[] = [
-  { status: 'todo', label: 'Todo', dotCls: 'bg-neutral-dot' },
-  { status: 'in_progress', label: 'In Progress', dotCls: 'bg-info-dot' },
-  { status: 'in_review', label: 'In Review', dotCls: 'bg-brandtone-dot' },
-  { status: 'done', label: 'Done', dotCls: 'bg-success-dot' },
-  { status: 'blocked', label: 'Blocked', dotCls: 'bg-danger-dot' },
-]
 
 interface SwimlaneSpec {
   key: string
@@ -35,6 +28,11 @@ export default function ProjectSwimlaneBoard({
   onCreateTask,
   canCreateForTeam,
 }: Props) {
+  const { statuses, techOn } = useTaskStatuses()
+  // One shared template so lane rows stay aligned with the header; the 220px
+  // per-column floor makes the container scroll horizontally at 9 columns.
+  const gridTemplate = `minmax(160px, 180px) repeat(${statuses.length}, minmax(220px, 1fr))`
+
   const lanes: SwimlaneSpec[] = []
   const laneByTeam = new Map<string, SwimlaneSpec>()
 
@@ -65,25 +63,30 @@ export default function ProjectSwimlaneBoard({
 
   return (
     <div className="scrollbar-themed overflow-x-auto rounded-2xl border border-line bg-card">
-      <div className="min-w-240">
+      {/* Min width = the grid's intrinsic minimum, so narrow viewports scroll
+          instead of clipping the rightmost columns. */}
+      <div style={{ minWidth: 160 + statuses.length * 220 }}>
         <div
           className="grid border-b border-line bg-fill-1"
-          style={{ gridTemplateColumns: `minmax(160px, 180px) repeat(${COLUMNS.length}, minmax(220px, 1fr))` }}
+          style={{ gridTemplateColumns: gridTemplate }}
         >
           <div className="px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-fg-subtle">
             Team
           </div>
-          {COLUMNS.map((col) => (
-            <div
-              key={col.status}
-              className="flex items-center gap-2 border-l border-line-subtle px-3 py-2.5"
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${col.dotCls}`} aria-hidden />
-              <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">
-                {col.label}
-              </span>
-            </div>
-          ))}
+          {statuses.map((status) => {
+            const meta = TASK_STATUS_META[status]
+            return (
+              <div
+                key={status}
+                className="flex items-center gap-2 border-l border-line-subtle px-3 py-2.5"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${meta.dotCls}`} aria-hidden />
+                <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">
+                  {meta.label}
+                </span>
+              </div>
+            )
+          })}
         </div>
 
         {lanes.length === 0 ? (
@@ -93,9 +96,11 @@ export default function ProjectSwimlaneBoard({
         ) : (
           lanes.map((lane, laneIdx) => {
             const byStatus = new Map<TaskStatus, Task[]>()
-            for (const col of COLUMNS) byStatus.set(col.status, [])
+            for (const status of statuses) byStatus.set(status, [])
             for (const t of lane.tasks) {
-              const bucket = byStatus.get(t.status)
+              // Fold statuses outside the active set into their legacy column
+              // so a tech-status task is never silently dropped flag-off.
+              const bucket = byStatus.get(bucketForActiveSet(t.status, techOn))
               if (bucket) bucket.push(t)
             }
             const total = lane.tasks.length
@@ -104,7 +109,7 @@ export default function ProjectSwimlaneBoard({
               <div
                 key={lane.key}
                 className={`grid ${laneIdx > 0 ? 'border-t border-line-subtle' : ''}`}
-                style={{ gridTemplateColumns: `minmax(160px, 180px) repeat(${COLUMNS.length}, minmax(220px, 1fr))` }}
+                style={{ gridTemplateColumns: gridTemplate }}
               >
                 <div className="flex flex-col justify-center gap-1 border-r border-line-subtle bg-fill-1 px-4 py-3">
                   <div className="truncate text-sm font-medium text-fg">
@@ -127,11 +132,11 @@ export default function ProjectSwimlaneBoard({
                     </button>
                   )}
                 </div>
-                {COLUMNS.map((col) => {
-                  const items = byStatus.get(col.status) ?? []
+                {statuses.map((status) => {
+                  const items = byStatus.get(status) ?? []
                   return (
                     <div
-                      key={col.status}
+                      key={status}
                       className="flex min-h-28 flex-col gap-2 border-l border-line-subtle p-2"
                     >
                       {items.length === 0 ? (

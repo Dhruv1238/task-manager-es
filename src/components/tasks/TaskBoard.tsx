@@ -1,4 +1,5 @@
 import TaskCard from './TaskCard'
+import { TASK_STATUS_META, bucketForActiveSet, useTaskStatuses } from '../../lib/taskStatus'
 import type { Task, TaskStatus, Team, User } from '../../types/models'
 
 interface Props {
@@ -8,36 +9,32 @@ interface Props {
   tasksById?: Map<string, Task>
 }
 
-const COLUMNS: { status: TaskStatus; label: string; dotCls: string }[] = [
-  { status: 'todo', label: 'Todo', dotCls: 'bg-neutral-dot' },
-  { status: 'in_progress', label: 'In Progress', dotCls: 'bg-info-dot' },
-  { status: 'in_review', label: 'In Review', dotCls: 'bg-brandtone-dot' },
-  { status: 'done', label: 'Done', dotCls: 'bg-success-dot' },
-  { status: 'blocked', label: 'Blocked', dotCls: 'bg-danger-dot' },
-]
-
 export default function TaskBoard({ tasks, users, teams, tasksById }: Props) {
+  const { statuses, techOn } = useTaskStatuses()
   const byStatus = new Map<TaskStatus, Task[]>()
-  for (const col of COLUMNS) byStatus.set(col.status, [])
+  for (const status of statuses) byStatus.set(status, [])
   for (const t of tasks) {
-    const bucket = byStatus.get(t.status)
+    // Fold statuses outside the active set into their legacy column so a
+    // tech-status task is never silently dropped while the flag is off.
+    const bucket = byStatus.get(bucketForActiveSet(t.status, techOn))
     if (bucket) bucket.push(t)
   }
 
   return (
     <div className="scrollbar-themed flex gap-4 overflow-x-auto pb-3">
-      {COLUMNS.map((col) => {
-        const items = byStatus.get(col.status) ?? []
+      {statuses.map((status) => {
+        const meta = TASK_STATUS_META[status]
+        const items = byStatus.get(status) ?? []
         return (
           <div
-            key={col.status}
+            key={status}
             className="flex w-72 shrink-0 flex-col rounded-2xl border border-line bg-card"
           >
             <div className="flex items-center justify-between border-b border-line-subtle px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <span className={`h-1.5 w-1.5 rounded-full ${col.dotCls}`} aria-hidden />
+                <span className={`h-1.5 w-1.5 rounded-full ${meta.dotCls}`} aria-hidden />
                 <span className="text-xs font-medium uppercase tracking-wider text-fg-muted">
-                  {col.label}
+                  {meta.label}
                 </span>
               </div>
               <span className="text-xs text-fg-subtle">{items.length}</span>

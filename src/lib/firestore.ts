@@ -26,6 +26,15 @@ import type {
   WorkType,
 } from '../types/models'
 import { childKind, effectiveKind } from './taskKind'
+import {
+  TASK_STATUS_META,
+  isComplete,
+  isTerminal,
+  isReviewStatus,
+  reviewApproveTarget,
+  reviewRejectTarget,
+  statusChangeSnippet,
+} from './taskStatus'
 import { INVERSE_RELATION } from './taskLinks'
 import type {
   DetailsUpdatedEvent,
@@ -1564,6 +1573,7 @@ export async function addTeamTask(input: AddTeamTaskInput): Promise<string> {
     projectTitle: input.projectTitle,
     subtaskCount: 0,
     subtaskDoneCount: 0,
+    subtaskCancelledCount: 0,
     attachments: [],
     reviewerId: null,
     ...(input.workType ? { workType: input.workType } : {}),
@@ -1753,6 +1763,7 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
     projectTitle: input.projectTitle,
     subtaskCount: 0,
     subtaskDoneCount: 0,
+    subtaskCancelledCount: 0,
     attachments: [],
     reviewerId: null,
     kind,
@@ -1820,10 +1831,12 @@ export async function addSubtask(input: AddSubtaskInput): Promise<string> {
 }
 
 // Link enforcement: a task can't be completed while any task that BLOCKS it
-// (its `blocked_by` links) is still open. The `blocks` direction and advisory
+// (its `blocked_by` links) is still open (non-terminal — a cancelled blocker
+// no longer gates its dependents). The `blocks` direction and advisory
 // relations (relates_to/duplicates) never gate. Client-enforced — same trust
 // model as the rest of the task domain (a Firestore rule can't read other docs).
 // A blocker that no longer exists is treated as unblocked (stale-link tolerant).
+// Lockstep: useOpenBlockers mirrors this predicate for the UI — change both.
 async function assertBlockersComplete(links: TaskLink[] | undefined): Promise<void> {
   const blockerIds = Array.from(
     new Set((links ?? []).filter((l) => l.relation === 'blocked_by').map((l) => l.taskId)),
@@ -1831,19 +1844,22 @@ async function assertBlockersComplete(links: TaskLink[] | undefined): Promise<vo
   if (blockerIds.length === 0) return
   const snaps = await Promise.all(blockerIds.map((id) => getDoc(tenantDoc('tasks', id))))
   const openBlockers = snaps
-    .filter((s) => s.exists() && (s.data() as { status?: TaskStatus }).status !== 'done')
+    .filter((s) => s.exists() && !isTerminal((s.data() as { status?: TaskStatus }).status))
     .map((s) => (s.data() as { title?: string }).title ?? 'a task')
   if (openBlockers.length > 0) {
     throw new Error(
       openBlockers.length === 1
-        ? `Can't complete this task — it's blocked by "${openBlockers[0]}", which isn't done yet.`
+        ? `Can't complete this task — it's blocked by "${openBlockers[0]}", which isn't finished yet.`
         : `Can't complete this task — it's blocked by ${openBlockers.length} unfinished tasks: ${openBlockers.join(', ')}.`,
     )
   }
 }
 
-// Updates a task's status. If the task is a subtask that just crossed the "done" boundary
-// in either direction, also updates the parent's `subtaskDoneCount` in the same batch (§8).
+// Updates a task's status. If the task is a subtask that just crossed the
+// "done" or "cancelled" boundary in either direction, also updates the
+// parent's `subtaskDoneCount` / `subtaskCancelledCount` in the same batch (§8).
+// setTaskStatus is the SOLE writer of both counters outside the review
+// round-trip's done bump — keep it that way or they drift.
 export interface SetTaskStatusInput {
   taskId: string
   status: TaskStatus
@@ -1852,6 +1868,12 @@ export interface SetTaskStatusInput {
 }
 
 export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
+  // Full-union runtime guard. Deliberately NOT flag-gated: the UI only offers
+  // the active set, and a stale-cache client in a flag-ON tenant must not be
+  // rejected for a legitimately-picked tech status.
+  if (!TASK_STATUS_META[input.status]) {
+    throw new Error(`Unknown task status: ${String(input.status)}`)
+  }
   const ref = tenantDoc('tasks', input.taskId)
   const snap = await getDoc(ref)
   if (!snap.exists()) throw new Error('Task not found')
@@ -1863,25 +1885,34 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
     teamId?: string
     createdBy?: string
     assigneeId?: string | null
+    reviewerId?: string | null
     links?: TaskLink[]
   }
   if (task.status === input.status) return
-  // Gate completion on open blockers (see assertBlockersComplete).
-  if (input.status === 'done') await assertBlockersComplete(task.links)
+  // Gate completion on open blockers (see assertBlockersComplete). Only actual
+  // completion gates — cancelling a blocked task is always allowed.
+  if (isComplete(input.status)) await assertBlockersComplete(task.links)
 
   const batch = writeBatch(db)
   batch.update(ref, {
     status: input.status,
     updatedAt: serverTimestamp(),
-    completedAt: input.status === 'done' ? serverTimestamp() : null,
+    completedAt: isComplete(input.status) ? serverTimestamp() : null,
+    // Stale-reviewer hygiene: a manual move out of the review pipeline ends
+    // the review, so the reviewer chip and queue don't keep a ghost entry.
+    ...(isReviewStatus(task.status) && !isReviewStatus(input.status)
+      ? { reviewerId: null, reviewerName: null }
+      : {}),
   })
 
   if (task.parentTaskId) {
-    const wasDone = task.status === 'done'
-    const isDone = input.status === 'done'
-    if (wasDone !== isDone) {
+    const doneDelta = (isComplete(input.status) ? 1 : 0) - (isComplete(task.status) ? 1 : 0)
+    const cancelledDelta =
+      (input.status === 'cancelled' ? 1 : 0) - (task.status === 'cancelled' ? 1 : 0)
+    if (doneDelta !== 0 || cancelledDelta !== 0) {
       batch.update(tenantDoc('tasks', task.parentTaskId), {
-        subtaskDoneCount: increment(isDone ? 1 : -1),
+        ...(doneDelta !== 0 ? { subtaskDoneCount: increment(doneDelta) } : {}),
+        ...(cancelledDelta !== 0 ? { subtaskCancelledCount: increment(cancelledDelta) } : {}),
         updatedAt: serverTimestamp(),
       })
     }
@@ -1910,7 +1941,8 @@ export async function setTaskStatus(input: SetTaskStatusInput): Promise<void> {
       taskId: input.taskId,
       projectId: task.projectId,
       taskTitle: task.title ?? 'a task',
-      snippet: `${task.status} → ${input.status}`,
+      // Frozen display text — labels, not ids (see statusChangeSnippet).
+      snippet: statusChangeSnippet(task.status, input.status),
     })
   }
 
@@ -2420,6 +2452,11 @@ export interface TransitionTaskToReviewInput {
   notes?: string
   authorId: string
   authorName: string
+  // Which review status to enter (features.techTaskStatuses adds in_uat).
+  // Every entry into the review pipeline must route through here so the task
+  // always carries a reviewerId — a review-status task without one appears in
+  // nobody's review queue. Defaults to in_review.
+  targetStatus?: 'in_review' | 'in_uat'
   // Audit context (taskTitle and projectId enrich the audit doc; if omitted, the
   // helper reads them from the task doc — but callers should pass them when
   // available to skip the extra read).
@@ -2427,28 +2464,51 @@ export interface TransitionTaskToReviewInput {
   projectId?: string
 }
 
-// Move a task to in_review with a named reviewer. Optional notes are added as a comment in the same batch.
+// Move a task into the review pipeline with a named reviewer. Optional notes
+// are added as a comment in the same batch.
 export async function transitionTaskToReview(
   input: TransitionTaskToReviewInput,
 ): Promise<void> {
-  let taskTitle = input.taskTitle
-  let projectId = input.projectId
-  if (!taskTitle || !projectId) {
-    const snap = await getDoc(tenantDoc('tasks', input.taskId))
-    if (snap.exists()) {
-      const data = snap.data() as { title?: string; projectId?: string }
-      taskTitle = taskTitle ?? data.title
-      projectId = projectId ?? data.projectId
-    }
+  // Always read the doc: entering review is a status change, so the previous
+  // status decides the parent's counter deltas below (a cancelled or done task
+  // can be pulled back into review from the status menu).
+  const snap = await getDoc(tenantDoc('tasks', input.taskId))
+  if (!snap.exists()) throw new Error('Task not found')
+  const task = snap.data() as {
+    status: TaskStatus
+    parentTaskId?: string | null
+    title?: string
+    projectId?: string
   }
+  const taskTitle = input.taskTitle ?? task.title
+  const projectId = input.projectId ?? task.projectId
 
   const batch = writeBatch(db)
+  const nextStatus = input.targetStatus ?? 'in_review'
   batch.update(tenantDoc('tasks', input.taskId), {
-    status: 'in_review',
+    status: nextStatus,
     reviewerId: input.reviewerId,
     reviewerName: input.reviewerName ?? null,
     updatedAt: serverTimestamp(),
+    // A review status is never complete — keep the completedAt invariant that
+    // setTaskStatus maintains (done → review must not leave a stamp behind).
+    ...(isComplete(task.status) ? { completedAt: null } : {}),
   })
+
+  // Leaving 'done' or 'cancelled' has to release the parent's rollup counters,
+  // exactly as setTaskStatus would — otherwise the count stays inflated
+  // forever and the parent's progress denominator never heals.
+  if (task.parentTaskId) {
+    const doneDelta = isComplete(task.status) ? -1 : 0
+    const cancelledDelta = task.status === 'cancelled' ? -1 : 0
+    if (doneDelta !== 0 || cancelledDelta !== 0) {
+      batch.update(tenantDoc('tasks', task.parentTaskId), {
+        ...(doneDelta !== 0 ? { subtaskDoneCount: increment(doneDelta) } : {}),
+        ...(cancelledDelta !== 0 ? { subtaskCancelledCount: increment(cancelledDelta) } : {}),
+        updatedAt: serverTimestamp(),
+      })
+    }
+  }
   const trimmed = input.notes?.trim()
   if (trimmed) {
     const commentRef = doc(tenantCol('tasks', input.taskId, 'comments'))
@@ -2489,11 +2549,20 @@ export interface TransitionTaskFromReviewInput {
   newAssigneeName?: string | null
   authorId: string
   authorName: string
+  // Whether the tech status set is active — REQUIRED and threaded from the
+  // caller's live useFeature('techTaskStatuses') value, never from the cached
+  // isFeatureEnabled snapshot: this decides where approve lands (a persisted
+  // write), and a 24h-stale snapshot must not pick the target.
+  techStatuses: boolean
 }
 
-// Approve (→ done) or reject (→ in_progress) a task currently in_review.
-// On approve: clears reviewerId, sets completedAt, increments parent subtaskDoneCount if subtask.
-// On reject: clears reviewerId, optionally reassigns, REQUIRES non-empty feedback (added as comment).
+// Approve or reject a task currently in the review pipeline. Approve advances
+// along reviewApproveTarget (generic: → done; tech: → ready_for_prod, since
+// review approval covers UAT) — completion side effects (blocker gate,
+// completedAt, parent subtaskDoneCount) fire ONLY when the resolved target is
+// complete. Reject → in_progress from any review status.
+// On both: clears reviewerId (the review round is over).
+// On reject: optionally reassigns, REQUIRES non-empty feedback (added as comment).
 // Throws if reject with empty/whitespace feedback (delta §3.4 mandatory feedback enforcement).
 export async function transitionTaskFromReview(
   input: TransitionTaskFromReviewInput,
@@ -2517,20 +2586,29 @@ export async function transitionTaskFromReview(
     links?: TaskLink[]
   }
 
-  // Approving moves the task to done — same completion gate as setTaskStatus.
-  if (input.decision === 'approve') await assertBlockersComplete(task.links)
+  const approveTarget = reviewApproveTarget(task.status, input.techStatuses)
+
+  // Completion gate applies only when approve actually completes the task
+  // (generic set). Advancing to ready_for_prod is not completion — the blocker
+  // gate fires later on the manual → Done move in setTaskStatus.
+  if (input.decision === 'approve' && isComplete(approveTarget)) {
+    await assertBlockersComplete(task.links)
+  }
 
   const batch = writeBatch(db)
 
   if (input.decision === 'approve') {
     batch.update(ref, {
-      status: 'done',
+      status: approveTarget,
       reviewerId: null,
       reviewerName: null,
-      completedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      // Same completedAt invariant as setTaskStatus: stamped only when the
+      // resolved target actually completes the task, cleared otherwise (a task
+      // pulled back into review from done can still carry a stale stamp).
+      completedAt: isComplete(approveTarget) ? serverTimestamp() : null,
     })
-    if (task.parentTaskId && task.status !== 'done') {
+    if (isComplete(approveTarget) && task.parentTaskId && !isComplete(task.status)) {
       batch.update(tenantDoc('tasks', task.parentTaskId), {
         subtaskDoneCount: increment(1),
         updatedAt: serverTimestamp(),
@@ -2555,7 +2633,9 @@ export async function transitionTaskFromReview(
       targetId: input.taskId,
       ...(task.title ? { targetTitle: task.title } : {}),
       ...(task.projectId ? { projectId: task.projectId } : {}),
-      payload: trimmed ? { note: trimmed } : {},
+      // Raw ids in the payload (relabel-able at render); the destination is
+      // recorded because approve's target depends on the active status set.
+      payload: { from: task.status, to: approveTarget, ...(trimmed ? { note: trimmed } : {}) },
       batch,
     })
     // Status-update notification: creator + assignee, minus the reviewer.
@@ -2567,14 +2647,16 @@ export async function transitionTaskFromReview(
         taskId: input.taskId,
         projectId: task.projectId,
         taskTitle: task.title ?? 'a task',
-        snippet: 'in_review → done',
+        // Frozen display text — labels, not ids (see statusChangeSnippet).
+        snippet: statusChangeSnippet(task.status, approveTarget),
       })
     }
   } else {
+    const rejectTarget = reviewRejectTarget()
     const nextAssigneeId = input.newAssigneeId ?? task.assigneeId ?? null
     const nextAssigneeName = input.newAssigneeName ?? task.assigneeName ?? null
     batch.update(ref, {
-      status: 'in_progress',
+      status: rejectTarget,
       reviewerId: null,
       reviewerName: null,
       assigneeId: nextAssigneeId,
@@ -2583,7 +2665,7 @@ export async function transitionTaskFromReview(
     })
     // If the task was previously done (rare but possible if approve was reverted),
     // decrement the parent's subtaskDoneCount.
-    if (task.parentTaskId && task.status === 'done') {
+    if (task.parentTaskId && isComplete(task.status)) {
       batch.update(tenantDoc('tasks', task.parentTaskId), {
         subtaskDoneCount: increment(-1),
         updatedAt: serverTimestamp(),
@@ -2608,6 +2690,8 @@ export async function transitionTaskFromReview(
       ...(task.title ? { targetTitle: task.title } : {}),
       ...(task.projectId ? { projectId: task.projectId } : {}),
       payload: {
+        from: task.status,
+        to: rejectTarget,
         feedback: trimmed,
         ...(reassigned
           ? { reassignedTo: nextAssigneeId, ...(nextAssigneeName ? { reassignedToName: nextAssigneeName } : {}) }
@@ -2642,7 +2726,9 @@ export async function transitionTaskFromReview(
         taskId: input.taskId,
         projectId: task.projectId,
         taskTitle: task.title ?? 'a task',
-        snippet: 'in_review → in_progress',
+        // Frozen display text — labels, not ids. The from-side comes from the
+        // doc: a send-back can now also come from in_uat.
+        snippet: statusChangeSnippet(task.status, rejectTarget),
       })
     }
   }
@@ -2854,6 +2940,7 @@ export async function duplicateTask(
     ...(source.workType ? { workType: source.workType } : {}),
     subtaskCount: 0,
     subtaskDoneCount: 0,
+    subtaskCancelledCount: 0,
     attachments: [], // refs share external storage objects — don't copy
     reviewerId: null,
     reviewerName: null,

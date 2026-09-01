@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Task } from '../../types/models'
+import { isTerminal } from '../../lib/taskStatus'
 import ChartCard from './ChartCard'
 
 interface Props {
@@ -19,7 +20,7 @@ export default function OverdueTasksList({
     return tasks
       .filter(
         (t) =>
-          t.status !== 'done' &&
+          !isTerminal(t.status) &&
           t.dueDate &&
           t.dueDate.toDate().getTime() < now,
       )

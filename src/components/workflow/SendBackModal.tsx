@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Modal from '../ui/Modal'
 import { useAuth } from '../../contexts/AuthContext'
+import { useFeature } from '../../contexts/AppConfigContext'
 import { useAllTeams } from '../../hooks/useAllTeams'
 import { useAllUsers } from '../../hooks/useAllUsers'
 import { transitionTaskFromReview } from '../../lib/firestore'
@@ -16,6 +17,8 @@ interface Props {
 // Optional reassign-to dropdown defaults to the original assignee.
 export default function SendBackModal({ open, onClose, task }: Props) {
   const { user, profile } = useAuth()
+  // Live flag value threaded into the write — never the cached snapshot.
+  const techStatuses = useFeature('techTaskStatuses')
   const { teams } = useAllTeams()
   const { users } = useAllUsers()
 
@@ -64,6 +67,7 @@ export default function SendBackModal({ open, onClose, task }: Props) {
         newAssigneeName: newAssignee?.displayName ?? null,
         authorId: user.uid,
         authorName: profile.displayName,
+        techStatuses,
       })
       onClose()
     } catch (e) {

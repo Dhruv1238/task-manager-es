@@ -36,6 +36,7 @@ import {
   formatPercent,
 } from '../lib/progress'
 import type { Attachment, Project, Task, Team, User } from '../types/models'
+import { isTerminal } from '../lib/taskStatus'
 import { isProjectClosed } from '../lib/projectStatus'
 import { isOverdue, formatDeadline, deadlineHasTime } from '../components/projects/projectListUtils'
 
@@ -94,7 +95,7 @@ function TeamCard({
   const progress = hierarchyOn
     ? aggregateDeepProgress(teamTasks, childrenIndex)
     : aggregateProgress(teamTasks)
-  const openCount = teamTasks.filter((t) => t.status !== 'done').length
+  const openCount = teamTasks.filter((t) => !isTerminal(t.status)).length
 
   return (
     <Link

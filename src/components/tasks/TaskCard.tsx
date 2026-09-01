@@ -5,6 +5,8 @@ import { getEffectiveAssignee } from '../../lib/effectiveAssignee'
 import { formatDuration } from '../../lib/duration'
 import { useFeature } from '../../contexts/AppConfigContext'
 import { KIND_STYLES, effectiveKind } from '../../lib/taskKind'
+import { isReviewStatus, isTerminal, taskStatusLabel } from '../../lib/taskStatus'
+import { subtaskRatio } from '../../lib/progress'
 import type { Task, TaskPriority, Team, User } from '../../types/models'
 
 interface Props {
@@ -52,9 +54,10 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
   const due = formatShortDate(task.dueDate)
   const overdue =
     task.dueDate &&
-    task.status !== 'done' &&
+    !isTerminal(task.status) &&
     task.dueDate.toDate().getTime() < Date.now()
   const isSubtask = Boolean(task.parentTaskId)
+  const ratio = subtaskRatio(task)
   const kind = effectiveKind(task)
   // Fall back to the denormalized parentTitle when the bucketing layer couldn't
   // resolve the parent (e.g. My-Tasks-fed boards where the parent isn't loaded).
@@ -97,10 +100,10 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
             {task.workType}
           </span>
         )}
-        {task.status === 'in_review' && task.reviewerName && (
+        {isReviewStatus(task.status) && task.reviewerName && (
           <span
             className="inline-flex items-center rounded-md border border-brand-edge bg-brand-soft px-1.5 py-0.5 text-[10px] text-brand"
-            title={`In review by ${task.reviewerName}`}
+            title={`${taskStatusLabel(task.status)} with ${task.reviewerName}`}
           >
             🔍 {task.reviewerName.split(' ')[0]}
           </span>
@@ -137,9 +140,9 @@ export default function TaskCard({ task, users, teams, parentTitle }: Props) {
         ) : (
           <span className="text-fg-faint">Unassigned</span>
         )}
-        {!isSubtask && (task.subtaskCount ?? 0) > 0 && (
+        {!isSubtask && ratio.total > 0 && (
           <span className="text-fg-subtle">
-            {task.subtaskDoneCount ?? 0}/{task.subtaskCount ?? 0}
+            {ratio.done}/{ratio.total}
           </span>
         )}
       </div>

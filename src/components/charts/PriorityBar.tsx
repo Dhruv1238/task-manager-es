@@ -10,6 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { Task, TaskPriority } from '../../types/models'
+import { isTerminal } from '../../lib/taskStatus'
 import {
   AXIS_STYLE,
   GRID_COLOR,
@@ -39,7 +40,7 @@ export default function PriorityBar({
     const counts = new Map<TaskPriority, number>()
     for (const p of ORDER) counts.set(p, 0)
     for (const t of tasks) {
-      if (excludeDone && t.status === 'done') continue
+      if (excludeDone && isTerminal(t.status)) continue
       counts.set(t.priority, (counts.get(t.priority) ?? 0) + 1)
     }
     return ORDER.map((p) => ({

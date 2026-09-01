@@ -9,6 +9,11 @@ export const STATUS_COLOR: Record<TaskStatus, string> = {
   in_review: 'var(--color-brandtone-dot)',
   done: 'var(--color-success-dot)',
   blocked: 'var(--color-danger-dot)',
+  // Tech-set statuses — tones match the pill/dot classes in TASK_STATUS_META.
+  dev_done: 'var(--color-mint-dot)',
+  in_uat: 'var(--color-yellow-dot)',
+  ready_for_prod: 'var(--color-orange-dot)',
+  cancelled: 'var(--color-pink-dot)',
 }
 
 export const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -17,6 +22,10 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   in_review: 'In Review',
   done: 'Done',
   blocked: 'Blocked',
+  dev_done: 'Dev Done',
+  in_uat: 'In UAT',
+  ready_for_prod: 'Ready for Prod',
+  cancelled: 'Cancelled',
 }
 
 export const PRIORITY_COLOR: Record<TaskPriority, string> = {

@@ -26,7 +26,7 @@ import { auth, db } from './firebase'
 import { IS_SANDBOX, computeAccessKeys, tenantCol, tenantDoc } from './firestore'
 import { captureEntry } from './leadCapture'
 import { COLLAB_DEFAULT_WORKFLOW_ID, seedCollabWorkflow } from './seedCollabWorkflow'
-import type { OrgStructure } from '../types/models'
+import type { OrgStructure, TaskStatus } from '../types/models'
 import type { PersonaArchetype, SandboxMeta } from '../types/sandbox'
 
 // --- Phase A ----------------------------------------------------------------
@@ -417,7 +417,8 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
     projectId: string
     projectTitle: string
     assignee: typeof sneha
-    status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'blocked'
+    // Seeded statuses stay within the generic 5 (present in both status sets).
+    status: TaskStatus
     priority: 'low' | 'medium' | 'high'
     reviewer?: typeof rohan
     dueInDays: number
@@ -563,6 +564,7 @@ async function seedSampleProjects(ctx: RichSeedContext): Promise<void> {
       projectTitle: t.projectTitle,
       subtaskCount: 0,
       subtaskDoneCount: 0,
+      subtaskCancelledCount: 0,
       attachments: [],
       reviewerId: t.reviewer?.uid ?? null,
       ...(t.reviewer ? { reviewerName: t.reviewer.displayName } : {}),

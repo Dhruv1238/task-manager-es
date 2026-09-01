@@ -13,13 +13,17 @@ interface Props {
   open: boolean
   onClose: () => void
   task: Task
+  // Which review status the task enters (features.techTaskStatuses adds
+  // in_uat). Every entry into the review pipeline routes through this modal so
+  // the task always carries a named reviewer. Defaults to in_review.
+  targetStatus?: 'in_review' | 'in_uat'
 }
 
 // Submit a task to review. Reviewer suggestion is the coordinator team's lead
 // by default (the team that owns client-facing validation); a searchable picker
 // lets the user pick anyone on the project. Falls back to "pick a reviewer"
 // when the tenant hasn't configured a coordinator role.
-export default function SubmitForReviewModal({ open, onClose, task }: Props) {
+export default function SubmitForReviewModal({ open, onClose, task, targetStatus }: Props) {
   const { user, profile } = useAuth()
   const org = useOrgStructure()
   const { users } = useAllUsers()
@@ -76,6 +80,7 @@ export default function SubmitForReviewModal({ open, onClose, task }: Props) {
         notes,
         authorId: user.uid,
         authorName: profile.displayName,
+        ...(targetStatus ? { targetStatus } : {}),
         taskTitle: task.title,
         projectId: task.projectId,
       })
@@ -98,7 +103,7 @@ export default function SubmitForReviewModal({ open, onClose, task }: Props) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Submit for review"
+      title={targetStatus === 'in_uat' ? 'Move to UAT' : 'Submit for review'}
       description={
         coordinatorLead
           ? `We've suggested the lead of ${coordinatorLead.name} — change them if someone else should validate.`

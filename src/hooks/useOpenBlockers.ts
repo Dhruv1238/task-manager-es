@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { documentId, onSnapshot, query, where } from 'firebase/firestore'
 import { tenantCol } from '../lib/firestore'
+import { isTerminal } from '../lib/taskStatus'
 import type { Task } from '../types/models'
 
 export interface OpenBlocker {
@@ -9,10 +10,12 @@ export interface OpenBlocker {
 }
 
 // Live list of the tasks that BLOCK this one (its `blocked_by` links) and are
-// not yet done. Drives the UI completion gate; the write path (setTaskStatus /
-// transitionTaskFromReview) enforces it authoritatively. Returns [] when the
-// task has no blockers. Fails open (returns []) on query error — the write path
-// still guards, so a transient read error never lets the UI hard-lock a task.
+// still open (non-terminal — a cancelled blocker no longer gates, in lockstep
+// with assertBlockersComplete). Drives the UI completion gate; the write path
+// (setTaskStatus / transitionTaskFromReview) enforces it authoritatively.
+// Returns [] when the task has no blockers. Fails open (returns []) on query
+// error — the write path still guards, so a transient read error never lets
+// the UI hard-lock a task.
 export function useOpenBlockers(task: Task | null): OpenBlocker[] {
   const [openBlockers, setOpenBlockers] = useState<OpenBlocker[]>([])
 
@@ -37,7 +40,7 @@ export function useOpenBlockers(task: Task | null): OpenBlocker[] {
         setOpenBlockers(
           snap.docs
             .map((d) => ({ ...(d.data() as Task), id: d.id }))
-            .filter((t) => t.status !== 'done')
+            .filter((t) => !isTerminal(t.status))
             .map((t) => ({ id: t.id, title: t.title })),
         )
       },
