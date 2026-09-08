@@ -10,7 +10,7 @@ import {
   type RoleResolutionCtx,
 } from '../lib/workflowEvaluator'
 import { computeEffectivePermissions } from '../lib/permissions/effectivePermissions'
-import type { Project } from '../types/models'
+import type { Project, User } from '../types/models'
 import type { Workflow } from '../types/workflow'
 
 export interface ActionableProject {
@@ -23,19 +23,32 @@ export interface ActionableProject {
   workflow: Workflow
 }
 
-// Projects where the workflow is blocked on the current user. Client-side
-// filter — Firestore can't OR across fields cleanly, and the data is small.
-// Iterates accessible projects, asks the evaluator which actions are open for
-// the viewer at each project's current stage on its OWN workflow (not "the
-// active one" — Phase 2b allows multiple workflows to coexist).
-export function useProjectsAwaitingMyAction(): {
+// Projects where the workflow is blocked on a given user — defaults to the
+// signed-in profile. Client-side filter — Firestore can't OR across fields
+// cleanly, and the data is small. Iterates the accessible projects for that same
+// user, asks the evaluator which actions are open for them at each project's
+// current stage on its OWN workflow (not "the active one" — Phase 2b allows
+// multiple workflows to coexist).
+//
+// `profileOverride` lets an admin surface render one member's inbox at a time
+// (the Member Tasks view); everything below is pure in the user argument
+// (getAllowedActions, computeEffectivePermissions), so handing it a different
+// profile is all that's needed. Omitted = the signed-in profile; an explicit
+// `null` = nobody = [], never a fallback to the viewer.
+//
+// Bug this fixes: /me is written against the sandbox persona lens
+// (effectiveProfile), but this hook read the REAL auth profile, so while acting
+// as a persona every other section showed the persona and "Projects awaiting my
+// action" showed the visitor's own inbox. Me.tsx now passes `lensProfile`.
+export function useProjectsAwaitingMyAction(profileOverride?: User | null): {
   projects: ActionableProject[]
   loading: boolean
 } {
-  const { profile } = useAuth()
+  const { profile: authProfile } = useAuth()
+  const profile = profileOverride === undefined ? authProfile : profileOverride
   const org = useOrgStructure()
   const { workflowsById, ensureWorkflow } = useAppConfigContext()
-  const { projects, loading: pLoading } = useAccessibleProjects()
+  const { projects, loading: pLoading } = useAccessibleProjects(profile)
   const { teams, loading: tLoading } = useAllTeams()
 
   const result = useMemo<ActionableProject[]>(() => {

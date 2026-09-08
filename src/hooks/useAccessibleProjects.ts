@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useAllProjects } from './useAllProjects'
-import type { Project } from '../types/models'
+import type { Project, User } from '../types/models'
 
-// Projects the current user is allowed to view:
+// Projects a given user is allowed to view — defaults to the signed-in profile:
 // - super_admins / admins: every project
 // - project leads: projects they're pinned as lead on (also folded into
 //   accessKeys, but kept as an explicit clause as a safety net)
@@ -14,8 +14,17 @@ import type { Project } from '../types/models'
 //   `array-contains <uid>` query.
 // `ownerId` is retained as a transitional belt-and-suspenders for any legacy doc
 // whose accessKeys predates the createdBy field; drop it once data is migrated.
-export function useAccessibleProjects(): { projects: Project[]; loading: boolean } {
-  const { profile } = useAuth()
+//
+// `profileOverride` exists so an admin surface can compute the scope for SOMEONE
+// ELSE (the Member Tasks view renders one member's inbox at a time). The
+// undefined/null distinction is load-bearing: omitted = the signed-in profile,
+// explicit `null` = nobody, which must yield [] rather than quietly falling back
+// to the viewer and showing them their own projects under someone else's name.
+export function useAccessibleProjects(
+  profileOverride?: User | null,
+): { projects: Project[]; loading: boolean } {
+  const { profile: authProfile } = useAuth()
+  const profile = profileOverride === undefined ? authProfile : profileOverride
   const { projects, loading } = useAllProjects()
 
   const scoped = useMemo(() => {

@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { Link, useLocation } from 'react-router-dom'
 import type { Task } from '../../types/models'
+import { isOverdueTask } from '../../lib/myTasksDerive'
 import { isTerminal } from '../../lib/taskStatus'
+import TaskListRow from '../tasks/TaskListRow'
 import ChartCard from './ChartCard'
 
 interface Props {
@@ -35,8 +36,6 @@ export default function UpcomingDeadlines({
       .slice(0, 6)
   }, [tasks, days])
 
-  const location = useLocation()
-
   return (
     <ChartCard
       title={title}
@@ -48,36 +47,30 @@ export default function UpcomingDeadlines({
       <ul className="space-y-1">
         {items.map((t) => {
           const when = t.dueDate!.toDate()
-          const overdue = when.getTime() < Date.now()
+          const overdue = isOverdueTask(t)
           const dayLabel = when.toLocaleDateString(undefined, {
             month: 'short',
             day: 'numeric',
           })
           return (
-            <li key={t.id}>
-              <Link
-                to={`/tasks/${t.id}`}
-                state={{ backgroundLocation: location }}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 transition hover:bg-fill-1"
-              >
+            <TaskListRow
+              key={t.id}
+              task={t}
+              leading={
                 <span
                   className={`inline-block h-8 w-1 shrink-0 rounded-full ${overdue ? 'bg-danger-dot' : 'bg-brandtone-dot'}`}
                   aria-hidden
                 />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-fg">{t.title}</div>
-                  <div className="truncate text-xs text-fg-subtle">
-                    {t.projectTitle} · {t.teamName}
-                  </div>
-                </div>
+              }
+              right={
                 <span
-                  className={`shrink-0 text-xs ${overdue ? 'text-tone-danger-fg' : 'text-fg-muted'}`}
+                  className={`text-xs ${overdue ? 'text-tone-danger-fg' : 'text-fg-muted'}`}
                 >
                   {overdue ? 'Overdue · ' : ''}
                   {dayLabel}
                 </span>
-              </Link>
-            </li>
+              }
+            />
           )
         })}
       </ul>

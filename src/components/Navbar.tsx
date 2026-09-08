@@ -21,7 +21,7 @@ const SandboxIdentityPill = __IS_SANDBOX__
 import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 
-const APP_NAME = 'Show Runner'
+const APP_NAME = 'HIVE'
 
 function initialsFor(user: { displayName?: string | null; email?: string | null }): string {
   const source = user.displayName || user.email || '?'
@@ -61,6 +61,9 @@ export default function Navbar() {
   const adminItems: AdminNavItem[] = [
     canViewMembers && { to: '/admin/members', label: 'Members' },
     canViewReports && { to: '/admin', end: true, label: 'Admin Analytics' },
+    // No `end`: the entry must stay active while a member uid is in the URL
+    // (/admin/member-tasks/:uid).
+    canViewReports && { to: '/admin/member-tasks', label: 'Member Tasks' },
     // Flag-gated as well as permission-gated: no point advertising a report
     // that has nothing in it until an admin turns time tracking on.
     canViewReports && timeTrackingOn && { to: '/admin/time', label: 'Time Report' },
@@ -244,6 +247,11 @@ export default function Navbar() {
               {canViewReports && (
                 <NavLink to="/admin" end className={mobileLinkCls}>
                   Admin Analytics
+                </NavLink>
+              )}
+              {canViewReports && (
+                <NavLink to="/admin/member-tasks" className={mobileLinkCls}>
+                  Member Tasks
                 </NavLink>
               )}
               {canViewReports && timeTrackingOn && (

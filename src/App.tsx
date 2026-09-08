@@ -24,6 +24,7 @@ import RolesHierarchy from './pages/RolesHierarchy'
 // modules remain in the repo, just no longer routed.
 const FlowAuthoring = lazy(() => import('./pages/FlowAuthoring'))
 import Me from './pages/Me'
+import MemberTasks from './pages/MemberTasks'
 import NotFound from './pages/NotFound'
 import ProjectBoard from './pages/ProjectBoard'
 import ProjectDetail from './pages/ProjectDetail'
@@ -96,6 +97,12 @@ function App() {
               * release switch is the timeTracking feature flag: with the flag
               * off nothing is logged, so the page is inert rather than hidden. */}
             <Route path="/admin/time" element={<TimeReport />} />
+            {/* Member Tasks renders one member's /me page. Two explicit paths
+              * rather than an optional `:uid?` segment — plain routes behave
+              * the same on every router version and cost nothing. The bare
+              * path is the "pick someone" state. */}
+            <Route path="/admin/member-tasks" element={<MemberTasks />} />
+            <Route path="/admin/member-tasks/:uid" element={<MemberTasks />} />
           </Route>
           {/* KPI Reports + Usage Analytics — pushed but NOT yet released to the
             * client. No nav entry, no permission column; the routes stay live
