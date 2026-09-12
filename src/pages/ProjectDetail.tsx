@@ -39,6 +39,7 @@ import type { Attachment, Project, Task, Team, User } from '../types/models'
 import { isTerminal } from '../lib/taskStatus'
 import { isProjectClosed } from '../lib/projectStatus'
 import { isOverdue, formatDeadline, deadlineHasTime } from '../components/projects/projectListUtils'
+import { projectSourceLabel } from '../lib/projectSource'
 
 type ProjectTab = 'overview' | 'analytics'
 
@@ -579,7 +580,8 @@ export default function ProjectDetail() {
               {(project.teamIds?.length ?? 0) === 1 ? '' : 's'}
             </span>
             <span className="text-fg-faint">
-              Created by {creator?.displayName ?? '—'} · {formatDate(project.createdAt)}
+              Created by {creator?.displayName ?? projectSourceLabel(project) ?? '—'} ·{' '}
+              {formatDate(project.createdAt)}
             </span>
           </div>
 

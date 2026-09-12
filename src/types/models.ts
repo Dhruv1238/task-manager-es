@@ -227,6 +227,25 @@ export interface Project {
   // Per-stage entry timestamps, stamped on each transition → enables
   // time-in-stage / funnel analytics without scanning projectHistory.
   stageEnteredAt?: Record<string, Timestamp>
+  // ─── Created by an external system (additive; absent on every project made
+  // in this app) ───────────────────────────────────────────────────────────
+  // Which system asked for this project. Only 'sales-portal' today, written by
+  // the createProjectFromSales function; see functions/src/project-doc.ts.
+  sourcePortal?: string
+  // The record this project was created FROM, in that system. Also what makes
+  // the create idempotent: the project's doc id is derived from it, so a
+  // retried call cannot mint a second project for one deal.
+  sourceLeadId?: string
+  // Deep link back to the originating record, for anyone asking where this
+  // came from.
+  sourceLeadUrl?: string
+  // Who closed the deal over there. Kept even when they have no user here —
+  // that case is exactly why `createdBy` may be a fallback uid rather than them.
+  sourceActorEmail?: string
+  sourceActorName?: string
+  // Deal value at closure, in the originating system's currency. Context only:
+  // nothing in this app computes from it.
+  sourceDealValue?: number
 }
 
 export interface Attachment {

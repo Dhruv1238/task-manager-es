@@ -4,5 +4,20 @@
     "location": "nam5",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "codebase": "default",
+    "predeploy": ["npm --prefix functions run build"],
+    "_comment": "Do NOT add 'lib' here. package.json's main is lib/index.js, predeploy compiles into it, and this array REPLACES the CLI defaults — a bare 'lib' matches the directory by basename and drops the compiled output from the upload, so the deploy fails with 'lib/index.js does not exist'. 'src' is excluded instead: tsc emits to lib, and the TypeScript sources are not needed at runtime.",
+    "ignore": ["node_modules", ".git", "src", "*.local", "tsconfig.json"]
+  },
+  "emulators": {
+    "auth": { "port": 9199 },
+    "functions": { "port": 5101 },
+    "firestore": { "port": 8180 },
+    "ui": { "enabled": true, "port": 4100 },
+    "singleProjectMode": true,
+    "_comment": "Ports are offset from the sales portal's (9099/5001/8080/4000) so both emulator suites can run side by side while testing the integration."
   }
 }

@@ -51,6 +51,7 @@ import { useChatEnabled } from '../contexts/AppConfigContext'
 import { STATUS_DISPLAY, STATUS_OPTIONS } from '../lib/projectStatus'
 import type { Project, ProjectStatus, User } from '../types/models'
 import type { CustomFieldDef } from '../types/workflow'
+import { projectSourceLabel } from '../lib/projectSource'
 
 const PAGE_SIZE = 24
 
@@ -749,6 +750,13 @@ export default function Projects() {
                           <span className="ml-1 text-fg-subtle">· Created by</span>
                         </span>
                       </>
+                    ) : projectSourceLabel(p) ? (
+                      // Came from another Eventstrat app — no avatar, because
+                      // there is no person to show.
+                      <span className="truncate">
+                        <span className="text-fg-muted">{projectSourceLabel(p)}</span>
+                        <span className="ml-1 text-fg-subtle">· Created by</span>
+                      </span>
                     ) : (
                       <span className="text-fg-subtle">—</span>
                     )}
